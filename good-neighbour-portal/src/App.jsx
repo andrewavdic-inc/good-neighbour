@@ -7,16 +7,29 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged }
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 // --- FIREBASE INITIALIZATION ---
-let firebaseApp, auth, db, appId;
-try {
-  const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-  firebaseApp = initializeApp(firebaseConfig);
-  auth = getAuth(firebaseApp);
-  db = getFirestore(firebaseApp);
-  appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-} catch (e) {
-  console.error("Firebase init error:", e);
-}
+// Import the functions you need from the SDKs you need
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
+  authDomain: "good-neighbour-portal.firebaseapp.com",
+  projectId: "good-neighbour-portal",
+  storageBucket: "good-neighbour-portal.firebasestorage.app",
+  messagingSenderId: "570654987529",
+  appId: "1:570654987529:web:400f90a7a63a03b6aa6fd8",
+  measurementId: "G-C3P8CNHYK9"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id').replace(/\//g, '-');
 
 // --- ONTARIO COMPLIANCE REQUIREMENTS ---
 const ONTARIO_REQUIREMENTS = [
@@ -280,10 +293,15 @@ const getHoliday = (dateStr) => {
 function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const onSubmit = (e) => {
     e.preventDefault();
-    onLogin(username, password);
+    setIsLoading(true);
+    setTimeout(() => {
+      onLogin(username, password);
+      setIsLoading(false);
+    }, 500);
   };
 
   return (
@@ -318,7 +336,6 @@ function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter username"
-                  disabled={!isDbReady}
                 />
               </div>
             </div>
@@ -333,7 +350,6 @@ function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
-                  disabled={!isDbReady}
                 />
               </div>
             </div>
@@ -341,32 +357,32 @@ function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
             <div>
               <button 
                 type="submit" 
-                disabled={!isDbReady || (!hasData && isDbReady)}
-                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                disabled={isLoading}
+                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:bg-slate-400"
               >
-                {isDbReady ? 'Secure Sign In' : 'Connecting to Server...'}
+                {isLoading ? 'Checking credentials...' : 'Secure Sign In'}
               </button>
             </div>
           </form>
 
-          {isDbReady && !hasData && (
+          {!hasData && (
             <div className="mt-6 border-t border-slate-200 pt-6">
               <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-center shadow-inner">
                 <AlertCircle className="h-6 w-6 text-amber-500 mx-auto mb-2" />
                 <p className="text-sm font-medium text-amber-800 mb-3">
-                  The cloud database is currently empty.
+                  {!isDbReady ? "Connecting to cloud database..." : "The cloud database is currently empty."}
                 </p>
                 <button 
                   onClick={onSeedData}
                   className="px-4 py-2 w-full bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-bold shadow transition"
                 >
-                  Initialize Demo Database
+                  Force Initialize Demo Database
                 </button>
               </div>
             </div>
           )}
 
-          {isDbReady && hasData && (
+          {hasData && (
             <div className="mt-6 border-t border-slate-200 pt-6">
               <div className="rounded-md bg-blue-50 p-4">
                 <div className="flex">
@@ -388,9 +404,8 @@ function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
       </div>
     </div>
   );
-}
 
-function Announcements({ messages, onSendMessage, currentUser, employees }) {
+}function Announcements({ messages, onSendMessage, currentUser, employees }) {
   const [newMsg, setNewMsg] = useState('');
   
   const canSend = currentUser.role === 'Administrator' || currentUser.role === 'admin' || currentUser.role === 'Block Captain';

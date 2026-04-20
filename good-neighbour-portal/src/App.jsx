@@ -291,7 +291,7 @@ const getHoliday = (dateStr) => {
 // SUBCOMPONENTS (BOTTOM-UP DEFINITION)
 // ==========================================
 
-}function Announcements({ messages, onSendMessage, currentUser, employees }) {
+function Announcements({ messages, onSendMessage, currentUser, employees }) {
   const [newMsg, setNewMsg] = useState('');
   
   const canSend = currentUser.role === 'Administrator' || currentUser.role === 'admin' || currentUser.role === 'Block Captain';

@@ -7,28 +7,16 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged }
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 // --- FIREBASE INITIALIZATION ---
-// Import the functions you need from the SDKs you need
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
-  authDomain: "good-neighbour-portal.firebaseapp.com",
-  projectId: "good-neighbour-portal",
-  storageBucket: "good-neighbour-portal.firebasestorage.app",
-  messagingSenderId: "570654987529",
-  appId: "1:570654987529:web:400f90a7a63a03b6aa6fd8",
-  measurementId: "G-C3P8CNHYK9"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-const auth = getAuth(app);
-const db = getFirestore(app);
+let firebaseApp, auth, db, appId;
+try {
+  const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+  firebaseApp = initializeApp(firebaseConfig);
+  auth = getAuth(firebaseApp);
+  db = getFirestore(firebaseApp);
+  appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+} catch (e) {
+  console.error("Firebase init error:", e);
+}
 
 // --- ONTARIO COMPLIANCE REQUIREMENTS ---
 const ONTARIO_REQUIREMENTS = [

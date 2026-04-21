@@ -2,12 +2,17 @@ import React, { useState, useMemo } from 'react';
 import { Wallet, Car, Receipt } from 'lucide-react';
 import { parseLocal } from '../utils';
 
-export default function AdminClientFundsManager({ clients, expenses, clientExpenses, employees }) {
+export default function AdminClientFundsManager({ clients = [], expenses = [], clientExpenses = [], employees = [] }) {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [expandedClientId, setExpandedClientId] = useState(null);
+
+  const safeClients = Array.isArray(clients) ? clients : [];
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
+  const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
+  const safeEmployees = Array.isArray(employees) ? employees : [];
 
   const monthOptions = useMemo(() => {
     const opts = [];
@@ -26,34 +31,35 @@ export default function AdminClientFundsManager({ clients, expenses, clientExpen
   const targetMonth = parseInt(monthStr, 10) - 1; // 0-indexed
 
   const clientFundsData = useMemo(() => {
-    return clients.map(client => {
-      const cMileage = expenses.filter(e => {
-        if(e.clientId !== client.id || e.status !== 'approved') return false;
+    return safeClients.map(client => {
+      if(!client) return null;
+      const cMileage = safeExpenses.filter(e => {
+        if(!e || e.clientId !== client.id || e.status !== 'approved' || !e.date) return false;
         const d = parseLocal(e.date);
         return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
       });
-      const mileageCost = cMileage.reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
+      const mileageCost = cMileage.reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
 
-      const cOOP = clientExpenses.filter(e => {
-        if(e.clientId !== client.id || e.status !== 'approved') return false;
+      const cOOP = safeClientExpenses.filter(e => {
+        if(!e || e.clientId !== client.id || e.status !== 'approved' || !e.date) return false;
         const d = parseLocal(e.date);
         return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
       });
-      const oopCost = cOOP.reduce((sum, e) => sum + Number(e.amount), 0);
+      const oopCost = cOOP.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
       return {
         ...client,
         mileageCost,
         oopCost,
         totalSpent: mileageCost + oopCost,
-        remaining: client.monthlyAllowance - (mileageCost + oopCost),
+        remaining: (client.monthlyAllowance || 0) - (mileageCost + oopCost),
         transactions: [
-          ...cMileage.map(m => ({ ...m, type: 'mileage', cost: Number(m.kilometers) * 0.68 })),
-          ...cOOP.map(o => ({ ...o, type: 'oop', cost: Number(o.amount) }))
-        ].sort((a, b) => new Date(b.date) - new Date(a.date))
+          ...cMileage.map(m => ({ ...m, type: 'mileage', cost: Number(m.kilometers || 0) * 0.68 })),
+          ...cOOP.map(o => ({ ...o, type: 'oop', cost: Number(o.amount || 0) }))
+        ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
       };
-    });
-  }, [clients, expenses, clientExpenses, targetYear, targetMonth]);
+    }).filter(Boolean);
+  }, [safeClients, safeExpenses, safeClientExpenses, targetYear, targetMonth]);
 
   const handleToggleExpand = (clientId) => {
     setExpandedClientId(prev => prev === clientId ? null : clientId);
@@ -107,7 +113,7 @@ export default function AdminClientFundsManager({ clients, expenses, clientExpen
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600 font-medium">
-                      ${client.monthlyAllowance.toFixed(2)}
+                      ${(client.monthlyAllowance || 0).toFixed(2)}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
                       ${client.mileageCost.toFixed(2)}
@@ -136,7 +142,7 @@ export default function AdminClientFundsManager({ clients, expenses, clientExpen
                         ) : (
                           <div className="space-y-2">
                             {client.transactions.map((tx, idx) => {
-                              const emp = employees.find(e => e.id === tx.employeeId);
+                              const emp = safeEmployees.find(e => e.id === tx.employeeId);
                               return (
                                 <div key={idx} className="flex items-center justify-between p-3 bg-white rounded border border-slate-200 text-sm">
                                   <div className="flex items-center gap-3">
@@ -145,7 +151,7 @@ export default function AdminClientFundsManager({ clients, expenses, clientExpen
                                     </div>
                                     <div>
                                       <div className="font-semibold text-slate-700">
-                                        {parseLocal(tx.date).toLocaleDateString()} &bull; {emp?.name || 'Unknown Staff'}
+                                        {tx.date ? parseLocal(tx.date).toLocaleDateString() : 'Unknown'} &bull; {emp?.name || 'Unknown Staff'}
                                       </div>
                                       <div className="text-xs text-slate-500">
                                         {tx.type === 'mileage' ? `${tx.kilometers}km: ` : ''}{tx.description}
@@ -153,7 +159,7 @@ export default function AdminClientFundsManager({ clients, expenses, clientExpen
                                     </div>
                                   </div>
                                   <div className="font-bold text-slate-700">
-                                    -${tx.cost.toFixed(2)}
+                                    -${(tx.cost || 0).toFixed(2)}
                                   </div>
                                 </div>
                               )

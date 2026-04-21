@@ -2,18 +2,23 @@ import React, { useState, useMemo } from 'react';
 import { Coins } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
-export default function AdminEarningsManager({ employees, shifts, expenses, clientExpenses, payPeriodStart }) {
+export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], payPeriodStart }) {
   const shiftRate = 45;
   const kmRate = 0.68;
   
-  const allPeriods = useMemo(() => getPastPayPeriods(payPeriodStart, 104), [payPeriodStart]);
+  const safeEmps = Array.isArray(employees) ? employees : [];
+  const safeShifts = Array.isArray(shifts) ? shifts : [];
+  const safeExp = Array.isArray(expenses) ? expenses : [];
+  const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
+  
+  const allPeriods = useMemo(() => getPastPayPeriods(payPeriodStart || '2026-04-01', 104), [payPeriodStart]);
   
   const availableYears = useMemo(() => {
     const years = allPeriods.map(p => p.end.getFullYear());
     return [...new Set(years)].sort((a, b) => b - a);
   }, [allPeriods]);
 
-  const [selectedYear, setSelectedYear] = useState(availableYears[0].toString());
+  const [selectedYear, setSelectedYear] = useState(availableYears[0]?.toString() || new Date().getFullYear().toString());
   const [selectedPeriodTime, setSelectedPeriodTime] = useState('');
 
   const filteredPeriods = useMemo(() => {
@@ -33,31 +38,35 @@ export default function AdminEarningsManager({ employees, shifts, expenses, clie
   
   const employeeEarnings = useMemo(() => {
     const now = new Date();
-    return employees.map(emp => {
-      const empShifts = shifts.filter(s => {
+    return safeEmps.map(emp => {
+      if(!emp) return null;
+      const empShifts = safeShifts.filter(s => {
+        if(!s || !s.date) return false;
         const d = parseLocal(s.date);
         return s.employeeId === emp.id && 
-               new Date(`${s.date}T${s.endTime}`) <= now &&
+               new Date(`${s.date}T${s.endTime || '23:59'}`) <= now &&
                d >= currentPeriodStart && d <= currentPeriodEnd;
       });
       const shiftEarnings = empShifts.length * shiftRate;
 
-      const empMileage = expenses.filter(e => {
+      const empMileage = safeExp.filter(e => {
+        if(!e || !e.date) return false;
         const d = parseLocal(e.date);
         return e.employeeId === emp.id && 
                e.status === 'approved' && 
                d >= currentPeriodStart && d <= currentPeriodEnd;
       });
-      const totalKms = empMileage.reduce((sum, e) => sum + Number(e.kilometers), 0);
+      const totalKms = empMileage.reduce((sum, e) => sum + Number(e.kilometers || 0), 0);
       const kmEarnings = totalKms * kmRate;
 
-      const empClientExp = clientExpenses.filter(e => {
+      const empClientExp = safeCE.filter(e => {
+        if(!e || !e.date) return false;
         const d = parseLocal(e.date);
         return e.employeeId === emp.id && 
                e.status === 'approved' && 
                d >= currentPeriodStart && d <= currentPeriodEnd;
       });
-      const clientExpenseEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount), 0);
+      const clientExpenseEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
       const totalEarnings = shiftEarnings + kmEarnings + clientExpenseEarnings;
 
@@ -70,8 +79,8 @@ export default function AdminEarningsManager({ employees, shifts, expenses, clie
         clientExpenseEarnings,
         totalEarnings
       };
-    }).sort((a, b) => b.totalEarnings - a.totalEarnings);
-  }, [employees, shifts, expenses, clientExpenses, currentPeriodStart, currentPeriodEnd]);
+    }).filter(Boolean).sort((a, b) => b.totalEarnings - a.totalEarnings);
+  }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

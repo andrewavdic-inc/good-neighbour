@@ -3,7 +3,6 @@ import { Coffee, FileText, CheckCircle, XCircle, Car } from 'lucide-react';
 
 export default function ExpenseManager({ expenses = [], clientExpenses = [], employees = [], clients = [], onUpdateExpense, onUpdateClientExpense }) {
   
-  // DEFENSIVE SAFETY NETS: Guarantee these are ALWAYS arrays so the app never crashes
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
   const safeEmployees = Array.isArray(employees) ? employees : [];
@@ -12,13 +11,13 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
   const sortedExpenses = [...safeExpenses].sort((a, b) => {
     if (a?.status === 'pending' && b?.status !== 'pending') return -1;
     if (a?.status !== 'pending' && b?.status === 'pending') return 1;
-    return new Date(b?.date || 0) - new Date(a?.date || 0);
+    return new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime();
   });
 
   const sortedClientExpenses = [...safeClientExpenses].sort((a, b) => {
     if (a?.status === 'pending' && b?.status !== 'pending') return -1;
     if (a?.status !== 'pending' && b?.status === 'pending') return 1;
-    return new Date(b?.date || 0) - new Date(a?.date || 0);
+    return new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime();
   });
 
   return (

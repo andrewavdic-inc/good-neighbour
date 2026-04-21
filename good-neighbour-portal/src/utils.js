@@ -16,30 +16,30 @@ export const ONTARIO_REQUIREMENTS = [
 export const MOCK_EMPLOYEES = [
   { 
     id: 'admin1', name: 'Master Admin', role: 'Administrator', username: 'admin', password: 'admin', phone: '555-0000', email: 'admin@goodneighbour.ca',
-    photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin&backgroundColor=0f766e', requirements: {}, timeOffBalances: { sick: 5, vacation: 15 }
+    photoUrl: '[https://api.dicebear.com/7.x/avataaars/svg?seed=Admin&backgroundColor=0f766e](https://api.dicebear.com/7.x/avataaars/svg?seed=Admin&backgroundColor=0f766e)', requirements: {}, timeOffBalances: { sick: 5, vacation: 15 }
   },
   { 
     id: 'emp1', name: 'Alice Smith', role: 'Block Captain', username: 'alice', password: 'password', phone: '555-1001', email: 'alice.s@goodneighbour.ca',
-    photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alice&backgroundColor=0f766e',
+    photoUrl: '[https://api.dicebear.com/7.x/avataaars/svg?seed=Alice&backgroundColor=0f766e](https://api.dicebear.com/7.x/avataaars/svg?seed=Alice&backgroundColor=0f766e)',
     requirements: { cpr: { status: 'valid', expiryDate: '2027-01-15' }, vsc: { status: 'valid', expiryDate: '2028-04-10' }, whmis: { status: 'valid' } },
     timeOffBalances: { sick: 5, vacation: 10 }
   },
   { 
     id: 'emp2', name: 'Bob Jones', role: 'Neighbour', username: 'bob', password: 'password', phone: '555-1002', email: 'bob.j@goodneighbour.ca',
-    photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob&backgroundColor=0f766e',
+    photoUrl: '[https://api.dicebear.com/7.x/avataaars/svg?seed=Bob&backgroundColor=0f766e](https://api.dicebear.com/7.x/avataaars/svg?seed=Bob&backgroundColor=0f766e)',
     requirements: { cpr: { status: 'expired', expiryDate: '2025-12-01' }, maskFit: { status: 'missing' } }, timeOffBalances: { sick: 5, vacation: 10 }
   },
   { 
     id: 'emp3', name: 'Charlie Davis', role: 'Neighbour', username: 'charlie', password: 'password', phone: '555-1003', email: 'charlie.d@goodneighbour.ca',
-    photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie&backgroundColor=0f766e',
+    photoUrl: '[https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie&backgroundColor=0f766e](https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie&backgroundColor=0f766e)',
     requirements: { vsc: { status: 'pending' } }, timeOffBalances: { sick: 5, vacation: 10 }
   },
 ];
 
 export const MOCK_CLIENTS = [
-  { id: 'client1', name: 'Eleanor Vance', notes: 'Needs mobility assistance. Please ensure all rugs are flat and walkways are clear.', emergencyContactName: 'Robert Vance (Son)', emergencyContactPhone: '555-0101', photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Eleanor&backgroundColor=0d9488', monthlyAllowance: 100 },
-  { id: 'client2', name: 'John Miller', notes: 'Dementia care. Requires patience and gentle redirection.', emergencyContactName: 'Sarah Miller (Wife)', emergencyContactPhone: '555-0202', photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=John&backgroundColor=0d9488', monthlyAllowance: 50 },
-  { id: 'client3', name: 'Mary Johnson', notes: 'Companionship and light housekeeping. Hard of hearing in left ear.', emergencyContactName: 'David Johnson (Brother)', emergencyContactPhone: '555-0303', photoUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mary&backgroundColor=0d9488', monthlyAllowance: 150 },
+  { id: 'client1', name: 'Eleanor Vance', notes: 'Needs mobility assistance. Please ensure all rugs are flat and walkways are clear.', emergencyContactName: 'Robert Vance (Son)', emergencyContactPhone: '555-0101', photoUrl: '[https://api.dicebear.com/7.x/avataaars/svg?seed=Eleanor&backgroundColor=0d9488](https://api.dicebear.com/7.x/avataaars/svg?seed=Eleanor&backgroundColor=0d9488)', monthlyAllowance: 100 },
+  { id: 'client2', name: 'John Miller', notes: 'Dementia care. Requires patience and gentle redirection.', emergencyContactName: 'Sarah Miller (Wife)', emergencyContactPhone: '555-0202', photoUrl: '[https://api.dicebear.com/7.x/avataaars/svg?seed=John&backgroundColor=0d9488](https://api.dicebear.com/7.x/avataaars/svg?seed=John&backgroundColor=0d9488)', monthlyAllowance: 50 },
+  { id: 'client3', name: 'Mary Johnson', notes: 'Companionship and light housekeeping. Hard of hearing in left ear.', emergencyContactName: 'David Johnson (Brother)', emergencyContactPhone: '555-0303', photoUrl: '[https://api.dicebear.com/7.x/avataaars/svg?seed=Mary&backgroundColor=0d9488](https://api.dicebear.com/7.x/avataaars/svg?seed=Mary&backgroundColor=0d9488)', monthlyAllowance: 150 },
 ];
 
 export const INITIAL_SHIFTS = [

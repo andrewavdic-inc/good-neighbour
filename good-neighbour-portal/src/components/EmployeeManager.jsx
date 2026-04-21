@@ -36,10 +36,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   const handleTimeOffChange = (type, value) => {
     setFormData(prev => ({
       ...prev,
-      timeOffBalances: {
-        ...prev.timeOffBalances,
-        [type]: Number(value)
-      }
+      timeOffBalances: { ...prev.timeOffBalances, [type]: Number(value) }
     }));
   };
 
@@ -48,10 +45,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
       ...prev,
       requirements: {
         ...prev.requirements,
-        [reqKey]: {
-          ...(prev.requirements[reqKey] || {}),
-          [field]: value
-        }
+        [reqKey]: { ...(prev.requirements[reqKey] || {}), [field]: value }
       }
     }));
   };
@@ -244,7 +238,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   );
 }
 
-export default function EmployeeManager({ employees = [], setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
+export default function EmployeeManager({ employees = [], onAddEmployee, onRemoveEmployee, updateEmployee, currentUser }) {
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -255,7 +249,6 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // DEFENSIVE SAFETY NET: Ensure employees is always an array
   const safeEmployees = Array.isArray(employees) ? employees : [];
 
   const handleAddEmployee = (e) => {
@@ -270,7 +263,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
       role: newRole,
       phone: newPhone,
       email: newEmail,
-      photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
+      photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : '',
       requirements: {},
       timeOffBalances: { sick: 5, vacation: 10 }
     };

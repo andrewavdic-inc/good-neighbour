@@ -21,16 +21,24 @@ import PaystubManager from './components/PaystubManager';
 import SettingsManager from './components/SettingsManager';
 
 // --- FIREBASE INITIALIZATION ---
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
-  authDomain: "good-neighbour-portal.firebaseapp.com",
-  projectId: "good-neighbour-portal",
-  storageBucket: "good-neighbour-portal.firebasestorage.app",
-  messagingSenderId: "570654987529",
-  appId: "1:570654987529:web:400f90a7a63a03b6aa6fd8",
-  measurementId: "G-C3P8CNHYK9"
-};
+let firebaseApp, auth, db, appId;
+try {
+  const firebaseConfig = {
+    apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
+    authDomain: "good-neighbour-portal.firebaseapp.com",
+    projectId: "good-neighbour-portal",
+    storageBucket: "good-neighbour-portal.firebasestorage.app",
+    messagingSenderId: "570654987529",
+    appId: "1:570654987529:web:400f90a7a63a03b6aa6fd8",
+    measurementId: "G-C3P8CNHYK9"
+  };
+  firebaseApp = initializeApp(firebaseConfig);
+  auth = getAuth(firebaseApp);
+  db = getFirestore(firebaseApp);
+  appId = 'good-neighbour-portal';
+} catch (e) {
+  console.error("Firebase init error:", e);
+}
 
 // ==========================================
 // HELPERS FOR INLINE COMPONENTS
@@ -573,14 +581,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
       ) : activeTab === 'client-funds' ? (
         <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />
       ) : activeTab === 'expenses' ? (
-        <ExpenseManager 
-          expenses={expenses} 
-          clientExpenses={clientExpenses}
-          employees={employees} 
-          clients={clients}
-          onUpdateExpense={onUpdateExpense} 
-          onUpdateClientExpense={onUpdateClientExpense}
-        />
+        <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={employees} clients={clients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />
       ) : activeTab === 'earnings' && isMasterAdmin ? (
         <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} />
       ) : activeTab === 'timeoff' ? (
@@ -760,10 +761,7 @@ export default function App() {
 
   // Setup Firebase Auth
   useEffect(() => {
-    if (!auth) {
-      console.error("Firebase failed to initialize. Please check your firebaseConfig keys!");
-      return;
-    }
+    if (!auth) return;
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -1005,7 +1003,6 @@ export default function App() {
             timeOffLogs={timeOffLogs}
             messages={messages}
             onSendMessage={onSendMessage}
-            payPeriodStart={payPeriodStart} 
             onPickupShift={onPickupShift}
           />
         )}

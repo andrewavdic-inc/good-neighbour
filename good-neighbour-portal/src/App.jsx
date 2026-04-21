@@ -1,49 +1,39 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity } from 'lucide-react';
-import LoginPage from './components/LoginPage';
-import Announcements from './components/Announcements';
-import { ONTARIO_REQUIREMENTS, MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES, parseLocal, isBiweeklyPayday, getPayPeriodBounds, getPastPayPeriods, getHoliday } from './utils';
-import EmployeeManager from './components/EmployeeManager';
-import ClientManager from './components/ClientManager';
-import TimeOffManager from './components/TimeOffManager';
-import AdminClientFundsManager from './components/AdminClientFundsManager';
-import AdminEarningsManager from './components/AdminEarningsManager';
-import ExpenseManager from './components/ExpenseManager';
-import PaystubManager from './components/PaystubManager';
-import SettingsManager from './components/SettingsManager';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
+// --- UTILS & COMPONENTS ---
+import { MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES, parseLocal, isBiweeklyPayday, getHoliday } from './utils';
+
+import LoginPage from './components/LoginPage';
+import Announcements from './components/Announcements';
+import EmployeeManager from './components/EmployeeManager';
+import ClientManager from './components/ClientManager';
+import AdminClientFundsManager from './components/AdminClientFundsManager';
+import AdminEarningsManager from './components/AdminEarningsManager';
+import TimeOffManager from './components/TimeOffManager';
+import ExpenseManager from './components/ExpenseManager';
+import PaystubManager from './components/PaystubManager';
+import SettingsManager from './components/SettingsManager';
+
 // --- FIREBASE INITIALIZATION ---
-// Import the functions you need from the SDKs you need
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
-  authDomain: "good-neighbour-portal.firebaseapp.com",
-  projectId: "good-neighbour-portal",
-  storageBucket: "good-neighbour-portal.firebasestorage.app",
-  messagingSenderId: "570654987529",
-  appId: "1:570654987529:web:400f90a7a63a03b6aa6fd8",
-  measurementId: "G-C3P8CNHYK9"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id').replace(/\//g, '-');
+let firebaseApp, auth, db, appId;
+try {
+  const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+  firebaseApp = initializeApp(firebaseConfig);
+  auth = getAuth(firebaseApp);
+  db = getFirestore(firebaseApp);
+  appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+} catch (e) {
+  console.error("Firebase init error:", e);
+}
 
 // ==========================================
-// SUBCOMPONENTS (BOTTOM-UP DEFINITION)
+// INLINE COMPONENTS
 // ==========================================
 
 function AddShiftModal({ isOpen, onClose, selectedDate, employees, clients, onSave }) {
@@ -58,7 +48,6 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees, clients, onSa
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
     const newShifts = [];
     const baseDate = parseLocal(selectedDate);
 
@@ -68,16 +57,12 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees, clients, onSa
         nextDate.setDate(baseDate.getDate() + (i * 7));
         const dateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
         
-        if (getHoliday(dateStr)) {
-          continue;
-        }
-        
+        if (getHoliday(dateStr)) continue;
         newShifts.push({ employeeId, clientId, date: dateStr, startTime, endTime });
       }
     } else {
       newShifts.push({ employeeId, clientId, date: selectedDate, startTime, endTime });
     }
-
     onSave(newShifts);
     onClose();
   };
@@ -89,89 +74,43 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees, clients, onSa
           <h3 className="text-lg font-bold text-slate-800">Assign New Shift</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition text-2xl leading-none">&times;</button>
         </div>
-        
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
-            <input 
-              type="date" 
-              value={selectedDate} 
-              readOnly 
-              className="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-500 cursor-not-allowed focus:outline-none"
-            />
+            <input type="date" value={selectedDate} readOnly className="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-500 cursor-not-allowed focus:outline-none" />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
-            <select 
-              value={employeeId} 
-              onChange={(e) => setEmployeeId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-              required
-            >
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
-              ))}
+            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+              {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>)}
             </select>
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Start Time</label>
-              <input 
-                type="time" 
-                value={startTime} 
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                required
-              />
+              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">End Time</label>
-              <input 
-                type="time" 
-                value={endTime} 
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                required
-              />
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required />
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Client</label>
-            <select 
-              value={clientId} 
-              onChange={(e) => setClientId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-              required
-            >
-              {clients.map(client => (
-                <option key={client.id} value={client.id}>{client.name}</option>
-              ))}
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+              {clients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
             </select>
           </div>
-
           <div className="pt-2 border-t border-slate-200">
             <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
-              <input 
-                type="checkbox" 
-                checked={isRecurring} 
-                onChange={(e) => setIsRecurring(e.target.checked)}
-                className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4"
-              />
+              <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
               <span>Repeat Weekly</span>
             </label>
-            
             {isRecurring && (
               <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-md space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">For how many weeks?</label>
-                  <select 
-                    value={recurrenceWeeks}
-                    onChange={(e) => setRecurrenceWeeks(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                  >
+                  <select value={recurrenceWeeks} onChange={(e) => setRecurrenceWeeks(Number(e.target.value))} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
                     <option value={4}>4 Weeks (1 Month)</option>
                     <option value={12}>12 Weeks (3 Months)</option>
                     <option value={26}>26 Weeks (6 Months)</option>
@@ -185,21 +124,9 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees, clients, onSa
               </div>
             )}
           </div>
-
           <div className="pt-4 flex justify-end space-x-3">
-            <button 
-              type="button" 
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition"
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition"
-            >
-              Save Shift
-            </button>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Cancel</button>
+            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition">Save Shift</button>
           </div>
         </form>
       </div>
@@ -207,8 +134,342 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees, clients, onSa
   );
 }
 
+function ClientProfileModal({ client, remainingBalance, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative">
+        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white">
+          <h3 className="text-lg font-bold flex items-center"><Heart className="h-5 w-5 mr-2 text-teal-200" /> Client Profile</h3>
+          <button onClick={onClose} className="text-teal-200 hover:text-white transition text-2xl leading-none">&times;</button>
+        </div>
+        <div className="p-6 space-y-6">
+          <div className="flex items-center space-x-4">
+            {client.photoUrl ? <img src={client.photoUrl} alt={client.name} className="h-16 w-16 rounded-full border-2 border-teal-100 object-cover" /> :
+              <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-teal-600"><User className="h-8 w-8" /></div>}
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">{client.name}</h2>
+              <div className="inline-flex items-center mt-1 px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+                <Wallet className="h-3 w-3 mr-1" /> ${remainingBalance.toFixed(2)} Monthly Funds Left
+              </div>
+            </div>
+          </div>
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Info className="h-4 w-4 mr-1.5" /> Care Notes & Routine</h4>
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions provided.'}</p>
+          </div>
+          <div className="bg-red-50 p-4 rounded-lg border border-red-100">
+            <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center"><Phone className="h-4 w-4 mr-1.5" /> Emergency Contact</h4>
+            {client.emergencyContactName ? (
+              <div>
+                <div className="text-sm font-semibold text-red-900">{client.emergencyContactName}</div>
+                <div className="text-lg font-bold text-red-700 mt-0.5">{client.emergencyContactPhone}</div>
+              </div>
+            ) : <span className="text-sm text-red-600 italic">No emergency contact listed. Call 911 in an emergency.</span>}
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeMileageLog({ myExpenses, clients, onAddExpense }) {
+  const [date, setDate] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [kilometers, setKilometers] = useState('');
+  const [description, setDescription] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!date || !clientId || !kilometers) return;
+    onAddExpense({ date, clientId, kilometers: Number(kilometers), description });
+    setDate(''); setClientId(''); setKilometers(''); setDescription('');
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="flex items-center"><Car className="h-5 w-5 mr-2 text-teal-600" /><h2 className="text-lg font-semibold text-slate-800">Mileage Log</h2></div>
+      </div>
+      <div className="p-6 border-b border-slate-200 bg-slate-50/50">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Client *</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required><option value="" disabled>Select client</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label><input type="number" min="0.1" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. 15" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. Grocery trip" /></div>
+          </div>
+          <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Mileage</button>
+        </form>
+      </div>
+      <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
+        {myExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logged yet.</div> :
+          [...myExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp => {
+            const client = clients.find(c => c.id === exp.clientId);
+            return (
+              <div key={exp.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
+                <div>
+                  <div className="font-semibold text-sm text-slate-800">{parseLocal(exp.date).toLocaleDateString()} <span className="text-slate-500 font-normal ml-1">for {client?.name}</span></div>
+                  <div className="text-xs text-slate-500 mt-0.5">{exp.kilometers} km &bull; {exp.description}</div>
+                </div>
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+              </div>
+            )
+          })
+        }
+      </div>
+    </div>
+  );
+}
+
+function EmployeeClientExpenseLog({ myClientExpenses, clients, onAddClientExpense }) {
+  const [date, setDate] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [receiptDetails, setReceiptDetails] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!date || !clientId || !amount) return;
+    onAddClientExpense({ date, clientId, amount: Number(amount), description, receiptDetails });
+    setDate(''); setClientId(''); setAmount(''); setDescription(''); setReceiptDetails('');
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="flex items-center"><Receipt className="h-5 w-5 mr-2 text-teal-600" /><h2 className="text-lg font-semibold text-slate-800">Client Expenses</h2></div>
+      </div>
+      <div className="p-6 border-b border-slate-200 bg-slate-50/50">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Client *</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required><option value="" disabled>Select client</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. 15.50" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. Coffee" /></div>
+          </div>
+          <div><label className="block text-xs font-medium text-slate-700 mb-1">Receipt Note/Link</label><input type="text" value={receiptDetails} onChange={(e)=>setReceiptDetails(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. Handed to client" /></div>
+          <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Expense</button>
+        </form>
+      </div>
+      <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
+        {myClientExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged yet.</div> :
+          [...myClientExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp => {
+            const client = clients.find(c => c.id === exp.clientId);
+            return (
+              <div key={exp.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
+                <div>
+                  <div className="font-semibold text-sm text-slate-800">{parseLocal(exp.date).toLocaleDateString()} <span className="text-slate-500 font-normal ml-1">for {client?.name}</span></div>
+                  <div className="text-xs text-slate-500 mt-0.5">${exp.amount.toFixed(2)} &bull; {exp.description}</div>
+                </div>
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+              </div>
+            )
+          })
+        }
+      </div>
+    </div>
+  );
+}
+
+function EmployeePaystubs({ myPaystubs }) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center"><FileText className="h-5 w-5 mr-2 text-teal-600" /><h2 className="text-lg font-semibold text-slate-800">My Paystubs</h2></div>
+      <div className="p-6">
+        {myPaystubs.length === 0 ? <div className="text-center text-slate-500 py-4">No paystubs available.</div> :
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {[...myPaystubs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(ps => (
+              <div key={ps.id} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
+                <FileText className="h-8 w-8 text-teal-600 mr-3 opacity-70 group-hover:opacity-100 transition" />
+                <div>
+                  <div className="font-semibold text-slate-800 text-sm">{parseLocal(ps.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
+                  <div className="text-xs text-slate-500 truncate w-32" title={ps.fileName}>{ps.fileName}</div>
+                </div>
+                <Download className="h-4 w-4 text-slate-400 ml-auto group-hover:text-teal-600 transition" />
+              </div>
+            ))}
+          </div>
+        }
+      </div>
+    </div>
+  );
+}
+
+function EmployeeDashboard({ shifts, employees, currentUser, clients, expenses, onAddExpense, clientExpenses, onAddClientExpense, getClientRemainingBalance, paystubs, timeOffLogs, messages, onSendMessage, payPeriodStart, onPickupShift }) {
+  const [activeTab, setActiveTab] = useState('schedule');
+  const [selectedClient, setSelectedClient] = useState(null);
+
+  const myShifts = shifts.filter(s => s.employeeId === currentUser.id);
+  const myExpenses = expenses.filter(e => e.employeeId === currentUser.id);
+  const myClientExpenses = clientExpenses.filter(e => e.employeeId === currentUser.id);
+  const myPaystubs = paystubs.filter(p => p.employeeId === currentUser.id);
+  const openShifts = shifts.filter(s => s.employeeId === 'unassigned');
+  
+  const now = new Date();
+  const upcomingShifts = myShifts
+    .filter(s => new Date(`${s.date}T${s.endTime}`) > now)
+    .sort((a, b) => new Date(`${a.date}T${a.startTime}`) - new Date(`${b.date}T${b.startTime}`));
+  const nextShift = upcomingShifts[0];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row gap-6">
+        <div className="md:w-1/3 space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
+            <div className="h-20 w-20 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 mb-4">
+              <User className="h-10 w-10" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800">{currentUser.name}</h2>
+            <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full mt-2 border border-teal-100">{currentUser.role}</span>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
+              <Clock className="h-5 w-5 mr-2 text-teal-600" />
+              <h2 className="text-lg font-semibold text-slate-800">Next Shift</h2>
+            </div>
+            <div className="p-6">
+              {nextShift ? (
+                <div className="space-y-4">
+                  <div className="flex items-center text-slate-700">
+                    <CalendarDays className="h-5 w-5 mr-3 text-slate-400" />
+                    <span className="font-medium">{parseLocal(nextShift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+                  </div>
+                  <div className="flex items-center text-slate-700">
+                    <Clock className="h-5 w-5 mr-3 text-slate-400" />
+                    <span className="font-medium">{nextShift.startTime} - {nextShift.endTime}</span>
+                  </div>
+                  <div className="flex items-center text-slate-700">
+                    <Heart className="h-5 w-5 mr-3 text-slate-400" />
+                    <span className="font-medium">{clients.find(c => c.id === nextShift.clientId)?.name}</span>
+                  </div>
+                  <button onClick={() => setSelectedClient(clients.find(c => c.id === nextShift.clientId))} className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded transition text-sm flex items-center justify-center">
+                    <Info className="h-4 w-4 mr-2" /> View Client Plan
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center text-slate-500 py-4">No upcoming shifts scheduled.</div>
+              )}
+            </div>
+          </div>
+
+          {openShifts.length > 0 && (
+            <div className="bg-amber-50 rounded-xl shadow-sm border border-amber-200 p-4">
+              <div className="flex items-center text-amber-800 font-bold mb-2">
+                <AlertCircle className="h-5 w-5 mr-2" /> Open Shifts Available!
+              </div>
+              <p className="text-sm text-amber-700 mb-3">There are {openShifts.length} shift(s) that need coverage.</p>
+              <button onClick={() => setActiveTab('open-shifts')} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded transition text-sm">View Open Shifts</button>
+            </div>
+          )}
+        </div>
+
+        <div className="md:w-2/3 space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
+              <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>My Schedule</button>
+              <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Logs & Expenses</button>
+              <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
+              <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Team Feed</button>
+            </div>
+
+            <div className="p-0">
+              {activeTab === 'schedule' && (
+                <div className="divide-y divide-slate-100">
+                  {upcomingShifts.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500">You have no upcoming shifts.</div>
+                  ) : (
+                    upcomingShifts.map(shift => {
+                      const client = clients.find(c => c.id === shift.clientId);
+                      return (
+                        <div key={shift.id} className="p-4 hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-start space-x-4">
+                            <div className="bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px]">
+                              <div className="text-xs font-bold text-teal-600 uppercase">{parseLocal(shift.date).toLocaleDateString('en-US', { month: 'short' })}</div>
+                              <div className="text-xl font-extrabold text-teal-800">{parseLocal(shift.date).getDate()}</div>
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
+                              <div className="text-sm text-slate-600 flex items-center mt-1">
+                                <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
+                              </div>
+                            </div>
+                          </div>
+                          <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
+                            Care Plan
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'open-shifts' && (
+                <div className="bg-amber-50/30 p-4">
+                  <h3 className="font-bold text-amber-800 mb-4 flex items-center"><AlertCircle className="h-5 w-5 mr-2"/> Shifts Needing Coverage</h3>
+                  <div className="space-y-3">
+                    {openShifts.length === 0 ? (
+                      <p className="text-sm text-slate-500 text-center py-4">No open shifts at this time.</p>
+                    ) : (
+                      openShifts.map(shift => {
+                        const client = clients.find(c => c.id === shift.clientId);
+                        return (
+                          <div key={shift.id} className="bg-white border border-amber-200 rounded-lg p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div>
+                              <div className="font-bold text-slate-800">{parseLocal(shift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+                              <div className="text-sm text-slate-600 mt-1">{shift.startTime} - {shift.endTime} &bull; {client?.name}</div>
+                            </div>
+                            <button 
+                              onClick={() => onPickupShift(shift.id, currentUser.id)}
+                              className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded transition w-full sm:w-auto"
+                            >
+                              Pick Up Shift
+                            </button>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'expenses' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
+                  <EmployeeMileageLog myExpenses={myExpenses} clients={clients} getClientRemainingBalance={getClientRemainingBalance} onAddExpense={onAddExpense} />
+                  <EmployeeClientExpenseLog myClientExpenses={myClientExpenses} clients={clients} getClientRemainingBalance={getClientRemainingBalance} onAddClientExpense={onAddClientExpense} />
+                </div>
+              )}
+
+              {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
+
+              {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {selectedClient && (
+        <ClientProfileModal 
+          client={selectedClient} 
+          remainingBalance={getClientRemainingBalance(selectedClient.id)}
+          onClose={() => setSelectedClient(null)} 
+        />
+      )}
+    </div>
+  );
+}
+
 function AdminDashboard({ shifts, employees, setEmployees, updateEmployee, clients, setClients, updateClient, expenses, onUpdateExpense, clientExpenses, onUpdateClientExpense, paystubs, onAddPaystub, onRemovePaystub, timeOffLogs, onAddTimeOffLog, onRemoveTimeOffLog, messages, onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, onAddShift, onRemoveShift, onMarkShiftOpen }) {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 3, 1));
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
   const [activeTab, setActiveTab] = useState('schedule');
@@ -255,76 +516,46 @@ function AdminDashboard({ shifts, employees, setEmployees, updateEmployee, clien
       </div>
 
       <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide">
-        <button 
-          onClick={() => setActiveTab('schedule')}
-          className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
+        <button onClick={() => setActiveTab('schedule')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
           <div className="flex items-center space-x-2"><CalendarIcon className="h-4 w-4"/><span>Schedule</span></div>
         </button>
-        <button 
-          onClick={() => setActiveTab('employees')}
-          className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'employees' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
+        <button onClick={() => setActiveTab('employees')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'employees' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
           <div className="flex items-center space-x-2"><Users className="h-4 w-4"/><span>Employees</span></div>
         </button>
-        <button 
-          onClick={() => setActiveTab('clients')}
-          className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'clients' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
+        <button onClick={() => setActiveTab('clients')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'clients' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
           <div className="flex items-center space-x-2"><Heart className="h-4 w-4"/><span>Clients</span></div>
         </button>
-        <button 
-          onClick={() => setActiveTab('client-funds')}
-          className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'client-funds' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
+        <button onClick={() => setActiveTab('client-funds')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'client-funds' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
           <div className="flex items-center space-x-2"><Wallet className="h-4 w-4"/><span>Client Funds</span></div>
         </button>
-        <button 
-          onClick={() => setActiveTab('expenses')}
-          className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
+        <button onClick={() => setActiveTab('expenses')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
           <div className="flex items-center space-x-2"><Receipt className="h-4 w-4"/><span>Reimbursements</span></div>
         </button>
         {isMasterAdmin && (
-          <button 
-            onClick={() => setActiveTab('earnings')}
-            className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'earnings' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-          >
+          <button onClick={() => setActiveTab('earnings')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'earnings' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <div className="flex items-center space-x-2"><Coins className="h-4 w-4"/><span>Earnings</span></div>
           </button>
         )}
-        <button 
-          onClick={() => setActiveTab('timeoff')}
-          className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'timeoff' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
+        <button onClick={() => setActiveTab('timeoff')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'timeoff' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
           <div className="flex items-center space-x-2"><CalendarDays className="h-4 w-4"/><span>Time Off</span></div>
         </button>
-        <button 
-          onClick={() => setActiveTab('paystubs')}
-          className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'paystubs' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
+        <button onClick={() => setActiveTab('paystubs')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'paystubs' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
           <div className="flex items-center space-x-2"><FileText className="h-4 w-4"/><span>Paystubs</span></div>
         </button>
-        <button 
-          onClick={() => setActiveTab('announcements')}
-          className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-        >
+        <button onClick={() => setActiveTab('announcements')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
           <div className="flex items-center space-x-2"><MessageSquare className="h-4 w-4"/><span>Announcements</span></div>
         </button>
         {isMasterAdmin && (
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}
-          >
+          <button onClick={() => setActiveTab('settings')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <div className="flex items-center space-x-2"><Settings className="h-4 w-4"/><span>Settings</span></div>
           </button>
         )}
       </div>
 
       {activeTab === 'employees' ? (
-        <EmployeeManager employees={employees} setEmployees={setEmployees} updateEmployee={updateEmployee} currentUser={currentUser} />
+        <EmployeeManager employees={employees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />
       ) : activeTab === 'clients' ? (
-        <ClientManager clients={clients} setClients={setClients} updateClient={updateClient} />
+        <ClientManager clients={clients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} />
       ) : activeTab === 'client-funds' ? (
         <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />
       ) : activeTab === 'expenses' ? (
@@ -337,31 +568,13 @@ function AdminDashboard({ shifts, employees, setEmployees, updateEmployee, clien
           onUpdateClientExpense={onUpdateClientExpense}
         />
       ) : activeTab === 'earnings' && isMasterAdmin ? (
-        <AdminEarningsManager
-          employees={employees}
-          shifts={shifts}
-          expenses={expenses}
-          clientExpenses={clientExpenses}
-          payPeriodStart={payPeriodStart}
-        />
+        <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} />
       ) : activeTab === 'timeoff' ? (
-        <TimeOffManager 
-          employees={employees} 
-          timeOffLogs={timeOffLogs} 
-          onAddTimeOff={onAddTimeOffLog} 
-          onRemoveTimeOff={onRemoveTimeOffLog} 
-        />
+        <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />
       ) : activeTab === 'paystubs' ? (
-        <PaystubManager 
-          paystubs={paystubs} 
-          employees={employees} 
-          onAddPaystub={onAddPaystub} 
-          onRemovePaystub={onRemovePaystub} 
-        />
+        <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />
       ) : activeTab === 'announcements' ? (
-        <div className="max-w-4xl">
-          <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />
-        </div>
+        <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>
       ) : activeTab === 'settings' && isMasterAdmin ? (
         <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} />
       ) : (
@@ -421,11 +634,9 @@ function AdminDashboard({ shifts, employees, setEmployees, updateEmployee, clien
                 
                 const filteredShifts = shifts.filter(s => {
                   if (!scheduleSearch.trim()) return true;
-                  
                   const emp = employees.find(e => e.id === s.employeeId);
                   const client = clients.find(c => c.id === s.clientId);
                   const searchLower = scheduleSearch.toLowerCase();
-                  
                   return (
                     (emp && emp.name.toLowerCase().includes(searchLower)) ||
                     (client && client.name.toLowerCase().includes(searchLower))
@@ -510,416 +721,6 @@ function AdminDashboard({ shifts, employees, setEmployees, updateEmployee, clien
           clients={clients}
           onSave={onAddShift}
         />
-      )}
-    </div>
-  );
-}
-
-function EmployeeDashboard({ shifts, employees, currentUser, clients, expenses, onAddExpense, clientExpenses, onAddClientExpense, getClientRemainingBalance, paystubs, timeOffLogs, messages, onSendMessage, payPeriodStart, onPickupShift }) {
-  const [viewingClient, setViewingClient] = useState(null);
-  const [scheduleView, setScheduleView] = useState('list');
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 3, 1));
-
-  const myShifts = useMemo(() => {
-    return shifts
-      .filter(s => s.employeeId === currentUser.id)
-      .sort((a, b) => new Date(`${a.date}T${a.startTime}`) - new Date(`${b.date}T${b.startTime}`));
-  }, [shifts, currentUser.id]);
-
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const pastShifts = myShifts.filter(s => new Date(`${s.date}T${s.endTime}`) <= now);
-  const upcomingShifts = myShifts.filter(s => new Date(`${s.date}T${s.endTime}`) > now);
-  const nextShift = upcomingShifts[0];
-
-  const openShifts = useMemo(() => {
-    return shifts
-      .filter(s => s.employeeId === 'unassigned' && new Date(`${s.date}T${s.startTime}`) >= now)
-      .sort((a, b) => new Date(`${a.date}T${a.startTime}`) - new Date(`${b.date}T${b.startTime}`));
-  }, [shifts, now]);
-
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
-  
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
-
-  const shiftRate = 45;
-  const kmRate = 0.68;
-  
-  const { start: currentPeriodStart, end: currentPeriodEnd } = getPayPeriodBounds(payPeriodStart);
-  
-  const currentPayPeriodShifts = pastShifts.filter(s => {
-    const d = parseLocal(s.date);
-    return d >= currentPeriodStart && d <= currentPeriodEnd;
-  });
-  const shiftEarnings = currentPayPeriodShifts.length * shiftRate;
-
-  const myExpenses = expenses.filter(e => e.employeeId === currentUser.id);
-  const currentPayPeriodExpenses = myExpenses.filter(e => {
-    const d = parseLocal(e.date);
-    return e.status === 'approved' && d >= currentPeriodStart && d <= currentPeriodEnd;
-  });
-  const totalKms = currentPayPeriodExpenses.reduce((sum, e) => sum + Number(e.kilometers), 0);
-  const kmEarnings = totalKms * kmRate;
-
-  const myClientExpenses = clientExpenses.filter(e => e.employeeId === currentUser.id);
-  const currentPayPeriodClientExpenses = myClientExpenses.filter(e => {
-    const d = parseLocal(e.date);
-    return e.status === 'approved' && d >= currentPeriodStart && d <= currentPeriodEnd;
-  });
-  const clientExpenseEarnings = currentPayPeriodClientExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  
-  const totalEarnings = shiftEarnings + kmEarnings + clientExpenseEarnings;
-
-  const ytdShifts = pastShifts.filter(s => parseLocal(s.date).getFullYear() === currentYear);
-  const ytdShiftEarnings = ytdShifts.length * shiftRate;
-  
-  const ytdExpenses = myExpenses.filter(e => e.status === 'approved' && parseLocal(e.date).getFullYear() === currentYear);
-  const ytdKmEarnings = ytdExpenses.reduce((sum, e) => sum + Number(e.kilometers), 0) * kmRate;
-
-  const ytdClientExpenses = myClientExpenses.filter(e => e.status === 'approved' && parseLocal(e.date).getFullYear() === currentYear);
-  const ytdClientExpenseEarnings = ytdClientExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
-
-  const ytdTotalEarnings = ytdShiftEarnings + ytdKmEarnings + ytdClientExpenseEarnings;
-
-  const myTimeOffLogs = timeOffLogs.filter(l => l.employeeId === currentUser.id && parseLocal(l.date).getFullYear() === currentYear);
-  const usedSick = myTimeOffLogs.filter(l => l.type === 'sick').length;
-  const usedVacation = myTimeOffLogs.filter(l => l.type === 'vacation').length;
-  const allowedSick = currentUser.timeOffBalances?.sick || 0;
-  const allowedVacation = currentUser.timeOffBalances?.vacation || 0;
-  const remSick = allowedSick - usedSick;
-  const remVacation = allowedVacation - usedVacation;
-
-  const handleViewProfile = (clientId) => {
-    const client = clients.find(c => c.id === clientId);
-    if (client) setViewingClient(client);
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl shadow-md border border-emerald-400 p-6 sm:p-8 text-white flex flex-col sm:flex-row items-center justify-between gap-6 relative overflow-hidden">
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none">
-          <Coins className="w-64 h-64 -mr-12" />
-        </div>
-        <div className="relative z-10 w-full flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <h2 className="text-xl font-bold flex items-center mb-1">
-              <Star className="h-5 w-5 mr-2 text-yellow-300" fill="currentColor" /> Current Pay Period
-            </h2>
-            <p className="text-emerald-50 text-sm">
-              {currentPeriodStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} &ndash; {currentPeriodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
-            <div className="mt-5 flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-6">
-              <span className="text-5xl sm:text-6xl font-extrabold leading-none">${totalEarnings.toFixed(2)}</span>
-              <div className="flex flex-col gap-1.5 flex-wrap pb-1">
-                <span className="text-emerald-100 font-medium bg-black/10 px-2.5 py-1 rounded text-xs inline-flex items-center w-fit">
-                  <Briefcase className="h-3.5 w-3.5 mr-1.5" /> 
-                  Shifts: ${shiftEarnings.toFixed(2)}
-                </span>
-                <span className="text-emerald-100 font-medium bg-black/10 px-2.5 py-1 rounded text-xs inline-flex items-center w-fit">
-                  <Car className="h-3.5 w-3.5 mr-1.5" /> 
-                  Mileage: ${kmEarnings.toFixed(2)}
-                </span>
-                <span className="text-emerald-100 font-medium bg-black/10 px-2.5 py-1 rounded text-xs inline-flex items-center w-fit">
-                  <Receipt className="h-3.5 w-3.5 mr-1.5" /> 
-                  Client Exp: ${clientExpenseEarnings.toFixed(2)}
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-black/10 border border-white/20 p-5 rounded-xl shrink-0 text-left md:text-right flex flex-col justify-center">
-            <span className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">YTD Earnings ({currentYear})</span>
-            <span className="text-3xl font-bold text-white">${ytdTotalEarnings.toFixed(2)}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-slate-500 font-semibold mb-3 flex items-center"><Activity className="w-5 h-5 mr-2 text-teal-600"/> Sick Days ({currentYear})</h3>
-          <div className="text-3xl font-bold text-slate-800 flex items-end gap-2">
-            <span className={remSick <= 0 ? 'text-red-500' : 'text-slate-800'}>{remSick}</span>
-            <span className="text-lg font-medium text-slate-400 mb-0.5">remaining</span>
-          </div>
-          <p className="text-sm text-slate-500 mt-2 font-medium bg-slate-50 p-2 rounded-lg border border-slate-100 inline-block">{usedSick} used out of {allowedSick} total allocated</p>
-        </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-          <h3 className="text-slate-500 font-semibold mb-3 flex items-center"><Sun className="w-5 h-5 mr-2 text-teal-600"/> Vacation Days ({currentYear})</h3>
-          <div className="text-3xl font-bold text-slate-800 flex items-end gap-2">
-            <span className={remVacation <= 0 ? 'text-red-500' : 'text-slate-800'}>{remVacation}</span>
-            <span className="text-lg font-medium text-slate-400 mb-0.5">remaining</span>
-          </div>
-          <p className="text-sm text-slate-500 mt-2 font-medium bg-slate-50 p-2 rounded-lg border border-slate-100 inline-block">{usedVacation} used out of {allowedVacation} total allocated</p>
-        </div>
-      </div>
-
-      {openShifts.length > 0 && (
-        <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="bg-amber-100/50 px-6 py-4 border-b border-amber-200 flex items-center justify-between">
-            <div className="flex items-center text-amber-800">
-              <Bell className="h-5 w-5 mr-2 animate-bounce" />
-              <h2 className="text-lg font-bold">Available Shifts Board</h2>
-            </div>
-            <span className="bg-amber-200 text-amber-800 text-xs font-bold px-2 py-1 rounded-full">{openShifts.length} Open</span>
-          </div>
-          <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {openShifts.map(shift => {
-              const shiftDate = new Date(shift.date);
-              const client = clients.find(c => c.id === shift.clientId);
-              return (
-                <div key={shift.id} className="bg-white border border-amber-200 rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md transition">
-                  <div>
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="font-bold text-amber-700">
-                        {shiftDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                      </div>
-                      <div className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded">
-                        +${shiftRate}
-                      </div>
-                    </div>
-                    <div className="text-sm font-medium text-slate-800 mb-1 flex items-center">
-                      <Clock className="h-4 w-4 mr-1.5 text-slate-400" />
-                      {shift.startTime} - {shift.endTime}
-                    </div>
-                    <div className="text-sm text-slate-600 mb-4 flex items-start">
-                      <Heart className="h-4 w-4 mr-1.5 text-teal-500 shrink-0 mt-0.5" />
-                      <span className="line-clamp-2">{client?.name} {client?.notes ? `- ${client.notes}` : ''}</span>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => onPickupShift(shift.id, currentUser.id)}
-                    className="w-full mt-4 bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 rounded-lg flex items-center justify-center transition"
-                  >
-                    <PlusCircle className="h-4 w-4 mr-1.5" /> Claim Shift
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center md:items-start justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Welcome back, {currentUser.name.split(' ')[0]}!</h1>
-          <p className="text-slate-500 text-lg">Here is an overview of your upcoming schedule.</p>
-        </div>
-        
-        {nextShift && (
-          <div className="bg-teal-50 border border-teal-100 p-4 rounded-xl shrink-0 w-full md:w-auto">
-            <h3 className="text-xs font-bold text-teal-600 uppercase tracking-wider mb-2 flex items-center justify-between">
-              <span className="flex items-center"><CalendarDays className="h-4 w-4 mr-1"/> Next Upcoming Shift</span>
-            </h3>
-            <div className="text-slate-800 font-semibold text-lg">
-              {new Date(nextShift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-            </div>
-            <div className="text-teal-700 flex items-center mt-1">
-              <Clock className="h-4 w-4 mr-1.5" />
-              {nextShift.startTime} - {nextShift.endTime}
-            </div>
-            <div className="mt-3 flex flex-col gap-2 border-t border-teal-200 pt-3">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-slate-700 font-medium">
-                  {clients.find(c => c.id === nextShift.clientId)?.name || 'Unknown Client'}
-                </div>
-                <button 
-                  onClick={() => handleViewProfile(nextShift.clientId)}
-                  className="text-xs bg-white text-teal-700 hover:bg-teal-600 hover:text-white border border-teal-200 px-2.5 py-1.5 rounded-md transition-colors font-medium flex items-center"
-                >
-                  <Info className="h-3.5 w-3.5 mr-1" />
-                  Profile
-                </button>
-              </div>
-              <div className="text-xs font-medium bg-teal-100/50 text-teal-800 px-2 py-1 rounded flex items-center w-fit">
-                <Wallet className="h-3 w-3 mr-1" />
-                Remaining Expense Funds: ${getClientRemainingBalance(nextShift.clientId).toFixed(2)}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />
-
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between bg-slate-50 gap-4">
-          <div className="flex items-center">
-            <CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Your Schedule</h2>
-          </div>
-          <div className="flex bg-slate-200 p-1 rounded-lg w-fit">
-            <button
-              onClick={() => setScheduleView('list')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'list' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-            >
-              List View
-            </button>
-            <button
-              onClick={() => setScheduleView('calendar')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'calendar' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-            >
-              Calendar View
-            </button>
-          </div>
-        </div>
-        
-        {scheduleView === 'list' ? (
-          myShifts.length === 0 ? (
-            <div className="p-12 text-center text-slate-500">
-              You currently have no scheduled shifts.
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {myShifts.map((shift, idx) => {
-                const shiftDate = new Date(shift.date);
-                const client = clients.find(c => c.id === shift.clientId);
-                const remainingBalance = getClientRemainingBalance(shift.clientId);
-                
-                return (
-                  <div key={shift.id} className={`p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition hover:bg-slate-50 ${idx === 0 ? 'bg-teal-50/30' : ''}`}>
-                    <div className="flex items-start space-x-4">
-                      <div className="bg-teal-100 text-teal-800 rounded-lg p-3 text-center min-w-[70px]">
-                        <div className="text-xs font-bold uppercase">{shiftDate.toLocaleDateString('en-US', { month: 'short' })}</div>
-                        <div className="text-2xl font-bold leading-none mt-1">{shiftDate.getDate()}</div>
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-semibold text-slate-800">
-                          {client?.name || 'Unknown Client'}
-                        </h4>
-                        <p className="text-slate-500 flex items-center mt-1">
-                           <Clock className="h-4 w-4 mr-1.5" />
-                           {shift.startTime} - {shift.endTime}
-                        </p>
-                        <div className="mt-2 text-xs font-medium bg-slate-100 text-slate-600 px-2 py-1 rounded inline-flex items-center">
-                          <Wallet className="h-3 w-3 mr-1" />
-                          Client Funds: ${remainingBalance.toFixed(2)} left
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="sm:text-right text-sm flex flex-col sm:items-end gap-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full font-medium bg-green-100 text-green-800 self-start sm:self-end w-fit">
-                        Confirmed
-                      </span>
-                      <button 
-                        onClick={() => handleViewProfile(shift.clientId)}
-                        className="text-xs text-teal-600 hover:text-teal-800 font-medium flex items-center transition"
-                      >
-                        <Info className="h-3.5 w-3.5 mr-1" /> View Care Profile
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        ) : (
-          <div>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
-              <h3 className="text-md font-semibold text-slate-800 flex items-center">
-                {monthNames[month]} {year}
-              </h3>
-              <div className="flex space-x-2">
-                <button onClick={prevMonth} className="p-1.5 rounded hover:bg-slate-100 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
-                <button onClick={nextMonth} className="p-1.5 rounded hover:bg-slate-100 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
-              {blanksArray.map(blank => (
-                <div key={`blank-${blank}`} className="bg-white min-h-[100px] opacity-50 p-2"></div>
-              ))}
-              {daysArray.map(day => {
-                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const dayShifts = myShifts.filter(s => s.date === dateStr);
-                const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
-                const holiday = getHoliday(dateStr);
-                
-                return (
-                  <div 
-                    key={day} 
-                    className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}
-                  >
-                    <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
-                      <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
-                      <div className="flex flex-col items-end gap-1">
-                        {holiday && (
-                          <span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>
-                            🍁 {holiday.name.toUpperCase()}
-                          </span>
-                        )}
-                        {isPayday && (
-                          <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday">
-                            <Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      {dayShifts.map(shift => {
-                        const client = clients.find(c => c.id === shift.clientId);
-                        return (
-                          <div 
-                            key={shift.id} 
-                            onClick={() => handleViewProfile(shift.clientId)}
-                            className="text-xs p-1.5 rounded bg-teal-100 text-teal-800 border border-teal-200 cursor-pointer hover:bg-teal-200 transition shadow-sm"
-                            title={`Shift: ${shift.startTime}-${shift.endTime} with ${client?.name || 'Unknown'}`}
-                          >
-                            <div className="font-semibold truncate flex items-center">
-                              <Heart className="h-2.5 w-2.5 mr-1 shrink-0 text-teal-600" />
-                              {client?.name?.split(' ')[0] || 'Unknown'}
-                            </div>
-                            <div className="text-[10px] mt-0.5 opacity-90 flex items-center">
-                              <Clock className="h-2.5 w-2.5 mr-1 shrink-0" />
-                              {shift.startTime}-{shift.endTime}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        <EmployeeMileageLog 
-          myExpenses={myExpenses} 
-          clients={clients} 
-          getClientRemainingBalance={getClientRemainingBalance}
-          onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
-        />
-        <EmployeeClientExpenseLog 
-          myClientExpenses={myClientExpenses} 
-          clients={clients} 
-          getClientRemainingBalance={getClientRemainingBalance}
-          onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} 
-        />
-      </div>
-
-      <EmployeePaystubs myPaystubs={paystubs.filter(p => p.employeeId === currentUser.id)} />
-
-      {viewingClient && (
-        <ClientProfileModal client={viewingClient} remainingBalance={getClientRemainingBalance(viewingClient.id)} onClose={() => setViewingClient(null)} />
       )}
     </div>
   );

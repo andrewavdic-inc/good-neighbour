@@ -44,7 +44,7 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center"><h2 className="text-lg font-semibold text-slate-800">Recent Paystubs</h2></div>
         <div className="p-4 space-y-2 max-h-[500px] overflow-y-auto">
           {paystubs.length === 0 ? <p className="text-sm text-slate-500 text-center py-4">No paystubs recorded.</p> :
-            paystubs.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(ps => {
+            [...paystubs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(ps => {
               const emp = employees.find(e => e.id === ps.employeeId);
               return (
                 <div key={ps.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50 hover:shadow-sm transition">

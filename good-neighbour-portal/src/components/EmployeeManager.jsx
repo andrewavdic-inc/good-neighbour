@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info } from 'lucide-react';
 
-// Hardcoded here so it NEVER crashes!
 const ONTARIO_REQUIREMENTS = [
   { key: 'cpr', label: 'CPR / First Aid' }, 
   { key: 'whmis', label: 'WHMIS' }, 
@@ -17,17 +16,17 @@ const ONTARIO_REQUIREMENTS = [
 
 function EditEmployeeModal({ employee, onClose, onSave }) {
   const [formData, setFormData] = useState({
-    name: employee.name || '',
-    username: employee.username || '',
-    password: employee.password || '',
-    role: employee.role || 'Neighbour',
-    phone: employee.phone || '',
-    email: employee.email || '',
-    address: employee.address || '',
-    emergencyContactName: employee.emergencyContactName || '',
-    emergencyContactPhone: employee.emergencyContactPhone || '',
-    requirements: employee.requirements || {},
-    timeOffBalances: employee.timeOffBalances || { sick: 5, vacation: 10 }
+    name: employee?.name || '',
+    username: employee?.username || '',
+    password: employee?.password || '',
+    role: employee?.role || 'Neighbour',
+    phone: employee?.phone || '',
+    email: employee?.email || '',
+    address: employee?.address || '',
+    emergencyContactName: employee?.emergencyContactName || '',
+    emergencyContactPhone: employee?.emergencyContactPhone || '',
+    requirements: employee?.requirements || {},
+    timeOffBalances: employee?.timeOffBalances || { sick: 5, vacation: 10 }
   });
   const [photoFile, setPhotoFile] = useState(null);
   const [activeTab, setActiveTab] = useState('profile'); 
@@ -65,8 +64,12 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     if (photoFile) {
       updatedData.photoUrl = URL.createObjectURL(photoFile);
     }
-    onSave(employee.id, updatedData);
+    if (onSave && employee?.id) {
+      onSave(employee.id, updatedData);
+    }
   };
+
+  if (!employee) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -81,12 +84,14 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
 
         <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 space-x-6">
           <button 
+            type="button"
             onClick={() => setActiveTab('profile')}
             className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'profile' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             Personal & Contact Profile
           </button>
           <button 
+            type="button"
             onClick={() => setActiveTab('compliance')}
             className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'compliance' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
@@ -239,7 +244,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   );
 }
 
-export default function EmployeeManager({ employees, setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
+export default function EmployeeManager({ employees = [], setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -249,6 +254,9 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
   const [newPhotoFile, setNewPhotoFile] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // DEFENSIVE SAFETY NET: Ensure employees is always an array
+  const safeEmployees = Array.isArray(employees) ? employees : [];
 
   const handleAddEmployee = (e) => {
     e.preventDefault();
@@ -266,7 +274,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
       requirements: {},
       timeOffBalances: { sick: 5, vacation: 10 }
     };
-    onAddEmployee(newEmp);
+    if (onAddEmployee) onAddEmployee(newEmp);
     setNewName('');
     setNewUsername('');
     setNewPassword('');
@@ -278,7 +286,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
   const getComplianceIssues = (emp) => {
     let issues = 0;
     ONTARIO_REQUIREMENTS.forEach(req => {
-      const status = emp.requirements?.[req.key]?.status;
+      const status = emp?.requirements?.[req.key]?.status;
       if (!status || status === 'missing' || status === 'expired') {
         issues++;
       }
@@ -286,10 +294,12 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
     return issues;
   };
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    emp.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredEmployees = safeEmployees.filter(emp => {
+    if (!emp) return false;
+    const nameMatch = (emp.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const roleMatch = (emp.role || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return nameMatch || roleMatch;
+  });
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -320,7 +330,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
             const isProtected = emp.id === 'admin1' && currentUser?.id !== 'admin1';
             
             return (
-              <div key={emp.id} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md transition bg-white relative">
+              <div key={emp.id || Math.random()} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md transition bg-white relative">
                 {!isProtected && (
                   <div className="absolute top-3 right-3 flex space-x-1">
                     <button 
@@ -332,7 +342,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
                     </button>
                     {emp.id !== 'admin1' && (
                       <button 
-                        onClick={() => onRemoveEmployee(emp.id)}
+                        onClick={() => onRemoveEmployee && onRemoveEmployee(emp.id)}
                         className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-md transition"
                         title="Remove Employee"
                       >
@@ -344,16 +354,16 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
                 
                 <div className="flex items-center space-x-3 mb-3 pr-16">
                   {emp.photoUrl ? (
-                    <img src={emp.photoUrl} alt={emp.name} className="h-12 w-12 rounded-full border border-slate-200 object-cover" />
+                    <img src={emp.photoUrl} alt={emp.name || 'Staff'} className="h-12 w-12 rounded-full border border-slate-200 object-cover" />
                   ) : (
                     <div className="h-12 w-12 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
                       <User className="h-6 w-6" />
                     </div>
                   )}
                   <div>
-                    <h3 className="font-bold text-slate-800 leading-tight">{emp.name}</h3>
+                    <h3 className="font-bold text-slate-800 leading-tight">{emp.name || 'Unnamed Employee'}</h3>
                     <div className="flex flex-col mt-0.5">
-                      <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded inline-block w-fit">{emp.role}</span>
+                      <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded inline-block w-fit">{emp.role || 'Staff'}</span>
                     </div>
                   </div>
                 </div>
@@ -466,7 +476,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Photo (Optional)</label>
-            <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer" onClick={() => document.getElementById('emp-photo-upload').click()}>
+            <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('emp-photo-upload').click()}>
               <div className="space-y-1 text-center">
                 <ImageIcon className="mx-auto h-6 w-6 text-slate-400" />
                 <div className="flex text-sm text-slate-600 justify-center">
@@ -500,7 +510,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
           employee={editingEmployee} 
           onClose={() => setEditingEmployee(null)} 
           onSave={(id, data) => {
-            updateEmployee(id, data);
+            if (updateEmployee) updateEmployee(id, data);
             setEditingEmployee(null);
           }} 
         />

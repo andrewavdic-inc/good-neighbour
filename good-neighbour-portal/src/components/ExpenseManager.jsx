@@ -1,17 +1,24 @@
 import React from 'react';
 import { Coffee, FileText, CheckCircle, XCircle, Car } from 'lucide-react';
 
-export default function ExpenseManager({ expenses, clientExpenses, employees, clients, onUpdateExpense, onUpdateClientExpense }) {
-  const sortedExpenses = [...expenses].sort((a, b) => {
-    if (a.status === 'pending' && b.status !== 'pending') return -1;
-    if (a.status !== 'pending' && b.status === 'pending') return 1;
-    return new Date(b.date) - new Date(a.date);
+export default function ExpenseManager({ expenses = [], clientExpenses = [], employees = [], clients = [], onUpdateExpense, onUpdateClientExpense }) {
+  
+  // DEFENSIVE SAFETY NETS: Guarantee these are ALWAYS arrays so the app never crashes
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
+  const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+  const safeClients = Array.isArray(clients) ? clients : [];
+
+  const sortedExpenses = [...safeExpenses].sort((a, b) => {
+    if (a?.status === 'pending' && b?.status !== 'pending') return -1;
+    if (a?.status !== 'pending' && b?.status === 'pending') return 1;
+    return new Date(b?.date || 0) - new Date(a?.date || 0);
   });
 
-  const sortedClientExpenses = [...clientExpenses].sort((a, b) => {
-    if (a.status === 'pending' && b.status !== 'pending') return -1;
-    if (a.status !== 'pending' && b.status === 'pending') return 1;
-    return new Date(b.date) - new Date(a.date);
+  const sortedClientExpenses = [...safeClientExpenses].sort((a, b) => {
+    if (a?.status === 'pending' && b?.status !== 'pending') return -1;
+    if (a?.status !== 'pending' && b?.status === 'pending') return 1;
+    return new Date(b?.date || 0) - new Date(a?.date || 0);
   });
 
   return (
@@ -42,12 +49,13 @@ export default function ExpenseManager({ expenses, clientExpenses, employees, cl
                 </tr>
               ) : (
                 sortedClientExpenses.map(expense => {
-                  const emp = employees.find(e => e.id === expense.employeeId);
-                  const client = clients.find(c => c.id === expense.clientId);
+                  if (!expense) return null;
+                  const emp = safeEmployees.find(e => e.id === expense.employeeId);
+                  const client = safeClients.find(c => c.id === expense.clientId);
                   
                   return (
-                    <tr key={`ce_${expense.id}`} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4 text-sm text-slate-800 font-medium">{new Date(expense.date).toLocaleDateString()}</td>
+                    <tr key={`ce_${expense.id || Math.random()}`} className="hover:bg-slate-50 transition">
+                      <td className="px-6 py-4 text-sm text-slate-800 font-medium">{expense.date ? new Date(expense.date).toLocaleDateString() : 'Unknown'}</td>
                       <td className="px-6 py-4 text-sm">
                         <div className="font-medium text-slate-700">{emp?.name || 'Unknown'}</div>
                         <div className="text-xs text-slate-500 mt-0.5">for {client?.name || 'Unknown'}</div>
@@ -63,7 +71,7 @@ export default function ExpenseManager({ expenses, clientExpenses, employees, cl
                           <span className="text-slate-400 italic">No attachment</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-emerald-600">${expense.amount.toFixed(2)}</td>
+                      <td className="px-6 py-4 text-sm font-semibold text-emerald-600">${(expense.amount || 0).toFixed(2)}</td>
                       <td className="px-6 py-4">
                         {expense.status === 'pending' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Pending</span>}
                         {expense.status === 'approved' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>}
@@ -72,10 +80,10 @@ export default function ExpenseManager({ expenses, clientExpenses, employees, cl
                       <td className="px-6 py-4 text-right space-x-2">
                         {expense.status === 'pending' && (
                           <>
-                            <button onClick={() => onUpdateClientExpense(expense.id, 'approved')} className="text-green-600 hover:bg-green-50 p-1.5 rounded transition" title="Approve">
+                            <button onClick={() => onUpdateClientExpense && onUpdateClientExpense(expense.id, 'approved')} className="text-green-600 hover:bg-green-50 p-1.5 rounded transition" title="Approve">
                               <CheckCircle className="h-5 w-5" />
                             </button>
-                            <button onClick={() => onUpdateClientExpense(expense.id, 'rejected')} className="text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="Reject">
+                            <button onClick={() => onUpdateClientExpense && onUpdateClientExpense(expense.id, 'rejected')} className="text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="Reject">
                               <XCircle className="h-5 w-5" />
                             </button>
                           </>
@@ -116,13 +124,14 @@ export default function ExpenseManager({ expenses, clientExpenses, employees, cl
                 </tr>
               ) : (
                 sortedExpenses.map(expense => {
-                  const emp = employees.find(e => e.id === expense.employeeId);
-                  const client = clients.find(c => c.id === expense.clientId);
-                  const amount = (expense.kilometers * 0.68).toFixed(2);
+                  if (!expense) return null;
+                  const emp = safeEmployees.find(e => e.id === expense.employeeId);
+                  const client = safeClients.find(c => c.id === expense.clientId);
+                  const amount = ((expense.kilometers || 0) * 0.68).toFixed(2);
                   
                   return (
-                    <tr key={`mil_${expense.id}`} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4 text-sm text-slate-800 font-medium">{new Date(expense.date).toLocaleDateString()}</td>
+                    <tr key={`mil_${expense.id || Math.random()}`} className="hover:bg-slate-50 transition">
+                      <td className="px-6 py-4 text-sm text-slate-800 font-medium">{expense.date ? new Date(expense.date).toLocaleDateString() : 'Unknown'}</td>
                       <td className="px-6 py-4 text-sm">
                         <div className="font-medium text-slate-700">{emp?.name || 'Unknown'}</div>
                         <div className="text-xs text-slate-500 mt-0.5">for {client?.name || 'Unknown'}</div>
@@ -138,10 +147,10 @@ export default function ExpenseManager({ expenses, clientExpenses, employees, cl
                       <td className="px-6 py-4 text-right space-x-2">
                         {expense.status === 'pending' && (
                           <>
-                            <button onClick={() => onUpdateExpense(expense.id, 'approved')} className="text-green-600 hover:bg-green-50 p-1.5 rounded transition" title="Approve">
+                            <button onClick={() => onUpdateExpense && onUpdateExpense(expense.id, 'approved')} className="text-green-600 hover:bg-green-50 p-1.5 rounded transition" title="Approve">
                               <CheckCircle className="h-5 w-5" />
                             </button>
-                            <button onClick={() => onUpdateExpense(expense.id, 'rejected')} className="text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="Reject">
+                            <button onClick={() => onUpdateExpense && onUpdateExpense(expense.id, 'rejected')} className="text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="Reject">
                               <XCircle className="h-5 w-5" />
                             </button>
                           </>

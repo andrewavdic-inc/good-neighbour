@@ -1,35 +1,44 @@
 import React, { useState, useMemo } from 'react';
 import { CalendarDays, Activity, Sun, Trash2, Plus } from 'lucide-react';
 
-// Include parseLocal directly to prevent import resolution errors
-const parseLocal = (dateStr) => {
+const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d);
+  try {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
+    return new Date(y, m - 1, d);
+  } catch (e) {
+    return new Date();
+  }
 };
 
 export default function TimeOffManager({ employees = [], timeOffLogs = [], onAddTimeOff, onRemoveTimeOff }) {
   const [employeeId, setEmployeeId] = useState('');
   const [date, setDate] = useState('');
-  const [type, setType] = useState('sick'); // 'sick' or 'vacation'
+  const [type, setType] = useState('sick');
   const [note, setNote] = useState('');
   
   const currentYear = new Date().getFullYear();
 
+  const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!employeeId || !date) return;
-    onAddTimeOff({ employeeId, date, type, note });
+    if (onAddTimeOff) {
+      onAddTimeOff({ employeeId, date, type, note });
+    }
     setEmployeeId('');
     setDate('');
     setNote('');
   };
 
   const employeeBalances = useMemo(() => {
-    if (!employees || !Array.isArray(employees)) return [];
+    if (safeEmployees.length === 0) return [];
     
-    return employees.map(emp => {
-      const empLogs = timeOffLogs.filter(l => l.employeeId === emp.id && parseLocal(l.date).getFullYear() === currentYear);
+    return safeEmployees.map(emp => {
+      const empLogs = safeTimeOffLogs.filter(l => l && l.employeeId === emp.id && l.date && parseLocalSafe(l.date).getFullYear() === currentYear);
       const usedSick = empLogs.filter(l => l.type === 'sick').length;
       const usedVacation = empLogs.filter(l => l.type === 'vacation').length;
       const allowedSick = emp.timeOffBalances?.sick || 0;
@@ -45,7 +54,7 @@ export default function TimeOffManager({ employees = [], timeOffLogs = [], onAdd
         allowedVacation
       };
     });
-  }, [employees, timeOffLogs, currentYear]);
+  }, [safeEmployees, safeTimeOffLogs, currentYear]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -64,8 +73,8 @@ export default function TimeOffManager({ employees = [], timeOffLogs = [], onAdd
               required
             >
               <option value="" disabled>Select an employee...</option>
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>
+              {safeEmployees.map(emp => (
+                <option key={emp.id || Math.random()} value={emp.id}>{emp.name || 'Unnamed Employee'}</option>
               ))}
             </select>
           </div>
@@ -134,8 +143,8 @@ export default function TimeOffManager({ employees = [], timeOffLogs = [], onAdd
                   </tr>
                 ) : (
                   employeeBalances.map(emp => (
-                    <tr key={emp.id} className="hover:bg-slate-50 transition">
-                      <td className="px-4 py-3 text-sm font-medium text-slate-800">{emp.name}</td>
+                    <tr key={emp.id || Math.random()} className="hover:bg-slate-50 transition">
+                      <td className="px-4 py-3 text-sm font-medium text-slate-800">{emp.name || 'Unnamed Employee'}</td>
                       <td className="px-4 py-3 text-sm">
                         <span className={`font-bold ${emp.remainingSick <= 0 ? 'text-red-500' : 'text-emerald-600'}`}>{emp.remainingSick}</span> / {emp.allowedSick}
                       </td>
@@ -157,31 +166,36 @@ export default function TimeOffManager({ employees = [], timeOffLogs = [], onAdd
             <h2 className="text-lg font-semibold text-slate-800">Recent Time Off Logs</h2>
           </div>
           <div className="p-4 space-y-2 max-h-[300px] overflow-y-auto">
-            {timeOffLogs.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">No time off logged yet.</p>
+            {safeTimeOffLogs.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">No time off logged yet.</p>
             ) : (
-              [...timeOffLogs].sort((a, b) => new Date(b.date) - new Date(a.date)).map(log => {
-                const emp = employees.find(e => e.id === log.employeeId);
+              [...safeTimeOffLogs].sort((a, b) => {
+                const dateA = a?.date ? new Date(a.date).getTime() : 0;
+                const dateB = b?.date ? new Date(b.date).getTime() : 0;
+                return dateB - dateA;
+              }).map(log => {
+                if (!log) return null;
+                const emp = safeEmployees.find(e => e.id === log.employeeId);
                 const isSick = log.type === 'sick';
                 return (
-                  <div key={log.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50 transition hover:shadow-sm">
+                  <div key={log.id || Math.random()} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50 transition hover:shadow-sm">
                     <div className="flex items-start space-x-3">
                       <div className={`p-2 rounded-full ${isSick ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
                         {isSick ? <Activity className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
                       </div>
                       <div>
                         <div className="font-semibold text-slate-800 text-sm">
-                          {emp?.name || 'Unknown'} <span className="font-normal text-slate-500 ml-1">took a {isSick ? 'Sick' : 'Vacation'} Day</span>
+                          {emp?.name || 'Unknown Employee'} <span className="font-normal text-slate-500 ml-1">took a {isSick ? 'Sick' : 'Vacation'} Day</span>
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5 flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-                          <span>{parseLocal(log.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          <span>{log.date ? parseLocalSafe(log.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown Date'}</span>
                           {log.note && <span className="hidden sm:inline">&bull;</span>}
                           {log.note && <span className="italic">"{log.note}"</span>}
                         </div>
                       </div>
                     </div>
                     <button 
-                      onClick={() => onRemoveTimeOff(log.id)}
+                      onClick={() => onRemoveTimeOff && onRemoveTimeOff(log.id)}
                       className="text-red-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition"
                       title="Delete Log"
                     >

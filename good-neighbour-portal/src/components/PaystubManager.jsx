@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { FileText, Plus, Trash2 } from 'lucide-react';
 
-// Safe date parser that will not crash if dateStr is missing or corrupted
+// Safe date parser to prevent crashes from missing dates
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
   try {
     const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
     return new Date(y, m - 1, d);
   } catch (e) {
-    return new Date(); // Fallback to today if string is completely unreadable
+    return new Date();
   }
 };
 
@@ -25,12 +26,10 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
     e.preventDefault();
     if (!employeeId || !date || !fileName) return;
     
-    // Safety check to ensure the function exists before calling it
     if (onAddPaystub) {
       onAddPaystub({ employeeId, date, fileName });
     }
     
-    // Clear form
     setEmployeeId(''); 
     setDate(''); 
     setFileName('');
@@ -38,8 +37,6 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-      {/* Upload Form (Admin Side) */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-fit">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
           <FileText className="h-5 w-5 mr-2 text-teal-600" />
@@ -93,7 +90,6 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
         </form>
       </div>
 
-      {/* Uploaded History List */}
       <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
           <h2 className="text-lg font-semibold text-slate-800">Recent Paystubs</h2>
@@ -103,12 +99,11 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
             <p className="text-sm text-slate-500 text-center py-8">No paystubs have been recorded yet.</p>
           ) : (
             [...safePaystubs].sort((a, b) => {
-               // Safe sorting that won't crash if dates are missing
                const dateA = a?.date ? new Date(a.date).getTime() : 0;
                const dateB = b?.date ? new Date(b.date).getTime() : 0;
                return dateB - dateA;
             }).map(ps => {
-              if (!ps) return null; // Safe guard against corrupt array items
+              if (!ps) return null; 
               const emp = safeEmployees.find(e => e.id === ps.employeeId);
               
               return (

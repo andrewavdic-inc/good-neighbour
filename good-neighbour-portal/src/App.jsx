@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -23,17 +23,24 @@ import SettingsManager from './components/SettingsManager';
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
 try {
-  const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+  const firebaseConfig = {
+    apiKey: "PASTE_YOUR_API_KEY_HERE",
+    authDomain: "PASTE_YOUR_AUTH_DOMAIN_HERE",
+    projectId: "PASTE_YOUR_PROJECT_ID_HERE",
+    storageBucket: "PASTE_YOUR_STORAGE_BUCKET_HERE",
+    messagingSenderId: "PASTE_YOUR_SENDER_ID_HERE",
+    appId: "PASTE_YOUR_APP_ID_HERE"
+  };
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+  appId = 'good-neighbour-portal';
 } catch (e) {
   console.error("Firebase init error:", e);
 }
 
 // ==========================================
-// INLINE COMPONENTS
+// INLINE COMPONENTS (To be extracted later)
 // ==========================================
 
 function AddShiftModal({ isOpen, onClose, selectedDate, employees, clients, onSave }) {
@@ -175,11 +182,12 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
   );
 }
 
-function EmployeeMileageLog({ myExpenses, clients, onAddExpense }) {
+function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
   const [date, setDate] = useState('');
   const [clientId, setClientId] = useState('');
   const [kilometers, setKilometers] = useState('');
   const [description, setDescription] = useState('');
+  const safeExpenses = Array.isArray(myExpenses) ? myExpenses : [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -207,8 +215,8 @@ function EmployeeMileageLog({ myExpenses, clients, onAddExpense }) {
         </form>
       </div>
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {myExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logged yet.</div> :
-          [...myExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp => {
+        {safeExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logged yet.</div> :
+          [...safeExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp => {
             const client = clients.find(c => c.id === exp.clientId);
             return (
               <div key={exp.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
@@ -226,12 +234,13 @@ function EmployeeMileageLog({ myExpenses, clients, onAddExpense }) {
   );
 }
 
-function EmployeeClientExpenseLog({ myClientExpenses, clients, onAddClientExpense }) {
+function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense }) {
   const [date, setDate] = useState('');
   const [clientId, setClientId] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [receiptDetails, setReceiptDetails] = useState('');
+  const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -260,8 +269,8 @@ function EmployeeClientExpenseLog({ myClientExpenses, clients, onAddClientExpens
         </form>
       </div>
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {myClientExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged yet.</div> :
-          [...myClientExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp => {
+        {safeClientExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged yet.</div> :
+          [...safeClientExpenses].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(exp => {
             const client = clients.find(c => c.id === exp.clientId);
             return (
               <div key={exp.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
@@ -279,19 +288,25 @@ function EmployeeClientExpenseLog({ myClientExpenses, clients, onAddClientExpens
   );
 }
 
-function EmployeePaystubs({ myPaystubs }) {
+function EmployeePaystubs({ myPaystubs = [] }) {
+  const safePaystubs = Array.isArray(myPaystubs) ? myPaystubs : [];
+  
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center"><FileText className="h-5 w-5 mr-2 text-teal-600" /><h2 className="text-lg font-semibold text-slate-800">My Paystubs</h2></div>
       <div className="p-6">
-        {myPaystubs.length === 0 ? <div className="text-center text-slate-500 py-4">No paystubs available.</div> :
+        {safePaystubs.length === 0 ? <div className="text-center text-slate-500 py-4">No paystubs available.</div> :
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {[...myPaystubs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(ps => (
-              <div key={ps.id} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
+            {[...safePaystubs].sort((a,b) => {
+              const dateA = a?.date ? new Date(a.date).getTime() : 0;
+              const dateB = b?.date ? new Date(b.date).getTime() : 0;
+              return dateB - dateA;
+            }).map(ps => (
+              <div key={ps?.id || Math.random()} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
                 <FileText className="h-8 w-8 text-teal-600 mr-3 opacity-70 group-hover:opacity-100 transition" />
                 <div>
-                  <div className="font-semibold text-slate-800 text-sm">{parseLocal(ps.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-                  <div className="text-xs text-slate-500 truncate w-32" title={ps.fileName}>{ps.fileName}</div>
+                  <div className="font-semibold text-slate-800 text-sm">{ps?.date ? parseLocal(ps.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown Date'}</div>
+                  <div className="text-xs text-slate-500 truncate w-32" title={ps?.fileName}>{ps?.fileName || 'Unnamed File'}</div>
                 </div>
                 <Download className="h-4 w-4 text-slate-400 ml-auto group-hover:text-teal-600 transition" />
               </div>
@@ -307,14 +322,15 @@ function EmployeeDashboard({ shifts, employees, currentUser, clients, expenses, 
   const [activeTab, setActiveTab] = useState('schedule');
   const [selectedClient, setSelectedClient] = useState(null);
 
-  const myShifts = shifts.filter(s => s.employeeId === currentUser.id);
-  const myExpenses = expenses.filter(e => e.employeeId === currentUser.id);
-  const myClientExpenses = clientExpenses.filter(e => e.employeeId === currentUser.id);
-  const myPaystubs = paystubs.filter(p => p.employeeId === currentUser.id);
-  const openShifts = shifts.filter(s => s.employeeId === 'unassigned');
+  const safeShifts = Array.isArray(shifts) ? shifts : [];
+  const myShifts = safeShifts.filter(s => s.employeeId === currentUser.id);
+  const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e.employeeId === currentUser.id);
+  const myClientExpenses = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e.employeeId === currentUser.id);
+  const myPaystubs = (Array.isArray(paystubs) ? paystubs : []).filter(p => p.employeeId === currentUser.id);
+  const openShifts = safeShifts.filter(s => s.employeeId === 'unassigned');
   
   const now = new Date();
-  const upcomingShifts = myShifts
+  const upcomingShifts = [...myShifts]
     .filter(s => new Date(`${s.date}T${s.endTime}`) > now)
     .sort((a, b) => new Date(`${a.date}T${a.startTime}`) - new Date(`${b.date}T${b.startTime}`));
   const nextShift = upcomingShifts[0];
@@ -468,7 +484,7 @@ function EmployeeDashboard({ shifts, employees, currentUser, clients, expenses, 
   );
 }
 
-function AdminDashboard({ shifts, employees, setEmployees, updateEmployee, clients, setClients, updateClient, expenses, onUpdateExpense, clientExpenses, onUpdateClientExpense, paystubs, onAddPaystub, onRemovePaystub, timeOffLogs, onAddTimeOffLog, onRemoveTimeOffLog, messages, onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, onAddShift, onRemoveShift, onMarkShiftOpen }) {
+function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, messages = [], onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, onAddShift, onRemoveShift, onMarkShiftOpen }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');

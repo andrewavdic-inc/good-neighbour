@@ -4,15 +4,15 @@ import { Briefcase, AlertCircle, Info } from 'lucide-react';
 export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+
+  // Strict boolean casting to prevent React "Object" crash errors
+  const dbReady = Boolean(isDbReady);
+  const dataExists = Boolean(hasData);
 
   const onSubmit = (e) => {
     e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => {
-      onLogin(username, password);
-      setIsLoading(false);
-    }, 500);
+    if (!dbReady || (!dataExists && dbReady)) return;
+    onLogin(username, password);
   };
 
   return (
@@ -47,6 +47,7 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter username"
+                  disabled={!dbReady}
                 />
               </div>
             </div>
@@ -61,6 +62,7 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
+                  disabled={!dbReady}
                 />
               </div>
             </div>
@@ -68,23 +70,24 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
             <div>
               <button 
                 type="submit" 
-                disabled={isLoading}
-                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:bg-slate-400"
+                disabled={!dbReady || (!dataExists && dbReady)}
+                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'Checking credentials...' : 'Secure Sign In'}
+                {dbReady ? 'Secure Sign In' : 'Connecting to Server...'}
               </button>
             </div>
           </form>
 
-          {!hasData && (
+          {dbReady && !dataExists && (
             <div className="mt-6 border-t border-slate-200 pt-6">
               <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-center shadow-inner">
                 <AlertCircle className="h-6 w-6 text-amber-500 mx-auto mb-2" />
                 <p className="text-sm font-medium text-amber-800 mb-3">
-                  {!isDbReady ? "Connecting to cloud database..." : "The cloud database is currently empty."}
+                  The cloud database is currently empty.
                 </p>
                 <button 
                   onClick={onSeedData}
+                  type="button"
                   className="px-4 py-2 w-full bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-bold shadow transition"
                 >
                   Force Initialize Demo Database
@@ -93,7 +96,7 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
             </div>
           )}
 
-          {hasData && (
+          {dbReady && dataExists && (
             <div className="mt-6 border-t border-slate-200 pt-6">
               <div className="rounded-md bg-blue-50 p-4">
                 <div className="flex">

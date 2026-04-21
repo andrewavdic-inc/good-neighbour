@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { CalendarDays, Activity, Sun, Trash2, Plus } from 'lucide-react';
 
+// Include parseLocal directly to prevent import resolution errors
 const parseLocal = (dateStr) => {
   if (!dateStr) return new Date();
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
 };
 
-export default function TimeOffManager({ employees, timeOffLogs, onAddTimeOff, onRemoveTimeOff }) {
+export default function TimeOffManager({ employees = [], timeOffLogs = [], onAddTimeOff, onRemoveTimeOff }) {
   const [employeeId, setEmployeeId] = useState('');
   const [date, setDate] = useState('');
   const [type, setType] = useState('sick'); // 'sick' or 'vacation'
@@ -25,6 +26,8 @@ export default function TimeOffManager({ employees, timeOffLogs, onAddTimeOff, o
   };
 
   const employeeBalances = useMemo(() => {
+    if (!employees || !Array.isArray(employees)) return [];
+    
     return employees.map(emp => {
       const empLogs = timeOffLogs.filter(l => l.employeeId === emp.id && parseLocal(l.date).getFullYear() === currentYear);
       const usedSick = empLogs.filter(l => l.type === 'sick').length;
@@ -157,7 +160,7 @@ export default function TimeOffManager({ employees, timeOffLogs, onAddTimeOff, o
             {timeOffLogs.length === 0 ? (
               <p className="text-sm text-slate-500 text-center py-4">No time off logged yet.</p>
             ) : (
-              timeOffLogs.sort((a, b) => new Date(b.date) - new Date(a.date)).map(log => {
+              [...timeOffLogs].sort((a, b) => new Date(b.date) - new Date(a.date)).map(log => {
                 const emp = employees.find(e => e.id === log.employeeId);
                 const isSick = log.type === 'sick';
                 return (

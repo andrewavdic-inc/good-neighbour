@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { FileText, Plus, Trash2 } from 'lucide-react';
-import { parseLocal } from '../utils';
+
+const parseLocal = (dateStr) => {
+  if (!dateStr) return new Date();
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
 
 export default function PaystubManager({ paystubs = [], employees = [], onAddPaystub, onRemovePaystub }) {
   const [employeeId, setEmployeeId] = useState('');

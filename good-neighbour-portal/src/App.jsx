@@ -21,24 +21,16 @@ import PaystubManager from './components/PaystubManager';
 import SettingsManager from './components/SettingsManager';
 
 // --- FIREBASE INITIALIZATION ---
-let firebaseApp, auth, db, appId;
-try {
-  // Add your keys here
-  const firebaseConfig = {
-    apiKey: "PASTE_YOUR_API_KEY_HERE",
-    authDomain: "PASTE_YOUR_AUTH_DOMAIN_HERE",
-    projectId: "PASTE_YOUR_PROJECT_ID_HERE",
-    storageBucket: "PASTE_YOUR_STORAGE_BUCKET_HERE",
-    messagingSenderId: "PASTE_YOUR_SENDER_ID_HERE",
-    appId: "PASTE_YOUR_APP_ID_HERE"
-  };
-  firebaseApp = initializeApp(firebaseConfig);
-  auth = getAuth(firebaseApp);
-  db = getFirestore(firebaseApp);
-  appId = 'good-neighbour-portal';
-} catch (e) {
-  console.error("Firebase init error:", e);
-}
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
+  authDomain: "good-neighbour-portal.firebaseapp.com",
+  projectId: "good-neighbour-portal",
+  storageBucket: "good-neighbour-portal.firebasestorage.app",
+  messagingSenderId: "570654987529",
+  appId: "1:570654987529:web:400f90a7a63a03b6aa6fd8",
+  measurementId: "G-C3P8CNHYK9"
+};
 
 // ==========================================
 // INLINE COMPONENTS

@@ -1,6 +1,24 @@
 import React, { useState } from 'react';
 import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info } from 'lucide-react';
-import { ONTARIO_REQUIREMENTS } from '../utils';
+import React, { useState } from 'react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info } from 'lucide-react';
+
+// Hardcoded here so it NEVER crashes!
+const ONTARIO_REQUIREMENTS = [
+  { key: 'cpr', label: 'CPR / First Aid' }, 
+  { key: 'whmis', label: 'WHMIS' }, 
+  { key: 'maskFit', label: 'Mask Fitting' },
+  { key: 'vsc', label: 'Vulnerable Sector Check' }, 
+  { key: 'prc', label: 'Police Record Check' }, 
+  { key: 'immunization', label: 'Immunization Records' },
+  { key: 'skills', label: 'Skills Verification' }, 
+  { key: 'driverLicense', label: "Driver's License" }, 
+  { key: 'autoInsurance', label: 'Auto Insurance' },
+  { key: 'references', label: 'Professional References' }
+];
+
+function EditEmployeeModal({ employee, onClose, onSave }) {
+// ... the rest of your gorgeous, original code stays exactly the same!
 
 function EditEmployeeModal({ employee, onClose, onSave }) {
   const [formData, setFormData] = useState({

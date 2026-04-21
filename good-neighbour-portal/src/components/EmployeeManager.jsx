@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info } from 'lucide-react';
-import React, { useState } from 'react';
-import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info } from 'lucide-react';
 
 // Hardcoded here so it NEVER crashes!
 const ONTARIO_REQUIREMENTS = [
@@ -16,9 +14,6 @@ const ONTARIO_REQUIREMENTS = [
   { key: 'autoInsurance', label: 'Auto Insurance' },
   { key: 'references', label: 'Professional References' }
 ];
-
-function EditEmployeeModal({ employee, onClose, onSave }) {
-// ... the rest of your gorgeous, original code stays exactly the same!
 
 function EditEmployeeModal({ employee, onClose, onSave }) {
   const [formData, setFormData] = useState({
@@ -101,7 +96,6 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
         
         <div className="overflow-y-auto p-6 flex-1 bg-slate-50/30">
           <form id="edit-employee-form" onSubmit={handleSubmit} className="space-y-6">
-            
             <div className={activeTab === 'profile' ? 'block space-y-6' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
@@ -245,7 +239,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   );
 }
 
-export default function EmployeeManager({ employees, onAddEmployee, onRemoveEmployee, updateEmployee, currentUser }) {
+export default function EmployeeManager({ employees, setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -476,7 +470,7 @@ export default function EmployeeManager({ employees, onAddEmployee, onRemoveEmpl
               <div className="space-y-1 text-center">
                 <ImageIcon className="mx-auto h-6 w-6 text-slate-400" />
                 <div className="flex text-sm text-slate-600 justify-center">
-                  <span className="relative cursor-pointer bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500">
+                  <span className="relative cursor-pointer bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-teal-500">
                     {newPhotoFile ? newPhotoFile.name : <span>Upload a photo</span>}
                   </span>
                 </div>

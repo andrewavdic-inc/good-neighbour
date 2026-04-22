@@ -17,23 +17,35 @@ const ONTARIO_REQUIREMENTS = [
 
 function EditEmployeeModal({ employee, onClose, onSave }) {
   const [formData, setFormData] = useState({
-    name: employee.name || '',
-    username: employee.username || '',
-    password: employee.password || '',
-    role: employee.role || 'Neighbour',
-    phone: employee.phone || '',
-    email: employee.email || '',
-    address: employee.address || '',
-    emergencyContactName: employee.emergencyContactName || '',
-    emergencyContactPhone: employee.emergencyContactPhone || '',
-    requirements: employee.requirements || {},
-    timeOffBalances: employee.timeOffBalances || { sick: 5, vacation: 10 }
+    name: employee?.name || '',
+    username: employee?.username || '',
+    password: employee?.password || '',
+    role: employee?.role || 'Neighbour',
+    phone: employee?.phone || '',
+    email: employee?.email || '',
+    address: employee?.address || '',
+    emergencyContactName: employee?.emergencyContactName || '',
+    emergencyContactPhone: employee?.emergencyContactPhone || '',
+    requirements: employee?.requirements || {},
+    timeOffBalances: employee?.timeOffBalances || { sick: 5, vacation: 10 },
+    availability: employee?.availability || []
   });
   const [photoFile, setPhotoFile] = useState(null);
   const [activeTab, setActiveTab] = useState('profile'); 
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
   
+  const toggleAvailability = (dayPart) => {
+    setFormData(prev => {
+      const current = prev.availability || [];
+      if (current.includes(dayPart)) {
+        return { ...prev, availability: current.filter(d => d !== dayPart) };
+      } else {
+        return { ...prev, availability: [...current, dayPart] };
+      }
+    });
+  };
+
   const handleTimeOffChange = (type, value) => {
     setFormData(prev => ({
       ...prev,
@@ -65,8 +77,12 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     if (photoFile) {
       updatedData.photoUrl = URL.createObjectURL(photoFile);
     }
-    onSave(employee.id, updatedData);
+    if (onSave && employee?.id) {
+      onSave(employee.id, updatedData);
+    }
   };
+
+  if (!employee) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -81,12 +97,14 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
 
         <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 space-x-6">
           <button 
+            type="button"
             onClick={() => setActiveTab('profile')}
             className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'profile' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             Personal & Contact Profile
           </button>
           <button 
+            type="button"
             onClick={() => setActiveTab('compliance')}
             className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'compliance' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
@@ -148,6 +166,23 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Home Address</label>
                     <input type="text" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                   </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-5">
+                <h4 className="text-sm font-semibold text-slate-800 mb-3 flex items-center"><CalendarDays className="h-4 w-4 mr-1.5 text-slate-500"/> Availability Tracker</h4>
+                <div className="flex flex-wrap gap-3">
+                  {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
+                    <label key={part} className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
+                      <input 
+                        type="checkbox" 
+                        checked={(formData.availability || []).includes(part)}
+                        onChange={() => toggleAvailability(part)}
+                        className="rounded text-teal-600 focus:ring-teal-500"
+                      />
+                      <span>{part}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -239,16 +274,19 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   );
 }
 
-export default function EmployeeManager({ employees, setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
+export default function EmployeeManager({ employees = [], setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState('Neighbour');
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [newAvailability, setNewAvailability] = useState([]);
   const [newPhotoFile, setNewPhotoFile] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const safeEmployees = Array.isArray(employees) ? employees : [];
 
   const handleAddEmployee = (e) => {
     e.preventDefault();
@@ -264,21 +302,30 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
       email: newEmail,
       photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
       requirements: {},
-      timeOffBalances: { sick: 5, vacation: 10 }
+      timeOffBalances: { sick: 5, vacation: 10 },
+      availability: newAvailability
     };
-    onAddEmployee(newEmp);
+    if (onAddEmployee) onAddEmployee(newEmp);
     setNewName('');
     setNewUsername('');
     setNewPassword('');
     setNewPhone('');
     setNewEmail('');
+    setNewAvailability([]);
     setNewPhotoFile(null);
+  };
+
+  const toggleNewAvailability = (dayPart) => {
+    setNewAvailability(prev => {
+      if (prev.includes(dayPart)) return prev.filter(d => d !== dayPart);
+      return [...prev, dayPart];
+    });
   };
 
   const getComplianceIssues = (emp) => {
     let issues = 0;
     ONTARIO_REQUIREMENTS.forEach(req => {
-      const status = emp.requirements?.[req.key]?.status;
+      const status = emp?.requirements?.[req.key]?.status;
       if (!status || status === 'missing' || status === 'expired') {
         issues++;
       }
@@ -286,10 +333,12 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
     return issues;
   };
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    emp.role.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredEmployees = safeEmployees.filter(emp => {
+    if (!emp) return false;
+    const nameMatch = (emp.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const roleMatch = (emp.role || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return nameMatch || roleMatch;
+  });
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -320,7 +369,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
             const isProtected = emp.id === 'admin1' && currentUser?.id !== 'admin1';
             
             return (
-              <div key={emp.id} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md transition bg-white relative">
+              <div key={emp.id || Math.random()} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md transition bg-white relative">
                 {!isProtected && (
                   <div className="absolute top-3 right-3 flex space-x-1">
                     <button 
@@ -332,7 +381,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
                     </button>
                     {emp.id !== 'admin1' && (
                       <button 
-                        onClick={() => onRemoveEmployee(emp.id)}
+                        onClick={() => onRemoveEmployee && onRemoveEmployee(emp.id)}
                         className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-md transition"
                         title="Remove Employee"
                       >
@@ -344,16 +393,16 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
                 
                 <div className="flex items-center space-x-3 mb-3 pr-16">
                   {emp.photoUrl ? (
-                    <img src={emp.photoUrl} alt={emp.name} className="h-12 w-12 rounded-full border border-slate-200 object-cover" />
+                    <img src={emp.photoUrl} alt={emp.name || 'Staff'} className="h-12 w-12 rounded-full border border-slate-200 object-cover" />
                   ) : (
                     <div className="h-12 w-12 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
                       <User className="h-6 w-6" />
                     </div>
                   )}
                   <div>
-                    <h3 className="font-bold text-slate-800 leading-tight">{emp.name}</h3>
+                    <h3 className="font-bold text-slate-800 leading-tight">{emp.name || 'Unnamed Employee'}</h3>
                     <div className="flex flex-col mt-0.5">
-                      <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded inline-block w-fit">{emp.role}</span>
+                      <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded inline-block w-fit">{emp.role || 'Staff'}</span>
                     </div>
                   </div>
                 </div>
@@ -364,6 +413,16 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
                     {emp.email && <div className="flex items-center"><Mail className="h-3 w-3 mr-1.5" />{emp.email}</div>}
                     {!emp.phone && !emp.email && <span className="italic text-slate-400">No contact info provided</span>}
                   </div>
+
+                  {(emp.availability && emp.availability.length > 0) && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {emp.availability.map(avail => (
+                        <span key={avail} className="text-[10px] font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">
+                          {avail}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   
                   {issuesCount > 0 ? (
                     <div className="flex items-center justify-center text-xs font-semibold bg-red-50 text-red-700 p-2 rounded border border-red-100">
@@ -465,11 +524,28 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
+            <div className="flex flex-wrap gap-2">
+              {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
+                <label key={part} className="flex items-center space-x-1.5 text-xs text-slate-700 cursor-pointer bg-white border border-slate-200 px-2 py-1 rounded hover:bg-slate-50">
+                  <input 
+                    type="checkbox" 
+                    checked={newAvailability.includes(part)}
+                    onChange={() => toggleNewAvailability(part)}
+                    className="rounded text-teal-600 focus:ring-teal-500"
+                  />
+                  <span>{part}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Photo (Optional)</label>
             <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('emp-photo-upload').click()}>
               <div className="space-y-1 text-center">
                 <ImageIcon className="mx-auto h-6 w-6 text-slate-400" />
-                <div className="flex text-sm text-slate-600 justify-center">
+                <div className="flex text-xs text-slate-600 justify-center">
                   <span className="relative cursor-pointer bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-teal-500">
                     {newPhotoFile ? newPhotoFile.name : <span>Upload a photo</span>}
                   </span>
@@ -500,7 +576,7 @@ export default function EmployeeManager({ employees, setEmployees, updateEmploye
           employee={editingEmployee} 
           onClose={() => setEditingEmployee(null)} 
           onSave={(id, data) => {
-            updateEmployee(id, data);
+            if (updateEmployee) updateEmployee(id, data);
             setEditingEmployee(null);
           }} 
         />

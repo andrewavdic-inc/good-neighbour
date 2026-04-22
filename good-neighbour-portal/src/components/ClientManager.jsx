@@ -11,6 +11,12 @@ function EditClientModal({ client, onClose, onSave }) {
   const [emergencyPhone, setEmergencyPhone] = useState(client.emergencyContactPhone || '');
   const [secondaryEmergencyName, setSecondaryEmergencyName] = useState(client.secondaryEmergencyName || '');
   const [secondaryEmergencyPhone, setSecondaryEmergencyPhone] = useState(client.secondaryEmergencyPhone || '');
+  
+  const [accountHolderName, setAccountHolderName] = useState(client.accountHolderName || '');
+  const [accountHolderAddress, setAccountHolderAddress] = useState(client.accountHolderAddress || '');
+  const [accountHolderPhone, setAccountHolderPhone] = useState(client.accountHolderPhone || '');
+  const [accountHolderEmail, setAccountHolderEmail] = useState(client.accountHolderEmail || '');
+
   const [monthlyAllowance, setMonthlyAllowance] = useState(client.monthlyAllowance?.toString() || '0');
   const [photoFile, setPhotoFile] = useState(null);
 
@@ -28,6 +34,10 @@ function EditClientModal({ client, onClose, onSave }) {
       emergencyContactPhone: emergencyPhone,
       secondaryEmergencyName,
       secondaryEmergencyPhone,
+      accountHolderName,
+      accountHolderAddress,
+      accountHolderPhone,
+      accountHolderEmail,
       monthlyAllowance: Number(monthlyAllowance) || 0
     };
 
@@ -42,66 +52,91 @@ function EditClientModal({ client, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
           <h3 className="text-lg font-bold text-slate-800">Edit Client Profile</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition text-2xl leading-none">&times;</button>
         </div>
         
         <div className="overflow-y-auto p-6">
-          <form id="edit-client-form" onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
-              <input 
-                type="text" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
-                <input 
-                  type="date" 
-                  value={dateOfBirth} 
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
-                <input 
-                  type="text" 
-                  value={phone} 
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Home Address</label>
-              <input 
-                type="text" 
-                value={address} 
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-              />
-            </div>
+          <form id="edit-client-form" onSubmit={handleSubmit} className="space-y-6">
             
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Expense Allowance ($) *</label>
-              <input 
-                type="number" 
-                min="0"
-                value={monthlyAllowance} 
-                onChange={(e) => setMonthlyAllowance(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                required
-              />
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Client Details</h4>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
+                  <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                  <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Client Home Address</label>
+                <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Care Plan / Notes</label>
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" rows="3" />
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Account Holder & Billing</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Account Holder Full Name</label>
+                  <input type="text" value={accountHolderName} onChange={(e) => setAccountHolderName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. Family Member Name" />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Expense Allowance ($) *</label>
+                  <input type="number" min="0" value={monthlyAllowance} onChange={(e) => setMonthlyAllowance(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Account Phone</label>
+                  <input type="text" value={accountHolderPhone} onChange={(e) => setAccountHolderPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Account Email</label>
+                  <input type="email" value={accountHolderEmail} onChange={(e) => setAccountHolderEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label>
+                <input type="text" value={accountHolderAddress} onChange={(e) => setAccountHolderAddress(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Emergency Contacts</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Primary Emergency Contact</label>
+                  <input type="text" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="Name (e.g. Son)" />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Primary Phone</label>
+                  <input type="text" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="555-0000" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Emergency Contact</label>
+                  <input type="text" value={secondaryEmergencyName} onChange={(e) => setSecondaryEmergencyName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="Name (e.g. Daughter)" />
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Phone</label>
+                  <input type="text" value={secondaryEmergencyPhone} onChange={(e) => setSecondaryEmergencyPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="555-0000" />
+                </div>
+              </div>
             </div>
 
             <div>
@@ -115,89 +150,16 @@ function EditClientModal({ client, onClose, onSave }) {
                     </span>
                   </div>
                 </div>
-                <input 
-                  id="edit-client-photo-upload" 
-                  type="file" 
-                  accept="image/*" 
-                  className="sr-only" 
-                  onChange={(e) => setPhotoFile(e.target.files[0])}
-                />
+                <input id="edit-client-photo-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => setPhotoFile(e.target.files[0])} />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 mt-4">
-              <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Primary Emergency Contact</label>
-                <input 
-                  type="text" 
-                  value={emergencyName} 
-                  onChange={(e) => setEmergencyName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                  placeholder="Name (e.g. Son)"
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Primary Phone</label>
-                <input 
-                  type="text" 
-                  value={emergencyPhone} 
-                  onChange={(e) => setEmergencyPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                  placeholder="555-0000"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Emergency Contact</label>
-                <input 
-                  type="text" 
-                  value={secondaryEmergencyName} 
-                  onChange={(e) => setSecondaryEmergencyName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                  placeholder="Name (e.g. Daughter)"
-                />
-              </div>
-              <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Phone</label>
-                <input 
-                  type="text" 
-                  value={secondaryEmergencyPhone} 
-                  onChange={(e) => setSecondaryEmergencyPhone(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                  placeholder="555-0000"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Care Plan / Notes</label>
-              <textarea 
-                value={notes} 
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                rows="4"
-              />
-            </div>
           </form>
         </div>
 
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
-          <button 
-            type="button" 
-            onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition"
-          >
-            Cancel
-          </button>
-          <button 
-            type="submit"
-            form="edit-client-form"
-            className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition"
-          >
-            Save Changes
-          </button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Cancel</button>
+          <button type="submit" form="edit-client-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition">Save Changes</button>
         </div>
       </div>
     </div>
@@ -210,10 +172,17 @@ export default function ClientManager({ clients = [], onAddClient, onRemoveClien
   const [newPhone, setNewPhone] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  
+  const [newAccountHolderName, setNewAccountHolderName] = useState('');
+  const [newAccountHolderAddress, setNewAccountHolderAddress] = useState('');
+  const [newAccountHolderPhone, setNewAccountHolderPhone] = useState('');
+  const [newAccountHolderEmail, setNewAccountHolderEmail] = useState('');
+
   const [newEmergencyName, setNewEmergencyName] = useState('');
   const [newEmergencyPhone, setNewEmergencyPhone] = useState('');
   const [newSecondaryEmergencyName, setNewSecondaryEmergencyName] = useState('');
   const [newSecondaryEmergencyPhone, setNewSecondaryEmergencyPhone] = useState('');
+  
   const [newPhotoFile, setNewPhotoFile] = useState(null);
   const [newMonthlyAllowance, setNewMonthlyAllowance] = useState('100');
   const [editingClient, setEditingClient] = useState(null);
@@ -232,6 +201,10 @@ export default function ClientManager({ clients = [], onAddClient, onRemoveClien
       phone: newPhone,
       address: newAddress,
       notes: newNotes,
+      accountHolderName: newAccountHolderName,
+      accountHolderAddress: newAccountHolderAddress,
+      accountHolderPhone: newAccountHolderPhone,
+      accountHolderEmail: newAccountHolderEmail,
       emergencyContactName: newEmergencyName,
       emergencyContactPhone: newEmergencyPhone,
       secondaryEmergencyName: newSecondaryEmergencyName,
@@ -240,21 +213,12 @@ export default function ClientManager({ clients = [], onAddClient, onRemoveClien
       monthlyAllowance: Number(newMonthlyAllowance) || 0
     };
     
-    if (onAddClient) {
-      onAddClient(newClient);
-    }
+    if (onAddClient) onAddClient(newClient);
 
-    setNewName('');
-    setNewDateOfBirth('');
-    setNewPhone('');
-    setNewAddress('');
-    setNewNotes('');
-    setNewEmergencyName('');
-    setNewEmergencyPhone('');
-    setNewSecondaryEmergencyName('');
-    setNewSecondaryEmergencyPhone('');
-    setNewPhotoFile(null);
-    setNewMonthlyAllowance('100');
+    setNewName(''); setNewDateOfBirth(''); setNewPhone(''); setNewAddress(''); setNewNotes('');
+    setNewAccountHolderName(''); setNewAccountHolderAddress(''); setNewAccountHolderPhone(''); setNewAccountHolderEmail('');
+    setNewEmergencyName(''); setNewEmergencyPhone(''); setNewSecondaryEmergencyName(''); setNewSecondaryEmergencyPhone('');
+    setNewPhotoFile(null); setNewMonthlyAllowance('100');
   };
 
   const filteredClients = safeClients.filter(client => 
@@ -330,7 +294,7 @@ export default function ClientManager({ clients = [], onAddClient, onRemoveClien
                     <div className="mb-1">
                       <span className="font-medium text-slate-700">Primary:</span> {client.emergencyContactName} ({client.emergencyContactPhone})
                     </div>
-                  ) : <span className="text-slate-400 italic block">No primary contact</span>}
+                  ) : <span className="text-slate-400 italic block mb-1">No primary contact</span>}
                   
                   {client.secondaryEmergencyName && (
                     <div>
@@ -372,30 +336,84 @@ export default function ClientManager({ clients = [], onAddClient, onRemoveClien
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
           <h2 className="text-lg font-semibold text-slate-800">Add New Client</h2>
         </div>
-        <form onSubmit={handleAddClient} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
-            <input 
-              type="text" 
-              value={newName} 
-              onChange={(e) => setNewName(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
-              placeholder="e.g. Eleanor Vance"
-              required
-            />
-          </div>
+        <form onSubmit={handleAddClient} className="p-6 space-y-4 max-h-[800px] overflow-y-auto">
           
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Expense Allowance ($) *</label>
-            <input 
-              type="number" 
-              min="0"
-              value={newMonthlyAllowance} 
-              onChange={(e) => setNewMonthlyAllowance(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-              placeholder="e.g. 100"
-              required
-            />
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Client Details</h4>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
+              <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
+                <input type="date" value={newDateOfBirth} onChange={(e) => setNewDateOfBirth(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                <input type="text" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Home Address</label>
+              <input type="text" value={newAddress} onChange={(e) => setNewAddress(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Care Plan / Notes</label>
+              <textarea value={newNotes} onChange={(e) => setNewNotes(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" rows="3" />
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-2">
+            <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Account Holder & Billing</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Account Holder Name</label>
+                <input type="text" value={newAccountHolderName} onChange={(e) => setNewAccountHolderName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Allowance ($) *</label>
+                <input type="number" min="0" value={newMonthlyAllowance} onChange={(e) => setNewMonthlyAllowance(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Account Phone</label>
+                <input type="text" value={newAccountHolderPhone} onChange={(e) => setNewAccountHolderPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Account Email</label>
+                <input type="email" value={newAccountHolderEmail} onChange={(e) => setNewAccountHolderEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Billing Address</label>
+              <input type="text" value={newAccountHolderAddress} onChange={(e) => setNewAccountHolderAddress(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-2">
+            <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Emergency Contacts</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Primary Contact</label>
+                <input type="text" value={newEmergencyName} onChange={(e) => setNewEmergencyName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Primary Phone</label>
+                <input type="text" value={newEmergencyPhone} onChange={(e) => setNewEmergencyPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Contact</label>
+                <input type="text" value={newSecondaryEmergencyName} onChange={(e) => setNewSecondaryEmergencyName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Phone</label>
+                <input type="text" value={newSecondaryEmergencyPhone} onChange={(e) => setNewSecondaryEmergencyPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+              </div>
+            </div>
           </div>
 
           <div>
@@ -409,72 +427,10 @@ export default function ClientManager({ clients = [], onAddClient, onRemoveClien
                   </span>
                 </div>
               </div>
-              <input 
-                id="client-photo-upload" 
-                type="file" 
-                accept="image/*" 
-                className="sr-only" 
-                onChange={(e) => setNewPhotoFile(e.target.files[0])}
-              />
+              <input id="client-photo-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => setNewPhotoFile(e.target.files[0])} />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Primary Emergency Contact</label>
-              <input 
-                type="text" 
-                value={newEmergencyName} 
-                onChange={(e) => setNewEmergencyName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                placeholder="Name (e.g. Son)"
-              />
-            </div>
-            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Primary Phone</label>
-              <input 
-                type="text" 
-                value={newEmergencyPhone} 
-                onChange={(e) => setNewEmergencyPhone(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                placeholder="555-0000"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Emergency Contact</label>
-              <input 
-                type="text" 
-                value={newSecondaryEmergencyName} 
-                onChange={(e) => setNewSecondaryEmergencyName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                placeholder="Name (e.g. Daughter)"
-              />
-            </div>
-            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Phone</label>
-              <input 
-                type="text" 
-                value={newSecondaryEmergencyPhone} 
-                onChange={(e) => setNewSecondaryEmergencyPhone(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                placeholder="555-0000"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Care Plan / Notes</label>
-            <textarea 
-              value={newNotes} 
-              onChange={(e) => setNewNotes(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-              placeholder="List mobility needs, allergies, routines..."
-              rows="3"
-            />
-          </div>
           <button 
             type="submit"
             className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none transition"

@@ -3,7 +3,6 @@ import { Coins } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
 export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], payPeriodStart }) {
-  const shiftRate = 45;
   const kmRate = 0.68;
   
   const safeEmps = Array.isArray(employees) ? employees : [];
@@ -47,7 +46,29 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                new Date(`${s.date}T${s.endTime || '23:59'}`) <= now &&
                d >= currentPeriodStart && d <= currentPeriodEnd;
       });
-      const shiftEarnings = empShifts.length * shiftRate;
+      
+      const isHourly = emp.payType === 'hourly';
+      let totalHours = 0;
+      
+      empShifts.forEach(s => {
+        const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
+        const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
+        let hours = (eH + eM/60) - (sH + sM/60);
+        if (hours < 0) hours += 24; // Overnight shift
+        totalHours += hours;
+      });
+
+      let shiftEarnings = 0;
+      let displayRate = '';
+      
+      if (isHourly) {
+        const hourlyWage = Number(emp.hourlyWage) || 22.50;
+        shiftEarnings = totalHours * hourlyWage;
+        displayRate = `${totalHours.toFixed(1)} hrs @ $${hourlyWage.toFixed(2)}/hr`;
+      } else {
+        shiftEarnings = empShifts.length * 45;
+        displayRate = `${empShifts.length} shifts @ $45/visit`;
+      }
 
       const empMileage = safeExp.filter(e => {
         if(!e || !e.date) return false;
@@ -73,6 +94,9 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       return {
         ...emp,
         shiftCount: empShifts.length,
+        totalHours,
+        isHourly,
+        displayRate,
         shiftEarnings,
         totalKms,
         kmEarnings,
@@ -140,7 +164,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                     <div className="text-xs text-slate-500">{emp.role}</div>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
-                    ${emp.shiftEarnings.toFixed(2)} <span className="text-xs text-slate-400">({emp.shiftCount} shifts)</span>
+                    ${emp.shiftEarnings.toFixed(2)} <span className="text-xs text-slate-400">({emp.displayRate})</span>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
                     ${emp.kmEarnings.toFixed(2)} <span className="text-xs text-slate-400">({emp.totalKms} km)</span>

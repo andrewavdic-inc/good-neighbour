@@ -153,26 +153,30 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
   if (!client) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative">
-        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white shrink-0">
           <h3 className="text-lg font-bold flex items-center"><Heart className="h-5 w-5 mr-2 text-teal-200" /> Client Profile</h3>
           <button onClick={onClose} className="text-teal-200 hover:text-white transition text-2xl leading-none">&times;</button>
         </div>
-        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-          <div>
-            <h2 className="text-xl font-bold text-slate-800">{client.name}</h2>
-            <div className="flex flex-wrap gap-2 mt-2">
-              <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
-                <Wallet className="h-3 w-3 mr-1" /> ${remainingBalance.toFixed(2)} Funds Left
-              </div>
-              {client.dateOfBirth && (
-                <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                  <CalendarDays className="h-3 w-3 mr-1" /> DOB: {client.dateOfBirth}
+        <div className="p-6 space-y-6 overflow-y-auto">
+          <div className="flex items-center space-x-4">
+            {client.photoUrl ? <img src={client.photoUrl} alt={client.name} className="h-16 w-16 rounded-full border-2 border-teal-100 object-cover" /> :
+              <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-teal-600"><User className="h-8 w-8" /></div>}
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">{client.name}</h2>
+              <div className="flex flex-wrap gap-2 mt-1">
+                <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+                  <Wallet className="h-3 w-3 mr-1" /> ${remainingBalance.toFixed(2)} Funds Left
                 </div>
-              )}
+                {client.dateOfBirth && (
+                  <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    <CalendarDays className="h-3 w-3 mr-1" /> DOB: {client.dateOfBirth}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          
+
           {(client.phone || client.address) && (
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
               {client.phone && <div className="text-sm text-slate-700 flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400" /> {client.phone}</div>}
@@ -180,14 +184,26 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
             </div>
           )}
 
+          {client.accountHolderName && (
+            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+              <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center"><User className="h-4 w-4 mr-1.5" /> Account Holder</h4>
+              <div className="space-y-1">
+                <div className="font-semibold text-indigo-900">{client.accountHolderName}</div>
+                {client.accountHolderPhone && <div className="text-sm text-indigo-700 flex items-center"><Phone className="h-3 w-3 mr-1" /> {client.accountHolderPhone}</div>}
+                {client.accountHolderEmail && <div className="text-sm text-indigo-700 flex items-center"><Mail className="h-3 w-3 mr-1" /> {client.accountHolderEmail}</div>}
+                {client.accountHolderAddress && <div className="text-sm text-indigo-700 flex items-center"><MapPin className="h-3 w-3 mr-1" /> {client.accountHolderAddress}</div>}
+              </div>
+            </div>
+          )}
+
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Info className="h-4 w-4 mr-1.5" /> Care Notes & Routine</h4>
-            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions.'}</p>
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions provided.'}</p>
           </div>
           <div className="bg-red-50 p-4 rounded-lg border border-red-100">
             <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center"><Phone className="h-4 w-4 mr-1.5" /> Emergency Contacts</h4>
             {client.emergencyContactName ? (
-              <div className="mb-3 border-b border-red-100 pb-2">
+              <div className="mb-3 border-b border-red-100 pb-3">
                 <div className="text-sm font-semibold text-red-900">Primary: {client.emergencyContactName}</div>
                 <div className="text-lg font-bold text-red-700 mt-0.5">{client.emergencyContactPhone}</div>
               </div>
@@ -201,7 +217,7 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
             )}
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
           <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Close</button>
         </div>
       </div>
@@ -237,8 +253,14 @@ function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Client *</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required><option value="" disabled>Select client</option>{safeClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label><input type="number" min="0.1" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label>
+              <input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required />
+            </div>
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
+          </div>
+          <div className="bg-amber-50 border border-amber-100 rounded p-2 text-amber-800 text-[10px] font-medium leading-tight">
+            * Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client (not to and from the client's home).
           </div>
           <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit</button>
         </form>
@@ -391,11 +413,10 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = new Date(year, month, 1).getDay(); 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
-  
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
   return (
     <div className="space-y-6">
@@ -406,7 +427,12 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
               <User className="h-10 w-10" />
             </div>
             <h2 className="text-xl font-bold text-slate-800">{currentUser.name}</h2>
-            <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full mt-2 border border-teal-100">{currentUser.role}</span>
+            <div className="flex flex-col mt-2 gap-1 items-center">
+              <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">{currentUser.role}</span>
+              <span className="text-xs font-semibold text-slate-500">
+                {currentUser.payType === 'hourly' ? `$${currentUser.hourlyWage || 22.50}/hr` : '$45/visit'}
+              </span>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -944,27 +970,6 @@ export default function App() {
     return () => unsubs.forEach(unsub => unsub());
   }, [firebaseUser]);
 
-  // Firestore DB Seed Function
-  const handleSeedData = async () => {
-    if (!firebaseUser || !db) return;
-    try {
-      const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId.toString());
-
-      for (const e of MOCK_EMPLOYEES) await setDoc(getDocRef('gn_employees', e.id), e);
-      for (const c of MOCK_CLIENTS) await setDoc(getDocRef('gn_clients', c.id), c);
-      for (const s of INITIAL_SHIFTS) await setDoc(getDocRef('gn_shifts', s.id.toString()), { ...s, id: s.id.toString() });
-      for (const ex of INITIAL_EXPENSES) await setDoc(getDocRef('gn_expenses', ex.id.toString()), { ...ex, id: ex.id.toString() });
-      for (const ce of INITIAL_CLIENT_EXPENSES) await setDoc(getDocRef('gn_clientExpenses', ce.id.toString()), { ...ce, id: ce.id.toString() });
-      for (const p of INITIAL_PAYSTUBS) await setDoc(getDocRef('gn_paystubs', p.id.toString()), { ...p, id: p.id.toString() });
-      for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
-      for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
-      
-      console.log("Demo database initialized successfully!");
-    } catch (err) {
-      console.error("Error seeding data:", err);
-    }
-  };
-
   // App Authentication
   const handleLogin = (username, password) => {
     const safeEmployees = Array.isArray(employees) ? employees : [];
@@ -973,7 +978,14 @@ export default function App() {
     );
     
     if (foundEmp) {
-      setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role, timeOffBalances: foundEmp.timeOffBalances });
+      setCurrentUser({ 
+        id: foundEmp.id, 
+        name: foundEmp.name, 
+        role: foundEmp.role, 
+        payType: foundEmp.payType,
+        hourlyWage: foundEmp.hourlyWage,
+        timeOffBalances: foundEmp.timeOffBalances 
+      });
       setViewMode(foundEmp.role === 'Administrator' ? 'admin' : 'employee');
     } else {
       alert("Invalid credentials. Please check your username and password.");
@@ -1084,7 +1096,7 @@ export default function App() {
         onLogin={handleLogin} 
         isDbReady={Boolean(isDbReady)} 
         hasData={Boolean(Array.isArray(employees) && employees.length > 0)} 
-        onSeedData={handleSeedData} 
+        onSeedData={() => {}} 
       />
     );
   }
@@ -1104,7 +1116,9 @@ export default function App() {
             <div className="flex items-center space-x-3 sm:space-x-4">
               {isAdmin && (
                 <button
-                  onClick={() => setViewMode(viewMode === 'admin' ? 'employee' : 'admin')}
+                  onClick={() => {
+                    setViewMode(viewMode === 'admin' ? 'employee' : 'admin');
+                  }}
                   className="text-xs font-bold bg-teal-800 hover:bg-teal-900 text-teal-100 px-2 sm:px-3 py-1.5 rounded transition shadow-sm"
                 >
                   {viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}

@@ -16,7 +16,7 @@ const parseLocalSafe = (dateStr) => {
 export default function PaystubManager({ paystubs = [], employees = [], onAddPaystub, onRemovePaystub }) {
   const [employeeId, setEmployeeId] = useState('');
   const [date, setDate] = useState('');
-  const [fileName, setFileName] = useState('');
+  const [paystubFile, setPaystubFile] = useState(null);
 
   // 100% guarantee these are arrays so .map() and .sort() can NEVER crash
   const safePaystubs = Array.isArray(paystubs) ? paystubs : [];
@@ -24,15 +24,15 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!employeeId || !date || !fileName) return;
+    if (!employeeId || !date || !paystubFile) return;
     
     if (onAddPaystub) {
-      onAddPaystub({ employeeId, date, fileName });
+      onAddPaystub({ employeeId, date, fileName: paystubFile.name });
     }
     
     setEmployeeId(''); 
     setDate(''); 
-    setFileName('');
+    setPaystubFile(null);
   };
 
   return (
@@ -70,15 +70,24 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">File Name/Link *</label>
-            <input 
-              type="text" 
-              value={fileName} 
-              onChange={(e) => setFileName(e.target.value)} 
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" 
-              placeholder="e.g. paystub_april.pdf" 
-              required 
-            />
+            <label className="block text-sm font-medium text-slate-700 mb-1">Upload File *</label>
+            <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('paystub-file-upload').click()}>
+              <div className="space-y-1 text-center">
+                <FileText className="mx-auto h-6 w-6 text-slate-400" />
+                <div className="flex text-sm text-slate-600 justify-center">
+                  <span className="relative cursor-pointer bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500">
+                    {paystubFile ? paystubFile.name : <span>Click to attach paystub document</span>}
+                  </span>
+                </div>
+              </div>
+              <input 
+                id="paystub-file-upload" 
+                type="file" 
+                accept=".pdf,image/*" 
+                className="sr-only" 
+                onChange={(e) => setPaystubFile(e.target.files[0])}
+              />
+            </div>
           </div>
           <button 
             type="submit" 
@@ -99,6 +108,7 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
             <p className="text-sm text-slate-500 text-center py-8">No paystubs have been recorded yet.</p>
           ) : (
             [...safePaystubs].sort((a, b) => {
+               // Safe sorting that won't crash if dates are missing
                const dateA = a?.date ? new Date(a.date).getTime() : 0;
                const dateB = b?.date ? new Date(b.date).getTime() : 0;
                return dateB - dateA;

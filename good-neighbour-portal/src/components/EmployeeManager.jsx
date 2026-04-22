@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, DollarSign } from 'lucide-react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info } from 'lucide-react';
 
 const ONTARIO_REQUIREMENTS = [
   { key: 'cpr', label: 'CPR / First Aid' }, 
@@ -25,6 +25,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     address: employee?.address || '',
     payType: employee?.payType || 'per_visit',
     hourlyWage: employee?.hourlyWage || 22.50,
+    perVisitRate: employee?.perVisitRate || 45,
     emergencyContactName: employee?.emergencyContactName || '',
     emergencyContactPhone: employee?.emergencyContactPhone || '',
     requirements: employee?.requirements || {},
@@ -77,7 +78,8 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     const updatedData = { 
       ...formData, 
       payType: formData.payType || 'per_visit',
-      hourlyWage: Number(formData.hourlyWage) || 22.50 
+      hourlyWage: Number(formData.hourlyWage) || 22.50,
+      perVisitRate: Number(formData.perVisitRate) || 45
     };
     
     if (photoFile) {
@@ -137,37 +139,48 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                       <input type="text" value={formData.password} onChange={(e) => handleChange('password', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                      <select value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
-                        <option value="Neighbour">Neighbour</option>
-                        <option value="Block Captain">Block Captain</option>
-                        <option value="Administrator">Administrator</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Pay Structure</label>
-                      <select value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
-                        <option value="per_visit">Per Visit ($45)</option>
+                  
+                  <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-white">
+                    <div className="col-span-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
+                      <select value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-teal-50">
+                        <option value="per_visit">Per Visit Rate</option>
                         <option value="hourly">Hourly Rate</option>
                       </select>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Hourly Wage ($) <span className="text-xs text-slate-500 font-normal ml-1">(Used if 'Hourly Rate' selected)</span></label>
+                    <div className="col-span-3 sm:col-span-1.5">
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit Rate ($)</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        step="1" 
+                        value={formData.perVisitRate} 
+                        onChange={(e) => handleChange('perVisitRate', e.target.value)} 
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                        required 
+                      />
+                    </div>
+                    <div className="col-span-3 sm:col-span-1.5">
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Hourly Wage ($)</label>
                       <input 
                         type="number" 
                         min="0" 
                         step="0.50" 
                         value={formData.hourlyWage} 
                         onChange={(e) => handleChange('hourlyWage', e.target.value)} 
-                        disabled={formData.payType === 'per_visit'}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm disabled:bg-slate-100 disabled:text-slate-400" 
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`}
                         required 
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                    <select value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                      <option value="Neighbour">Neighbour</option>
+                      <option value="Block Captain">Block Captain</option>
+                      <option value="Administrator">Administrator</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Update Photo (Optional)</label>
@@ -311,6 +324,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
   const [newRole, setNewRole] = useState('Neighbour');
   const [newPayType, setNewPayType] = useState('per_visit');
   const [newHourlyWage, setNewHourlyWage] = useState('22.50');
+  const [newPerVisitRate, setNewPerVisitRate] = useState('45');
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newAvailability, setNewAvailability] = useState([]);
@@ -332,6 +346,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
       role: newRole,
       payType: newPayType,
       hourlyWage: Number(newHourlyWage) || 22.50,
+      perVisitRate: Number(newPerVisitRate) || 45,
       phone: newPhone,
       email: newEmail,
       photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
@@ -345,6 +360,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
     setNewPassword('');
     setNewPayType('per_visit');
     setNewHourlyWage('22.50');
+    setNewPerVisitRate('45');
     setNewPhone('');
     setNewEmail('');
     setNewAvailability([]);
@@ -440,7 +456,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                     <div className="flex flex-col mt-0.5 space-y-1">
                       <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded inline-block w-fit">{emp.role || 'Staff'}</span>
                       <span className="text-xs font-semibold text-slate-600">
-                        {emp.payType === 'hourly' ? `$${emp.hourlyWage || 22.50}/hr` : '$45/visit'}
+                        {emp.payType === 'hourly' ? `$${emp.hourlyWage || 22.50}/hr` : `$${emp.perVisitRate || 45}/visit`}
                       </span>
                     </div>
                   </div>
@@ -526,8 +542,46 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             </div>
           </div>
           
+          <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-slate-50/50">
+            <div className="col-span-3">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
+              <select 
+                value={newPayType} 
+                onChange={(e) => setNewPayType(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-teal-50"
+              >
+                <option value="per_visit">Per Visit Rate</option>
+                <option value="hourly">Hourly Rate</option>
+              </select>
+            </div>
+            <div className="col-span-3 sm:col-span-1.5">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit Rate ($)</label>
+              <input 
+                type="number" 
+                min="0"
+                step="1"
+                value={newPerVisitRate} 
+                onChange={(e) => setNewPerVisitRate(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`}
+                required
+              />
+            </div>
+            <div className="col-span-3 sm:col-span-1.5">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Hourly Wage ($)</label>
+              <input 
+                type="number" 
+                min="0"
+                step="0.50"
+                value={newHourlyWage} 
+                onChange={(e) => setNewHourlyWage(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`}
+                required
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2 sm:col-span-1">
+            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
               <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
               <select 
                 value={newRole} 
@@ -539,36 +593,6 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                 <option value="Administrator">Administrator</option>
               </select>
             </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Pay Structure</label>
-              <select 
-                value={newPayType} 
-                onChange={(e) => setNewPayType(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-              >
-                <option value="per_visit">Per Visit ($45)</option>
-                <option value="hourly">Hourly Rate</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Hourly Wage ($) <span className="text-xs text-slate-500 font-normal ml-1">(Used if 'Hourly Rate' selected)</span></label>
-              <input 
-                type="number" 
-                min="0"
-                step="0.50"
-                value={newHourlyWage} 
-                onChange={(e) => setNewHourlyWage(e.target.value)}
-                disabled={newPayType === 'per_visit'}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm disabled:bg-slate-100 disabled:text-slate-400"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
               <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
               <input 
@@ -579,7 +603,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                 placeholder="555-0000"
               />
             </div>
-            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <input 
                 type="email" 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Coffee, FileText, CheckCircle, XCircle, Car } from 'lucide-react';
 
 export default function ExpenseManager({ expenses = [], clientExpenses = [], employees = [], clients = [], onUpdateExpense, onUpdateClientExpense }) {
@@ -8,20 +8,96 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
   const safeEmployees = Array.isArray(employees) ? employees : [];
   const safeClients = Array.isArray(clients) ? clients : [];
 
-  const sortedExpenses = [...safeExpenses].sort((a, b) => {
-    if (a?.status === 'pending' && b?.status !== 'pending') return -1;
-    if (a?.status !== 'pending' && b?.status === 'pending') return 1;
-    return new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime();
+  const [expenseSort, setExpenseSort] = useState({ key: 'date', direction: 'desc' });
+  const [clientExpSort, setClientExpSort] = useState({ key: 'date', direction: 'desc' });
+  const [selectedMonth, setSelectedMonth] = useState(''); // Format: YYYY-MM
+
+  const handleExpSort = (key) => {
+    setExpenseSort(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const handleClientExpSort = (key) => {
+    setClientExpSort(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  // Filter by selected month before sorting
+  const filteredExpenses = safeExpenses.filter(e => {
+    if (!selectedMonth) return true;
+    return e.date && e.date.startsWith(selectedMonth);
   });
 
-  const sortedClientExpenses = [...safeClientExpenses].sort((a, b) => {
-    if (a?.status === 'pending' && b?.status !== 'pending') return -1;
-    if (a?.status !== 'pending' && b?.status === 'pending') return 1;
-    return new Date(b?.date || 0).getTime() - new Date(a?.date || 0).getTime();
+  const filteredClientExpenses = safeClientExpenses.filter(e => {
+    if (!selectedMonth) return true;
+    return e.date && e.date.startsWith(selectedMonth);
+  });
+
+  const sortedExpenses = [...filteredExpenses].sort((a, b) => {
+    let valA, valB;
+    if (expenseSort.key === 'date') {
+      valA = new Date(a.date || 0).getTime();
+      valB = new Date(b.date || 0).getTime();
+    } else if (expenseSort.key === 'amount') {
+      valA = a.kilometers || 0;
+      valB = b.kilometers || 0;
+    } else if (expenseSort.key === 'status') {
+      valA = a.status || '';
+      valB = b.status || '';
+    }
+    if (valA < valB) return expenseSort.direction === 'asc' ? -1 : 1;
+    if (valA > valB) return expenseSort.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const sortedClientExpenses = [...filteredClientExpenses].sort((a, b) => {
+    let valA, valB;
+    if (clientExpSort.key === 'date') {
+      valA = new Date(a.date || 0).getTime();
+      valB = new Date(b.date || 0).getTime();
+    } else if (clientExpSort.key === 'amount') {
+      valA = a.amount || 0;
+      valB = b.amount || 0;
+    } else if (clientExpSort.key === 'status') {
+      valA = a.status || '';
+      valB = b.status || '';
+    }
+    if (valA < valB) return clientExpSort.direction === 'asc' ? -1 : 1;
+    if (valA > valB) return clientExpSort.direction === 'asc' ? 1 : -1;
+    return 0;
   });
 
   return (
     <div className="space-y-8">
+      {/* Month/Year Filter Header */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Reimbursement Approvals</h2>
+          <p className="text-sm text-slate-500">Review and approve employee out-of-pocket expenses and mileage.</p>
+        </div>
+        <div className="flex items-center space-x-2 w-full sm:w-auto">
+          <label className="text-sm font-semibold text-slate-700 whitespace-nowrap">Filter by Month:</label>
+          <input 
+            type="month" 
+            value={selectedMonth} 
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="w-full sm:w-auto px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+          />
+          {selectedMonth && (
+            <button 
+              onClick={() => setSelectedMonth('')} 
+              className="text-xs text-slate-500 hover:text-red-500 underline whitespace-nowrap"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
           <Coffee className="h-5 w-5 mr-2 text-teal-600" />
@@ -32,19 +108,21 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
-                <th className="px-6 py-3 font-medium">Date</th>
+                <th onClick={() => handleClientExpSort('date')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Date ↕</th>
                 <th className="px-6 py-3 font-medium">Staff & Client</th>
                 <th className="px-6 py-3 font-medium hidden md:table-cell">Item/Description</th>
                 <th className="px-6 py-3 font-medium">Receipt</th>
-                <th className="px-6 py-3 font-medium">Amount</th>
-                <th className="px-6 py-3 font-medium">Status</th>
+                <th onClick={() => handleClientExpSort('amount')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Amount ↕</th>
+                <th onClick={() => handleClientExpSort('status')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Status ↕</th>
                 <th className="px-6 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {sortedClientExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500">No client expense receipts submitted.</td>
+                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
+                    {selectedMonth ? `No client expenses submitted for ${selectedMonth}.` : "No client expense receipts submitted."}
+                  </td>
                 </tr>
               ) : (
                 sortedClientExpenses.map(expense => {
@@ -107,19 +185,21 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
-                <th className="px-6 py-3 font-medium">Date</th>
+                <th onClick={() => handleExpSort('date')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Date ↕</th>
                 <th className="px-6 py-3 font-medium">Staff & Client</th>
                 <th className="px-6 py-3 font-medium hidden md:table-cell">Description</th>
-                <th className="px-6 py-3 font-medium">Kilometers</th>
+                <th onClick={() => handleExpSort('amount')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Kilometers ↕</th>
                 <th className="px-6 py-3 font-medium">Reimbursement ($0.68/km)</th>
-                <th className="px-6 py-3 font-medium">Status</th>
+                <th onClick={() => handleExpSort('status')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Status ↕</th>
                 <th className="px-6 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {sortedExpenses.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500">No mileage logs submitted.</td>
+                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
+                    {selectedMonth ? `No mileage logs submitted for ${selectedMonth}.` : "No mileage logs submitted."}
+                  </td>
                 </tr>
               ) : (
                 sortedExpenses.map(expense => {

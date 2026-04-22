@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info } from 'lucide-react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, DollarSign, CheckCircle } from 'lucide-react';
 
 const ONTARIO_REQUIREMENTS = [
   { key: 'cpr', label: 'CPR / First Aid' }, 
@@ -116,7 +116,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
             onClick={() => setActiveTab('compliance')}
             className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'compliance' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
-            Certificates & Clearances (Ontario)
+            Certificates & Clearances
           </button>
         </div>
         
@@ -261,12 +261,13 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
             <div className={activeTab === 'compliance' ? 'block' : 'hidden'}>
               <div className="bg-blue-50 border border-blue-100 text-blue-800 text-sm p-4 rounded-xl mb-6 flex items-start">
                 <Info className="h-5 w-5 mr-2 shrink-0 mt-0.5 text-blue-600"/>
-                <p>Track mandatory employer requirements for Ontario. Set status to "Missing" or "Expired" to flag this employee on the main dashboard.</p>
+                <p>Track mandatory employer requirements. Use "Not Applicable" for requirements that do not apply to this specific role to prevent them from flagging as missing.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                 {ONTARIO_REQUIREMENTS.map(req => {
-                  const currentData = formData.requirements[req.key] || { status: 'missing', expiryDate: '' };
+                  const currentData = formData.requirements[req.key] || { status: 'missing', expiryDate: '', fileUrl: null };
+                  
                   return (
                     <div key={req.key} className="bg-white border border-slate-200 p-3 rounded-lg shadow-sm">
                       <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-2">
@@ -277,6 +278,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                           className={`mt-1 xl:mt-0 text-xs font-medium rounded border-slate-300 focus:ring-teal-500 px-2 py-1 ${
                             currentData.status === 'valid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                             currentData.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                            currentData.status === 'not_applicable' ? 'bg-slate-100 text-slate-600 border-slate-300' :
                             'bg-red-50 text-red-700 border-red-200'
                           }`}
                         >
@@ -284,16 +286,56 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                           <option value="pending">Pending Verification</option>
                           <option value="valid">Valid / Verified</option>
                           <option value="expired">Expired</option>
+                          <option value="not_applicable">Not Applicable</option>
                         </select>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-slate-500 w-16">Expiry:</span>
-                        <input 
-                          type="date" 
-                          value={currentData.expiryDate || ''} 
-                          onChange={(e) => handleReqChange(req.key, 'expiryDate', e.target.value)}
-                          className="flex-1 px-2 py-1 border border-slate-200 rounded text-xs text-slate-600 focus:outline-none focus:border-teal-500"
-                        />
+                      
+                      <div className="flex flex-col space-y-2 mt-2 pt-2 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500">Expiry:</span>
+                          <input 
+                            type="date" 
+                            value={currentData.expiryDate || ''} 
+                            onChange={(e) => handleReqChange(req.key, 'expiryDate', e.target.value)}
+                            disabled={currentData.status === 'not_applicable'}
+                            className="w-32 px-2 py-1 border border-slate-200 rounded text-xs text-slate-600 focus:outline-none focus:border-teal-500 disabled:bg-slate-50 disabled:text-slate-400"
+                          />
+                        </div>
+                        
+                        {currentData.status !== 'not_applicable' && (
+                          <div className="flex items-center justify-between">
+                            {currentData.fileUrl ? (
+                              <div className="flex items-center justify-between w-full bg-teal-50 px-2 py-1.5 rounded border border-teal-100">
+                                <span className="text-xs text-teal-700 font-medium flex items-center">
+                                  <CheckCircle className="h-3 w-3 mr-1"/> Uploaded
+                                </span>
+                                <button type="button" onClick={() => handleReqChange(req.key, 'fileUrl', null)} className="text-red-500 hover:text-red-700 p-0.5 rounded transition">
+                                  <Trash2 className="h-3 w-3"/>
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                type="button" 
+                                onClick={() => document.getElementById(`req-upload-${req.key}`).click()} 
+                                className="text-xs bg-white hover:bg-slate-50 text-slate-600 font-medium py-1.5 px-2 rounded border border-slate-300 flex items-center w-full justify-center transition"
+                              >
+                                <ImageIcon className="h-3 w-3 mr-1.5 text-slate-400"/> Attach Certificate Image
+                              </button>
+                            )}
+                            <input 
+                              id={`req-upload-${req.key}`} 
+                              type="file" 
+                              accept="image/*,.pdf" 
+                              className="sr-only" 
+                              onChange={(e) => { 
+                                if(e.target.files[0]) {
+                                  handleReqChange(req.key, 'fileUrl', URL.createObjectURL(e.target.files[0]));
+                                  if (currentData.status === 'missing') handleReqChange(req.key, 'status', 'pending');
+                                }
+                              }} 
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
@@ -377,8 +419,9 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
   const getComplianceIssues = (emp) => {
     let issues = 0;
     ONTARIO_REQUIREMENTS.forEach(req => {
-      const status = emp?.requirements?.[req.key]?.status;
-      if (!status || status === 'missing' || status === 'expired') {
+      const status = emp?.requirements?.[req.key]?.status || 'missing';
+      // Do not count 'not_applicable' as an issue
+      if (status === 'missing' || status === 'expired') {
         issues++;
       }
     });

@@ -6,10 +6,24 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
+// --- UTILS & COMPONENTS ---
+import { MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES } from './utils';
+
+import LoginPage from './components/LoginPage';
+import Announcements from './components/Announcements';
+import EmployeeManager from './components/EmployeeManager';
+import ClientManager from './components/ClientManager';
+import AdminClientFundsManager from './components/AdminClientFundsManager';
+import AdminEarningsManager from './components/AdminEarningsManager';
+import TimeOffManager from './components/TimeOffManager';
+import ExpenseManager from './components/ExpenseManager';
+import PaystubManager from './components/PaystubManager';
+import SettingsManager from './components/SettingsManager';
+
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
 try {
-  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  const firebaseConfig = {
     apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
     authDomain: "good-neighbour-portal.firebaseapp.com",
     projectId: "good-neighbour-portal",
@@ -20,7 +34,7 @@ try {
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  appId = typeof __app_id !== 'undefined' ? __app_id : 'good-neighbour-portal';
+  appId = 'good-neighbour-portal';
 } catch (e) {
   console.error("Firebase init error:", e);
 }
@@ -28,19 +42,6 @@ try {
 // ==========================================
 // UTILS & HELPERS
 // ==========================================
-const ONTARIO_REQUIREMENTS = [
-  { key: 'cpr', label: 'CPR / First Aid' }, 
-  { key: 'whmis', label: 'WHMIS' }, 
-  { key: 'maskFit', label: 'Mask Fitting' },
-  { key: 'vsc', label: 'Vulnerable Sector Check' }, 
-  { key: 'prc', label: 'Police Record Check' }, 
-  { key: 'immunization', label: 'Immunization Records' },
-  { key: 'skills', label: 'Skills Verification' }, 
-  { key: 'driverLicense', label: "Driver's License" }, 
-  { key: 'autoInsurance', label: 'Auto Insurance' },
-  { key: 'references', label: 'Professional References' }
-];
-
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
   try {
@@ -664,7 +665,7 @@ function EmployeePaystubs({ myPaystubs = [] }) {
   );
 }
 
-function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], onSendMessage, payPeriodStart, onPickupShift }) {
+function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [selectedClient, setSelectedClient] = useState(null);
   const [scheduleView, setScheduleView] = useState('list');
@@ -674,9 +675,6 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
   const safeClients = Array.isArray(clients) ? clients : [];
   
   const myShifts = safeShifts.filter(s => s && s.employeeId === currentUser.id);
-  const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id);
-  const myClientExpenses = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id);
-  const myPaystubs = (Array.isArray(paystubs) ? paystubs : []).filter(p => p && p.employeeId === currentUser.id);
   const openShifts = safeShifts.filter(s => s && s.employeeId === 'unassigned');
   
   const now = new Date();
@@ -716,6 +714,8 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
             expenses={expenses} 
             clientExpenses={clientExpenses} 
             payPeriodStart={payPeriodStart} 
+            isBonusActive={isBonusActive}
+            employees={employees}
           />
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -764,6 +764,9 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
             <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
               <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>My Schedule</button>
               <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Logs & Expenses</button>
+              {isBonusActive && (
+                <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Awards</button>
+              )}
               <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
               <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Team Feed</button>
             </div>
@@ -912,6 +915,18 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
                 </div>
               )}
 
+              {activeTab === 'awards' && isBonusActive && (
+                <div className="p-6">
+                  <AwardsLeaderboard 
+                    employees={employees} 
+                    shifts={shifts} 
+                    expenses={expenses} 
+                    clientExpenses={clientExpenses} 
+                    isBonusActive={isBonusActive} 
+                  />
+                </div>
+              )}
+
               {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
 
               {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />}
@@ -931,7 +946,7 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
   );
 }
 
-function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, messages = [], onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient }) {
+function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, messages = [], onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient, isBonusActive, setIsBonusActive }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -1031,7 +1046,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
           onUpdateClientExpense={onUpdateClientExpense}
         />
       ) : activeTab === 'earnings' && isMasterAdmin ? (
-        <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} />
+        <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} />
       ) : activeTab === 'timeoff' ? (
         <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />
       ) : activeTab === 'paystubs' ? (
@@ -1039,7 +1054,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
       ) : activeTab === 'announcements' ? (
         <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>
       ) : activeTab === 'settings' && isMasterAdmin ? (
-        <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} />
+        <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} />
       ) : (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
@@ -1196,6 +1211,7 @@ export default function App() {
   const [isDbReady, setIsDbReady] = useState(false);
   const [viewMode, setViewMode] = useState('employee');
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
+  const [isBonusActive, setIsBonusActive] = useState(false);
 
   // App State
   const [shifts, setShifts] = useState([]);
@@ -1249,6 +1265,15 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_paystubs'), snap => setPaystubs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_timeOffLogs'), snap => setTimeOffLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    
+    // Listen for global settings
+    unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.payPeriodStart) setPayPeriodStart(data.payPeriodStart);
+        if (data.isBonusActive !== undefined) setIsBonusActive(data.isBonusActive);
+      }
+    }, handleError));
 
     return () => unsubs.forEach(unsub => unsub());
   }, [firebaseUser]);
@@ -1342,6 +1367,21 @@ export default function App() {
     if (!firebaseUser) return;
     const id = Date.now().toString();
     await setDoc(getDocRef('gn_messages', id), { id, text, senderId, date: new Date().toISOString() });
+  };
+
+  const handleSaveSettings = async (field, value) => {
+    if (!firebaseUser) return;
+    if (field === 'payPeriodStart') setPayPeriodStart(value);
+    if (field === 'isBonusActive') setIsBonusActive(value);
+    
+    await setDoc(
+      getDocRef('gn_settings', 'global'), 
+      { 
+        payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, 
+        isBonusActive: field === 'isBonusActive' ? value : isBonusActive 
+      }, 
+      { merge: true }
+    );
   };
 
   const getClientRemainingBalance = (clientId) => {
@@ -1449,7 +1489,9 @@ export default function App() {
             onSendMessage={onSendMessage}
             currentUser={currentUser}
             payPeriodStart={payPeriodStart}
-            setPayPeriodStart={setPayPeriodStart}
+            setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)}
+            isBonusActive={isBonusActive}
+            setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)}
             onAddShift={onAddShift} 
             onRemoveShift={onRemoveShift}
             onMarkShiftOpen={onMarkShiftOpen}
@@ -1471,6 +1513,7 @@ export default function App() {
             onSendMessage={onSendMessage}
             payPeriodStart={payPeriodStart} 
             onPickupShift={onPickupShift}
+            isBonusActive={isBonusActive}
           />
         )}
       </main>

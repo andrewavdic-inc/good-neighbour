@@ -6,20 +6,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
-// --- UTILS & COMPONENTS ---
-import { MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES } from './utils';
-
-import LoginPage from './components/LoginPage';
-import Announcements from './components/Announcements';
-import EmployeeManager from './components/EmployeeManager';
-import ClientManager from './components/ClientManager';
-import AdminClientFundsManager from './components/AdminClientFundsManager';
-import AdminEarningsManager from './components/AdminEarningsManager';
-import TimeOffManager from './components/TimeOffManager';
-import ExpenseManager from './components/ExpenseManager';
-import PaystubManager from './components/PaystubManager';
-import SettingsManager from './components/SettingsManager';
-
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
 try {
@@ -94,6 +80,17 @@ const getPayPeriodBounds = (anchorDateStr) => {
   return { start, end: new Date(start.getTime() + 13 * 86400000) };
 };
 
+const getPastPayPeriods = (anchorDateStr, numPeriods = 104) => {
+  const { start: currentStart, end: currentEnd } = getPayPeriodBounds(anchorDateStr);
+  const periods = [{ start: currentStart, end: currentEnd, isCurrent: true }];
+  let prevStart = new Date(currentStart);
+  for (let i = 1; i <= numPeriods; i++) {
+    prevStart = new Date(prevStart.getTime() - 14 * 86400000);
+    periods.push({ start: new Date(prevStart), end: new Date(prevStart.getTime() + 13 * 86400000), isCurrent: false });
+  }
+  return periods;
+};
+
 const safeShiftsSort = (arr) => {
   if (!Array.isArray(arr)) return [];
   return [...arr].sort((a, b) => {
@@ -165,7 +162,7 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
 // INLINE COMPONENTS
 // ==========================================
 
-function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonusActive, bonusSettings = { monthly: [100, 50, 20], annual: [3000, 2000, 1000] } }) {
+function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonusActive, bonusSettings }) {
   const now = new Date();
   
   const currentLeaderboard = useMemo(() => {
@@ -285,7 +282,7 @@ function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonu
   );
 }
 
-function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart, isBonusActive, employees, bonusSettings = { monthly: [100, 50, 20], annual: [3000, 2000, 1000] } }) {
+function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart, isBonusActive, employees, bonusSettings }) {
   const now = new Date();
   const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
   
@@ -358,6 +355,103 @@ function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, pay
             <div className="flex justify-between items-center bg-yellow-500/20 border border-yellow-500/30 p-2 rounded mt-2">
               <span className="text-sm text-yellow-300 flex items-center"><Star className="h-3 w-3 mr-1" fill="currentColor"/> Projected Bonus</span>
               <span className="font-bold text-yellow-400">+${bonusEarnings.toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsManager({ payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings }) {
+  const handleUpdateBonus = (category, index, value) => {
+    const updated = { ...bonusSettings, [category]: [...bonusSettings[category]] };
+    updated[category][index] = Number(value) || 0;
+    setBonusSettings(updated); 
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 max-w-2xl overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
+        <Settings className="h-5 w-5 mr-2 text-teal-600" />
+        <h2 className="font-semibold text-slate-800">System Settings</h2>
+      </div>
+      <div className="p-6 space-y-6">
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-1">Pay Period Anchor Date</label>
+          <input 
+            type="date" 
+            value={payPeriodStart} 
+            onChange={(e) => setPayPeriodStart(e.target.value)} 
+            className="w-full max-w-sm px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" 
+          />
+          <p className="text-xs text-slate-500 mt-1">This date is used to calculate bi-weekly pay cycles.</p>
+        </div>
+        
+        <div className="border-t border-slate-200 pt-5">
+          <label className="flex items-center space-x-3 cursor-pointer group w-fit">
+            <div className="relative flex items-center justify-center">
+              <input 
+                type="checkbox" 
+                checked={isBonusActive || false} 
+                onChange={(e) => setIsBonusActive(e.target.checked)} 
+                className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
+              />
+            </div>
+            <span className="font-bold text-slate-800 flex items-center group-hover:text-teal-700 transition">
+              <Award className="h-5 w-5 mr-1.5 text-amber-500"/> 
+              Enable Performance Bonus System
+            </span>
+          </label>
+          <div className="mt-2 ml-8 text-xs text-slate-500 leading-relaxed max-w-xl">
+            When active, top earning employees with a minimum of 10 completed shifts will receive automated cash bonuses on their paycheck each month. Annual trophies track total badges won.
+          </div>
+
+          {isBonusActive && (
+            <div className="mt-4 ml-8 p-5 bg-slate-50 border border-slate-200 rounded-lg space-y-5">
+              <h4 className="text-sm font-bold text-slate-700 border-b border-slate-200 pb-2">Bonus Payout Configurations</h4>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                <div>
+                  <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center">
+                    <CalendarDays className="h-4 w-4 mr-1.5"/> Monthly Leaderboard
+                  </h5>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-yellow-600 flex items-center"><Trophy className="h-3 w-3 mr-1"/> 1st Place</span>
+                      <div className="relative"><span className="absolute left-2 top-1.5 text-slate-400 text-sm">$</span><input type="number" min="0" value={bonusSettings.monthly[0]} onChange={(e)=>handleUpdateBonus('monthly', 0, e.target.value)} className="w-24 pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-teal-500" /></div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-slate-500 flex items-center"><Medal className="h-3 w-3 mr-1"/> 2nd Place</span>
+                      <div className="relative"><span className="absolute left-2 top-1.5 text-slate-400 text-sm">$</span><input type="number" min="0" value={bonusSettings.monthly[1]} onChange={(e)=>handleUpdateBonus('monthly', 1, e.target.value)} className="w-24 pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-teal-500" /></div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-amber-700 flex items-center"><Award className="h-3 w-3 mr-1"/> 3rd Place</span>
+                      <div className="relative"><span className="absolute left-2 top-1.5 text-slate-400 text-sm">$</span><input type="number" min="0" value={bonusSettings.monthly[2]} onChange={(e)=>handleUpdateBonus('monthly', 2, e.target.value)} className="w-24 pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-teal-500" /></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center">
+                    <Trophy className="h-4 w-4 mr-1.5"/> Annual Grand Prizes
+                  </h5>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-yellow-600 flex items-center"><Trophy className="h-3 w-3 mr-1"/> 1st Place</span>
+                      <div className="relative"><span className="absolute left-2 top-1.5 text-slate-400 text-sm">$</span><input type="number" min="0" value={bonusSettings.annual[0]} onChange={(e)=>handleUpdateBonus('annual', 0, e.target.value)} className="w-24 pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-teal-500" /></div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-slate-500 flex items-center"><Medal className="h-3 w-3 mr-1"/> 2nd Place</span>
+                      <div className="relative"><span className="absolute left-2 top-1.5 text-slate-400 text-sm">$</span><input type="number" min="0" value={bonusSettings.annual[1]} onChange={(e)=>handleUpdateBonus('annual', 1, e.target.value)} className="w-24 pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-teal-500" /></div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-amber-700 flex items-center"><Award className="h-3 w-3 mr-1"/> 3rd Place</span>
+                      <div className="relative"><span className="absolute left-2 top-1.5 text-slate-400 text-sm">$</span><input type="number" min="0" value={bonusSettings.annual[2]} onChange={(e)=>handleUpdateBonus('annual', 2, e.target.value)} className="w-24 pl-5 pr-2 py-1 text-sm border border-slate-300 rounded focus:ring-teal-500" /></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -698,9 +792,6 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
   const safeClients = Array.isArray(clients) ? clients : [];
   
   const myShifts = safeShifts.filter(s => s && s.employeeId === currentUser.id);
-  const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id);
-  const myClientExpenses = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id);
-  const myPaystubs = (Array.isArray(paystubs) ? paystubs : []).filter(p => p && p.employeeId === currentUser.id);
   const openShifts = safeShifts.filter(s => s && s.employeeId === 'unassigned');
   
   const now = new Date();
@@ -1402,6 +1493,7 @@ export default function App() {
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
     
+    // Update local state immediately for fast UI response
     if (field === 'payPeriodStart') setPayPeriodStart(value);
     if (field === 'isBonusActive') setIsBonusActive(value);
     if (field === 'bonusAmounts') setBonusSettings(value);

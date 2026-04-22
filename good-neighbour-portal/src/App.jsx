@@ -44,11 +44,34 @@ try {
 // ==========================================
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
+  if (typeof dateStr === 'number') return new Date(dateStr);
+  if (typeof dateStr !== 'string') {
+    if (dateStr.toDate) return dateStr.toDate();
+    if (dateStr.seconds) return new Date(dateStr.seconds * 1000);
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? new Date() : d;
+  }
   try {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
-    return new Date(y, m - 1, d);
-  } catch (e) { return new Date(); }
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [y, m, d] = parts.map(Number);
+      if (y && m && d && !isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return new Date(y, m - 1, d);
+      }
+    }
+    const fallback = new Date(dateStr);
+    return isNaN(fallback.getTime()) ? new Date() : fallback;
+  } catch (e) { 
+    return new Date(); 
+  }
+};
+
+const safeSortByDateDesc = (arr) => {
+  return [...arr].sort((a, b) => {
+    const tA = a.date ? new Date(a.date).getTime() : 0;
+    const tB = b.date ? new Date(b.date).getTime() : 0;
+    return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+  });
 };
 
 const isBiweeklyPayday = (currentDateStr, startDateStr) => {
@@ -291,7 +314,7 @@ function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, pay
   const kmEarnings = myPeriodExp.reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
 
   const myPeriodCE = clientExpenses.filter(e => e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
-  const oopEarnings = myPeriodCE.reduce((sum, e) => sum + Number(e.amount), 0);
+  const oopEarnings = myPeriodCE.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
   let bonusEarnings = 0;
   if (isBonusActive) {
@@ -543,9 +566,8 @@ function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
       </div>
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
         {safeExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logged yet.</div> :
-          [...safeExpenses].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(exp => {
+          safeSortByDateDesc(safeExpenses).map(exp => {
             if(!exp) return null;
-            const client = safeClients.find(c => c.id === exp.clientId);
             return (
               <div key={exp.id || Math.random()} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
                 <div>
@@ -617,14 +639,13 @@ function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddCl
       </div>
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
         {safeClientExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged yet.</div> :
-          [...safeClientExpenses].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(exp => {
+          safeSortByDateDesc(safeClientExpenses).map(exp => {
             if(!exp) return null;
-            const client = safeClients.find(c => c.id === exp.clientId);
             return (
               <div key={exp.id || Math.random()} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
                 <div>
                   <div className="font-semibold text-sm text-slate-800">{exp.date ? parseLocalSafe(exp.date).toLocaleDateString() : 'Unknown Date'}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">${(exp.amount || 0).toFixed(2)} &bull; {exp.description}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">${Number(exp.amount || 0).toFixed(2)} &bull; {exp.description}</div>
                 </div>
                 <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status || 'pending'}</span>
               </div>
@@ -645,7 +666,7 @@ function EmployeePaystubs({ myPaystubs = [] }) {
       <div className="p-6">
         {safePaystubs.length === 0 ? <div className="text-center text-slate-500 py-4">No paystubs available.</div> :
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {[...safePaystubs].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(ps => {
+            {safeSortByDateDesc(safePaystubs).map(ps => {
               if(!ps) return null;
               return (
                 <div key={ps.id || Math.random()} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
@@ -675,6 +696,9 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
   const safeClients = Array.isArray(clients) ? clients : [];
   
   const myShifts = safeShifts.filter(s => s && s.employeeId === currentUser.id);
+  const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id);
+  const myClientExpenses = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id);
+  const myPaystubs = (Array.isArray(paystubs) ? paystubs : []).filter(p => p && p.employeeId === currentUser.id);
   const openShifts = safeShifts.filter(s => s && s.employeeId === 'unassigned');
   
   const now = new Date();
@@ -1399,7 +1423,7 @@ export default function App() {
         const d = new Date(e.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       })
-      .reduce((sum, e) => sum + Number(e.amount), 0);
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
       
     const safeExp = Array.isArray(expenses) ? expenses : [];
     const mileageThisMonth = safeExp
@@ -1409,7 +1433,7 @@ export default function App() {
         const d = new Date(e.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       })
-      .reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
+      .reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
       
     return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
   };

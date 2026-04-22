@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, MessageSquare, Send, Download, TrendingUp, Trophy, Medal, Award, Activity } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -7,7 +7,7 @@ import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged }
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 // --- UTILS & COMPONENTS ---
-import { MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES, parseLocal, isBiweeklyPayday, getHoliday, getPayPeriodBounds } from './utils';
+import { MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES } from './utils';
 
 import LoginPage from './components/LoginPage';
 import Announcements from './components/Announcements';
@@ -23,35 +23,51 @@ import SettingsManager from './components/SettingsManager';
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
 try {
-  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  const firebaseConfig = {
     apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
     authDomain: "good-neighbour-portal.firebaseapp.com",
     projectId: "good-neighbour-portal",
     storageBucket: "good-neighbour-portal.firebasestorage.app",
     messagingSenderId: "570654987529",
-    appId: "1:570654987529:web:400f90a7a63a03b6aa6fd8",
-    measurementId: "G-C3P8CNHYK9"
+    appId: "1:570654987529:web:400f90a7a63a03b6aa6fd8"
   };
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  appId = typeof __app_id !== 'undefined' ? __app_id : 'good-neighbour-portal';
+  appId = 'good-neighbour-portal';
 } catch (e) {
   console.error("Firebase init error:", e);
 }
 
 // ==========================================
-// HELPERS FOR INLINE COMPONENTS
+// UTILS & HELPERS
 // ==========================================
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
   try {
     const [y, m, d] = dateStr.split('-').map(Number);
-    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
+    if (!y || !m || !d) return new Date();
     return new Date(y, m - 1, d);
-  } catch (e) {
-    return new Date();
-  }
+  } catch (e) { return new Date(); }
+};
+
+const isBiweeklyPayday = (currentDateStr, startDateStr) => {
+  if (!startDateStr || !currentDateStr) return false;
+  const [sY, sM, sD] = startDateStr.split('-').map(Number);
+  const [cY, cM, cD] = currentDateStr.split('-').map(Number);
+  const diffDays = (Date.UTC(cY, cM - 1, cD) - Date.UTC(sY, sM - 1, sD)) / 86400000;
+  return diffDays > 0 && diffDays % 14 === 0;
+};
+
+const getPayPeriodBounds = (anchorDateStr) => {
+  const now = new Date();
+  const anchor = parseLocalSafe(anchorDateStr);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (today < anchor) return { start: anchor, end: new Date(anchor.getTime() + 13 * 86400000) };
+  const diffDays = Math.floor((today - anchor) / 86400000);
+  const cycles = Math.floor(diffDays / 14);
+  const start = new Date(anchor.getTime() + cycles * 14 * 86400000);
+  return { start, end: new Date(start.getTime() + 13 * 86400000) };
 };
 
 const safeShiftsSort = (arr) => {
@@ -63,9 +79,271 @@ const safeShiftsSort = (arr) => {
   });
 };
 
+const getHoliday = (dateStr) => {
+  const holidays = {
+    '2026-01-01': { name: 'New Year\'s Day' },
+    '2026-02-16': { name: 'Family Day' },
+    '2026-04-03': { name: 'Good Friday' },
+    '2026-05-18': { name: 'Victoria Day' },
+    '2026-07-01': { name: 'Canada Day' },
+    '2026-08-03': { name: 'Civic Holiday' },
+    '2026-09-07': { name: 'Labour Day' },
+    '2026-10-12': { name: 'Thanksgiving Day' },
+    '2026-12-25': { name: 'Christmas Day' },
+    '2026-12-26': { name: 'Boxing Day' }
+  };
+  return holidays[dateStr] || null;
+};
+
+// Bonus Logic Helpers
+const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses) => {
+  const empShifts = shifts.filter(s => {
+    if (s.employeeId !== emp.id || !s.date || !s.endTime) return false;
+    const shiftDate = new Date(`${s.date}T${s.endTime}`);
+    return shiftDate >= start && shiftDate <= end && shiftDate <= new Date();
+  });
+  
+  let shiftEarnings = 0;
+  let totalHours = 0;
+  const isHourly = emp.payType === 'hourly';
+
+  empShifts.forEach(s => {
+    const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
+    const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
+    let h = (eH + eM/60) - (sH + sM/60);
+    if (h < 0) h += 24;
+    totalHours += h;
+  });
+
+  shiftEarnings = isHourly ? (totalHours * (Number(emp.hourlyWage) || 22.5)) : (empShifts.length * (Number(emp.perVisitRate) || 45));
+
+  const kmEarnings = expenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
+  const oop = clientExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + Number(e.amount), 0);
+
+  return { shiftCount: empShifts.length, totalHours, shiftEarnings, kmEarnings, oop, total: shiftEarnings + kmEarnings + oop };
+};
+
+const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees) => {
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0, 23, 59, 59);
+  
+  let results = employees.map(emp => {
+    const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses);
+    return { emp, ...data };
+  });
+
+  results = results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total);
+  return results.slice(0, 3);
+};
+
+
 // ==========================================
 // INLINE COMPONENTS
 // ==========================================
+
+function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonusActive }) {
+  const now = new Date();
+  
+  const currentLeaderboard = useMemo(() => {
+    return getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, employees);
+  }, [shifts, expenses, clientExpenses, employees, now]);
+  
+  const annualStandings = useMemo(() => {
+    const scores = {};
+    employees.forEach(e => scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, totalScore: 0 });
+    
+    for (let m = 0; m <= now.getMonth(); m++) {
+      const lb = getMonthlyLeaderboard(now.getFullYear(), m, shifts, expenses, clientExpenses, employees);
+      if (lb[0]) { scores[lb[0].emp.id].gold++; scores[lb[0].emp.id].totalScore += 3; }
+      if (lb[1]) { scores[lb[1].emp.id].silver++; scores[lb[1].emp.id].totalScore += 2; }
+      if (lb[2]) { scores[lb[2].emp.id].bronze++; scores[lb[2].emp.id].totalScore += 1; }
+    }
+    
+    return Object.values(scores).filter(s => s.totalScore > 0).sort((a, b) => b.totalScore - a.totalScore);
+  }, [shifts, expenses, clientExpenses, employees, now]);
+
+  if (!isBonusActive) {
+    return (
+      <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-slate-200">
+        <Award className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+        <h3 className="text-lg font-semibold text-slate-600">Bonus System Inactive</h3>
+        <p className="text-sm text-slate-500 mt-1">The Performance Bonus System is currently disabled.</p>
+      </div>
+    );
+  }
+
+  const badgeIcons = [<Trophy className="h-10 w-10 mb-3" />, <Medal className="h-10 w-10 mb-3" />, <Award className="h-10 w-10 mb-3" />];
+  const prizes = ["$100", "$50", "$20"];
+  const colors = [
+    "bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 border-yellow-400", 
+    "bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 border-slate-400", 
+    "bg-gradient-to-br from-amber-600 to-orange-800 text-white border-amber-700"
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Monthly Leaderboard */}
+      <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
+        <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>
+        <h2 className="text-2xl font-bold mb-2 relative z-10 flex items-center">
+          <Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> 
+          {now.toLocaleString('default', { month: 'long' })} Leaderboard
+        </h2>
+        <p className="text-teal-100 mb-6 relative z-10 text-sm">
+          Top 3 earners with 10+ shifts qualify for monthly cash bonuses!
+        </p>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
+          {currentLeaderboard.map((winner, index) => (
+            <div key={winner.emp.id} className={`${colors[index]} rounded-xl p-4 shadow-md border transform hover:-translate-y-1 transition duration-300 flex flex-col items-center text-center`}>
+              {badgeIcons[index]}
+              <div className="font-bold text-lg leading-tight">{winner.emp.name}</div>
+              <div className="text-sm font-semibold opacity-90 mb-3">{index + 1}{index===0?'st':index===1?'nd':'rd'} Place</div>
+              <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm flex items-center">
+                +{prizes[index]} Bonus
+              </div>
+            </div>
+          ))}
+          {currentLeaderboard.length === 0 && (
+            <div className="col-span-3 text-center py-8 bg-black/10 rounded-lg text-sm border border-white/20 backdrop-blur-sm">
+              <p className="font-semibold text-lg mb-1">The race is on!</p>
+              <p className="opacity-90">No employees have completed the 10 shifts required to qualify for the leaderboard yet.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Annual Standings */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+            <Trophy className="h-5 w-5 mr-2 text-yellow-500" /> 
+            Annual Trophy Standings
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Top 3 badge earners at year-end win grand prizes of $3000, $2000, and $1000!
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                <th className="px-6 py-3 font-semibold">Employee</th>
+                <th className="px-6 py-3 font-semibold text-center">Golds (3pt)</th>
+                <th className="px-6 py-3 font-semibold text-center">Silvers (2pt)</th>
+                <th className="px-6 py-3 font-semibold text-center">Bronzes (1pt)</th>
+                <th className="px-6 py-3 font-semibold text-right">Total Score</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {annualStandings.map((s, idx) => (
+                <tr key={s.emp.id} className={idx < 3 ? 'bg-yellow-50/30 hover:bg-yellow-50' : 'hover:bg-slate-50 transition'}>
+                  <td className="px-6 py-4 font-bold text-slate-800 flex items-center">
+                    {idx === 0 && <Trophy className="h-4 w-4 mr-2 text-yellow-500"/>}
+                    {idx === 1 && <Medal className="h-4 w-4 mr-2 text-slate-400"/>}
+                    {idx === 2 && <Award className="h-4 w-4 mr-2 text-amber-600"/>}
+                    {idx > 2 && <span className="w-6 font-normal text-slate-400 text-xs">{idx+1}.</span>}
+                    {s.emp.name}
+                  </td>
+                  <td className="px-6 py-4 text-center font-semibold text-yellow-600">{s.gold}</td>
+                  <td className="px-6 py-4 text-center font-semibold text-slate-500">{s.silver}</td>
+                  <td className="px-6 py-4 text-center font-semibold text-amber-700">{s.bronze}</td>
+                  <td className="px-6 py-4 text-right font-black text-slate-800">{s.totalScore} pts</td>
+                </tr>
+              ))}
+              {annualStandings.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="px-6 py-8 text-center text-slate-500">No badges have been awarded yet this year.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart, isBonusActive, employees }) {
+  const now = new Date();
+  const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
+  
+  const completedShifts = shifts.filter(s => {
+    if (s.employeeId !== currentUser.id || !s.date || !s.endTime) return false;
+    const shiftEnd = new Date(`${s.date}T${s.endTime}`);
+    return shiftEnd <= now && new Date(s.date) >= periodBounds.start && new Date(s.date) <= periodBounds.end;
+  });
+
+  let shiftEarnings = 0;
+  if (currentUser.payType === 'hourly') {
+    let hrs = 0;
+    completedShifts.forEach(s => {
+      const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
+      const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
+      let h = (eH + eM/60) - (sH + sM/60);
+      if (h < 0) h += 24;
+      hrs += h;
+    });
+    shiftEarnings = hrs * (Number(currentUser.hourlyWage) || 22.50);
+  } else {
+    shiftEarnings = completedShifts.length * (Number(currentUser.perVisitRate) || 45);
+  }
+
+  const myPeriodExp = expenses.filter(e => e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
+  const kmEarnings = myPeriodExp.reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
+
+  const myPeriodCE = clientExpenses.filter(e => e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
+  const oopEarnings = myPeriodCE.reduce((sum, e) => sum + Number(e.amount), 0);
+
+  let bonusEarnings = 0;
+  if (isBonusActive) {
+    const lb = getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, employees);
+    if (lb[0]?.emp.id === currentUser.id) bonusEarnings = 100;
+    else if (lb[1]?.emp.id === currentUser.id) bonusEarnings = 50;
+    else if (lb[2]?.emp.id === currentUser.id) bonusEarnings = 20;
+  }
+
+  const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
+
+  return (
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden mb-6 mt-6">
+      <div className="absolute -right-4 -bottom-4 opacity-10"><TrendingUp size={150} /></div>
+      <div className="relative z-10">
+        <h3 className="text-slate-300 font-medium text-sm flex items-center mb-1">
+          <Activity className="h-4 w-4 mr-1.5 text-emerald-400" /> Live Pay Tracker
+        </h3>
+        <div className="text-xs text-slate-400 mb-6">
+          Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}
+        </div>
+        
+        <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">
+          ${totalEarnings.toFixed(2)}
+        </div>
+        
+        <div className="space-y-3">
+          <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+            <span className="text-sm text-slate-300">Completed Shifts ({completedShifts.length})</span>
+            <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+            <span className="text-sm text-slate-300">Approved Mileage</span>
+            <span className="font-semibold text-white">${kmEarnings.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+            <span className="text-sm text-slate-300">Approved Expenses</span>
+            <span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span>
+          </div>
+          {isBonusActive && bonusEarnings > 0 && (
+            <div className="flex justify-between items-center bg-yellow-500/20 border border-yellow-500/30 p-2 rounded mt-2">
+              <span className="text-sm text-yellow-300 flex items-center"><Star className="h-3 w-3 mr-1" fill="currentColor"/> Projected Bonus</span>
+              <span className="font-bold text-yellow-400">+${bonusEarnings.toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], onSave }) {
   const safeEmps = Array.isArray(employees) ? employees : [];
@@ -179,6 +457,18 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
             </div>
           )}
 
+          {client.accountHolderName && (
+            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+              <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center"><User className="h-4 w-4 mr-1.5" /> Account Holder</h4>
+              <div className="space-y-1">
+                <div className="font-semibold text-indigo-900">{client.accountHolderName}</div>
+                {client.accountHolderPhone && <div className="text-sm text-indigo-700 flex items-center"><Phone className="h-3 w-3 mr-1" /> {client.accountHolderPhone}</div>}
+                {client.accountHolderEmail && <div className="text-sm text-indigo-700 flex items-center"><Mail className="h-3 w-3 mr-1" /> {client.accountHolderEmail}</div>}
+                {client.accountHolderAddress && <div className="text-sm text-indigo-700 flex items-center"><MapPin className="h-3 w-3 mr-1" /> {client.accountHolderAddress}</div>}
+              </div>
+            </div>
+          )}
+
           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Info className="h-4 w-4 mr-1.5" /> Care Notes & Routine</h4>
             <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions provided.'}</p>
@@ -191,6 +481,13 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
                 <div className="text-lg font-bold text-red-700 mt-0.5">{client.emergencyContactPhone}</div>
               </div>
             ) : <span className="text-sm text-red-600 italic block mb-2">No primary contact listed.</span>}
+            
+            {client.secondaryEmergencyName && (
+              <div>
+                <div className="text-sm font-semibold text-red-900">Secondary: {client.secondaryEmergencyName}</div>
+                <div className="text-md font-bold text-red-700 mt-0.5">{client.secondaryEmergencyPhone}</div>
+              </div>
+            )}
           </div>
         </div>
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
@@ -231,9 +528,12 @@ function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label>
-              <input type="number" min="0.1" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required />
+              <input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required />
             </div>
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
+          </div>
+          <div className="bg-amber-50 border border-amber-100 rounded p-2 text-amber-800 text-[10px] font-medium leading-tight">
+            * Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client (not to and from the client's home).
           </div>
           <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit</button>
         </form>
@@ -362,7 +662,7 @@ function EmployeePaystubs({ myPaystubs = [] }) {
   );
 }
 
-function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], onSendMessage, payPeriodStart, onPickupShift }) {
+function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [selectedClient, setSelectedClient] = useState(null);
   const [scheduleView, setScheduleView] = useState('list');
@@ -391,25 +691,6 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
-  // --- NEW PAY TRACKER LOGIC ---
-  const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
-  
-  const completedShifts = myShifts.filter(s => {
-    if (!s.date || !s.endTime) return false;
-    const shiftEnd = new Date(`${s.date}T${s.endTime}`);
-    return shiftEnd <= now && new Date(s.date) >= periodBounds.start && new Date(s.date) <= periodBounds.end;
-  });
-
-  const shiftEarnings = completedShifts.length * 45; // Defaulting to $45 per visit
-
-  const myPeriodExp = myExpenses.filter(e => e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
-  const kmEarnings = myPeriodExp.reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
-
-  const myPeriodCE = myClientExpenses.filter(e => e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
-  const oopEarnings = myPeriodCE.reduce((sum, e) => sum + Number(e.amount), 0);
-
-  const totalEarnings = shiftEarnings + kmEarnings + oopEarnings;
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-6">
@@ -419,41 +700,23 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
               <User className="h-10 w-10" />
             </div>
             <h2 className="text-xl font-bold text-slate-800">{currentUser.name}</h2>
-            <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full mt-2 border border-teal-100">{currentUser.role}</span>
-          </div>
-
-          {/* --- NEW LIVE PAY TRACKER --- */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden">
-            <div className="absolute -right-4 -bottom-4 opacity-10"><TrendingUp size={150} /></div>
-            <div className="relative z-10">
-              <h3 className="text-slate-300 font-medium text-sm flex items-center mb-1">
-                <Activity className="h-4 w-4 mr-1.5 text-emerald-400" /> Live Pay Tracker
-              </h3>
-              <div className="text-xs text-slate-400 mb-6">
-                Current Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}
-              </div>
-              
-              <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">
-                ${totalEarnings.toFixed(2)}
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex justify-between items-center bg-white/5 p-2 rounded">
-                  <span className="text-sm text-slate-300">Completed Shifts ({completedShifts.length})</span>
-                  <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center bg-white/5 p-2 rounded">
-                  <span className="text-sm text-slate-300">Approved Mileage</span>
-                  <span className="font-semibold text-white">${kmEarnings.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center bg-white/5 p-2 rounded">
-                  <span className="text-sm text-slate-300">Approved Expenses</span>
-                  <span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span>
-                </div>
-              </div>
+            <div className="flex flex-col mt-2 gap-1 items-center">
+              <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">{currentUser.role}</span>
+              <span className="text-xs font-semibold text-slate-500">
+                {currentUser.payType === 'hourly' ? `$${currentUser.hourlyWage || 22.50}/hr` : `$${currentUser.perVisitRate || 45}/visit`}
+              </span>
             </div>
           </div>
-          {/* --------------------------- */}
+
+          <EmployeePayTracker 
+            currentUser={currentUser} 
+            shifts={shifts} 
+            expenses={expenses} 
+            clientExpenses={clientExpenses} 
+            payPeriodStart={payPeriodStart} 
+            isBonusActive={isBonusActive}
+            employees={employees}
+          />
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
@@ -501,6 +764,9 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
             <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
               <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>My Schedule</button>
               <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Logs & Expenses</button>
+              {isBonusActive && (
+                <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Awards</button>
+              )}
               <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
               <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Team Feed</button>
             </div>
@@ -649,6 +915,18 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
                 </div>
               )}
 
+              {activeTab === 'awards' && isBonusActive && (
+                <div className="p-6">
+                  <AwardsLeaderboard 
+                    employees={employees} 
+                    shifts={shifts} 
+                    expenses={expenses} 
+                    clientExpenses={clientExpenses} 
+                    isBonusActive={isBonusActive} 
+                  />
+                </div>
+              )}
+
               {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
 
               {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />}
@@ -668,7 +946,7 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
   );
 }
 
-function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, messages = [], onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient }) {
+function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, messages = [], onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient, isBonusActive, setIsBonusActive }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -768,7 +1046,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
           onUpdateClientExpense={onUpdateClientExpense}
         />
       ) : activeTab === 'earnings' && isMasterAdmin ? (
-        <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} />
+        <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} />
       ) : activeTab === 'timeoff' ? (
         <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />
       ) : activeTab === 'paystubs' ? (
@@ -776,7 +1054,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
       ) : activeTab === 'announcements' ? (
         <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>
       ) : activeTab === 'settings' && isMasterAdmin ? (
-        <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} />
+        <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} />
       ) : (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
@@ -832,8 +1110,9 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
                 const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
                 const holiday = getHoliday(dateStr);
                 
-                const filteredShifts = shifts.filter(s => {
-                  if (!scheduleSearch.trim()) return true;
+                const safeShifts = Array.isArray(shifts) ? shifts : [];
+                const filteredShifts = safeShifts.filter(s => {
+                  if (!s || !scheduleSearch.trim()) return true;
                   const emp = employees.find(e => e.id === s.employeeId);
                   const client = clients.find(c => c.id === s.clientId);
                   const searchLower = scheduleSearch.toLowerCase();
@@ -843,7 +1122,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
                   );
                 });
                 
-                const dayShifts = filteredShifts.filter(s => s.date === dateStr);
+                const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
                 
                 return (
                   <div 
@@ -872,7 +1151,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
                         const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
                         const client = clients.find(c => c.id === shift.clientId);
                         return (
-                          <div key={shift.id} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : emp?.name || 'Unknown'} with ${client?.name || 'Unknown'}: ${shift.startTime}-${shift.endTime}`}>
+                          <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : emp?.name || 'Unknown'} with ${client?.name || 'Unknown'}: ${shift.startTime}-${shift.endTime}`}>
                             <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>
                               {isOpen ? '🚨 OPEN SHIFT' : emp?.name?.split(' ')[0] || 'Unknown'}
                             </div>
@@ -932,6 +1211,7 @@ export default function App() {
   const [isDbReady, setIsDbReady] = useState(false);
   const [viewMode, setViewMode] = useState('employee');
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
+  const [isBonusActive, setIsBonusActive] = useState(false);
 
   // App State
   const [shifts, setShifts] = useState([]);
@@ -985,6 +1265,15 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_paystubs'), snap => setPaystubs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_timeOffLogs'), snap => setTimeOffLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    
+    // Listen for global settings
+    unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.payPeriodStart) setPayPeriodStart(data.payPeriodStart);
+        if (data.isBonusActive !== undefined) setIsBonusActive(data.isBonusActive);
+      }
+    }, handleError));
 
     return () => unsubs.forEach(unsub => unsub());
   }, [firebaseUser]);
@@ -1003,6 +1292,7 @@ export default function App() {
         role: foundEmp.role, 
         payType: foundEmp.payType,
         hourlyWage: foundEmp.hourlyWage,
+        perVisitRate: foundEmp.perVisitRate,
         timeOffBalances: foundEmp.timeOffBalances 
       });
       setViewMode(foundEmp.role === 'Administrator' ? 'admin' : 'employee');
@@ -1079,33 +1369,60 @@ export default function App() {
     await setDoc(getDocRef('gn_messages', id), { id, text, senderId, date: new Date().toISOString() });
   };
 
+  const handleSaveSettings = async (field, value) => {
+    if (!firebaseUser) return;
+    if (field === 'payPeriodStart') setPayPeriodStart(value);
+    if (field === 'isBonusActive') setIsBonusActive(value);
+    
+    await setDoc(
+      getDocRef('gn_settings', 'global'), 
+      { 
+        payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, 
+        isBonusActive: field === 'isBonusActive' ? value : isBonusActive 
+      }, 
+      { merge: true }
+    );
+  };
+
   const getClientRemainingBalance = (clientId) => {
-    const client = clients.find(c => c.id === clientId);
+    const safeClients = Array.isArray(clients) ? clients : [];
+    const client = safeClients.find(c => c && c.id === clientId);
     if (!client) return 0;
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
-    const spentThisMonth = clientExpenses
-      .filter(e => e.clientId === clientId && e.status === 'approved')
+    const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
+    const spentThisMonth = safeCE
+      .filter(e => e && e.clientId === clientId && e.status === 'approved')
       .filter(e => {
+        if(!e.date) return false;
         const d = new Date(e.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       })
       .reduce((sum, e) => sum + Number(e.amount), 0);
       
-    const mileageThisMonth = expenses
-      .filter(e => e.clientId === clientId && e.status === 'approved')
+    const safeExp = Array.isArray(expenses) ? expenses : [];
+    const mileageThisMonth = safeExp
+      .filter(e => e && e.clientId === clientId && e.status === 'approved')
       .filter(e => {
+        if(!e.date) return false;
         const d = new Date(e.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       })
       .reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
       
-    return client.monthlyAllowance - spentThisMonth - mileageThisMonth;
+    return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
   };
 
   if (!currentUser) {
-    return <LoginPage onLogin={handleLogin} isDbReady={isDbReady} hasData={employees.length > 0} onSeedData={() => {}} />;
+    return (
+      <LoginPage 
+        onLogin={handleLogin} 
+        isDbReady={Boolean(isDbReady)} 
+        hasData={Boolean(Array.isArray(employees) && employees.length > 0)} 
+        onSeedData={() => {}} 
+      />
+    );
   }
 
   const isAdmin = currentUser.role === 'Administrator' || currentUser.role === 'admin';
@@ -1172,7 +1489,9 @@ export default function App() {
             onSendMessage={onSendMessage}
             currentUser={currentUser}
             payPeriodStart={payPeriodStart}
-            setPayPeriodStart={setPayPeriodStart}
+            setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)}
+            isBonusActive={isBonusActive}
+            setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)}
             onAddShift={onAddShift} 
             onRemoveShift={onRemoveShift}
             onMarkShiftOpen={onMarkShiftOpen}
@@ -1194,6 +1513,7 @@ export default function App() {
             onSendMessage={onSendMessage}
             payPeriodStart={payPeriodStart} 
             onPickupShift={onPickupShift}
+            isBonusActive={isBonusActive}
           />
         )}
       </main>

@@ -1,8 +1,49 @@
 import React, { useState, useMemo } from 'react';
-import { Coins } from 'lucide-react';
+import { Coins, Award } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
-export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], payPeriodStart }) {
+// Helper to determine who won the bonus for a specific month
+const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees) => {
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0, 23, 59, 59);
+  
+  let results = employees.map(emp => {
+    const empShifts = shifts.filter(s => {
+      if (s.employeeId !== emp.id || !s.date || !s.endTime) return false;
+      const shiftDate = new Date(`${s.date}T${s.endTime}`);
+      return shiftDate >= start && shiftDate <= end && shiftDate <= new Date();
+    });
+    
+    let shiftEarnings = 0;
+    if (emp.payType === 'hourly') {
+      let hrs = 0;
+      empShifts.forEach(s => {
+        const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
+        const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
+        let h = (eH + eM/60) - (sH + sM/60);
+        if (h < 0) h += 24;
+        hrs += h;
+      });
+      shiftEarnings = hrs * (Number(emp.hourlyWage) || 22.5);
+    } else {
+      shiftEarnings = empShifts.length * (Number(emp.perVisitRate) || 45);
+    }
+    
+    const myExp = expenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= start && parseLocal(e.date) <= end);
+    const kmEarnings = myExp.reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
+    
+    const myCE = clientExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= start && parseLocal(e.date) <= end);
+    const oopEarnings = myCE.reduce((sum, e) => sum + Number(e.amount), 0);
+    
+    return { emp, shiftCount: empShifts.length, total: shiftEarnings + kmEarnings + oopEarnings };
+  });
+  
+  results = results.filter(r => r.shiftCount >= 10);
+  results.sort((a, b) => b.total - a.total);
+  return results.slice(0, 3);
+};
+
+export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], payPeriodStart, isBonusActive }) {
   const kmRate = 0.68;
   
   const safeEmps = Array.isArray(employees) ? employees : [];
@@ -37,6 +78,9 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   
   const employeeEarnings = useMemo(() => {
     const now = new Date();
+    // Get the leaderboard for the month that this pay period ends in
+    const monthlyWinners = getMonthlyLeaderboard(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), safeShifts, safeExp, safeCE, safeEmps);
+
     return safeEmps.map(emp => {
       if(!emp) return null;
       const empShifts = safeShifts.filter(s => {
@@ -54,7 +98,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
         const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
         let hours = (eH + eM/60) - (sH + sM/60);
-        if (hours < 0) hours += 24; // Overnight shift
+        if (hours < 0) hours += 24; 
         totalHours += hours;
       });
 
@@ -66,8 +110,9 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         shiftEarnings = totalHours * hourlyWage;
         displayRate = `${totalHours.toFixed(1)} hrs @ $${hourlyWage.toFixed(2)}/hr`;
       } else {
-        shiftEarnings = empShifts.length * 45;
-        displayRate = `${empShifts.length} shifts @ $45/visit`;
+        const visitRate = Number(emp.perVisitRate) || 45;
+        shiftEarnings = empShifts.length * visitRate;
+        displayRate = `${empShifts.length} shifts @ $${visitRate}/visit`;
       }
 
       const empMileage = safeExp.filter(e => {
@@ -89,7 +134,15 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       });
       const clientExpenseEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
-      const totalEarnings = shiftEarnings + kmEarnings + clientExpenseEarnings;
+      // Determine Bonus
+      let bonusEarnings = 0;
+      if (isBonusActive) {
+        if (monthlyWinners[0]?.emp.id === emp.id) bonusEarnings = 100;
+        else if (monthlyWinners[1]?.emp.id === emp.id) bonusEarnings = 50;
+        else if (monthlyWinners[2]?.emp.id === emp.id) bonusEarnings = 20;
+      }
+
+      const totalEarnings = shiftEarnings + kmEarnings + clientExpenseEarnings + bonusEarnings;
 
       return {
         ...emp,
@@ -101,10 +154,11 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         totalKms,
         kmEarnings,
         clientExpenseEarnings,
+        bonusEarnings,
         totalEarnings
       };
     }).filter(Boolean).sort((a, b) => b.totalEarnings - a.totalEarnings);
-  }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd]);
+  }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd, isBonusActive]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -148,13 +202,14 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
               <th className="px-6 py-3 font-medium">Shift Earnings</th>
               <th className="px-6 py-3 font-medium">Mileage</th>
               <th className="px-6 py-3 font-medium">Out-of-Pocket</th>
+              {isBonusActive && <th className="px-6 py-3 font-medium text-amber-600">Bonuses</th>}
               <th className="px-6 py-3 font-medium text-right text-slate-800">Total Due</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {employeeEarnings.length === 0 ? (
               <tr>
-                <td colSpan="5" className="px-6 py-8 text-center text-slate-500">No active employees to display.</td>
+                <td colSpan={isBonusActive ? "6" : "5"} className="px-6 py-8 text-center text-slate-500">No active employees to display.</td>
               </tr>
             ) : (
               employeeEarnings.map(emp => (
@@ -164,14 +219,23 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                     <div className="text-xs text-slate-500">{emp.role}</div>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
-                    ${emp.shiftEarnings.toFixed(2)} <span className="text-xs text-slate-400">({emp.displayRate})</span>
+                    ${emp.shiftEarnings.toFixed(2)} <span className="text-xs text-slate-400 block mt-0.5">({emp.displayRate})</span>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
-                    ${emp.kmEarnings.toFixed(2)} <span className="text-xs text-slate-400">({emp.totalKms} km)</span>
+                    ${emp.kmEarnings.toFixed(2)} <span className="text-xs text-slate-400 block mt-0.5">({emp.totalKms} km)</span>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
                     ${emp.clientExpenseEarnings.toFixed(2)}
                   </td>
+                  {isBonusActive && (
+                    <td className="px-6 py-4 text-sm font-semibold text-amber-600">
+                      {emp.bonusEarnings > 0 ? (
+                        <div className="flex items-center">
+                          <Award className="h-4 w-4 mr-1"/> +${emp.bonusEarnings}
+                        </div>
+                      ) : '-'}
+                    </td>
+                  )}
                   <td className="px-6 py-4 text-right text-emerald-600 font-bold text-base">
                     ${emp.totalEarnings.toFixed(2)}
                   </td>

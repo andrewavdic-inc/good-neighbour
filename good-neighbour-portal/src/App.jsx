@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, TrendingUp } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -23,7 +23,7 @@ import SettingsManager from './components/SettingsManager';
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
 try {
-  const firebaseConfig = {
+  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
     apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
     authDomain: "good-neighbour-portal.firebaseapp.com",
     projectId: "good-neighbour-portal",
@@ -35,7 +35,7 @@ try {
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  appId = 'good-neighbour-portal';
+  appId = typeof __app_id !== 'undefined' ? __app_id : 'good-neighbour-portal';
 } catch (e) {
   console.error("Firebase init error:", e);
 }
@@ -168,11 +168,6 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
                 <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
                   <Wallet className="h-3 w-3 mr-1" /> ${remainingBalance.toFixed(2)} Funds Left
                 </div>
-                {client.dateOfBirth && (
-                  <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                    <CalendarDays className="h-3 w-3 mr-1" /> DOB: {client.dateOfBirth}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -181,18 +176,6 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
               {client.phone && <div className="text-sm text-slate-700 flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400" /> {client.phone}</div>}
               {client.address && <div className="text-sm text-slate-700 flex items-center"><MapPin className="h-4 w-4 mr-2 text-slate-400" /> {client.address}</div>}
-            </div>
-          )}
-
-          {client.accountHolderName && (
-            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-              <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center"><User className="h-4 w-4 mr-1.5" /> Account Holder</h4>
-              <div className="space-y-1">
-                <div className="font-semibold text-indigo-900">{client.accountHolderName}</div>
-                {client.accountHolderPhone && <div className="text-sm text-indigo-700 flex items-center"><Phone className="h-3 w-3 mr-1" /> {client.accountHolderPhone}</div>}
-                {client.accountHolderEmail && <div className="text-sm text-indigo-700 flex items-center"><Mail className="h-3 w-3 mr-1" /> {client.accountHolderEmail}</div>}
-                {client.accountHolderAddress && <div className="text-sm text-indigo-700 flex items-center"><MapPin className="h-3 w-3 mr-1" /> {client.accountHolderAddress}</div>}
-              </div>
             </div>
           )}
 
@@ -208,13 +191,6 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
                 <div className="text-lg font-bold text-red-700 mt-0.5">{client.emergencyContactPhone}</div>
               </div>
             ) : <span className="text-sm text-red-600 italic block mb-2">No primary contact listed.</span>}
-            
-            {client.secondaryEmergencyName && (
-              <div>
-                <div className="text-sm font-semibold text-red-900">Secondary: {client.secondaryEmergencyName}</div>
-                <div className="text-md font-bold text-red-700 mt-0.5">{client.secondaryEmergencyPhone}</div>
-              </div>
-            )}
           </div>
         </div>
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
@@ -255,12 +231,9 @@ function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label>
-              <input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required />
+              <input type="number" min="0.1" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required />
             </div>
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
-          </div>
-          <div className="bg-amber-50 border border-amber-100 rounded p-2 text-amber-800 text-[10px] font-medium leading-tight">
-            * Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client (not to and from the client's home).
           </div>
           <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit</button>
         </form>
@@ -418,6 +391,25 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
+  // --- NEW PAY TRACKER LOGIC ---
+  const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
+  
+  const completedShifts = myShifts.filter(s => {
+    if (!s.date || !s.endTime) return false;
+    const shiftEnd = new Date(`${s.date}T${s.endTime}`);
+    return shiftEnd <= now && new Date(s.date) >= periodBounds.start && new Date(s.date) <= periodBounds.end;
+  });
+
+  const shiftEarnings = completedShifts.length * 45; // Defaulting to $45 per visit
+
+  const myPeriodExp = myExpenses.filter(e => e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
+  const kmEarnings = myPeriodExp.reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
+
+  const myPeriodCE = myClientExpenses.filter(e => e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
+  const oopEarnings = myPeriodCE.reduce((sum, e) => sum + Number(e.amount), 0);
+
+  const totalEarnings = shiftEarnings + kmEarnings + oopEarnings;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-6">
@@ -427,13 +419,41 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
               <User className="h-10 w-10" />
             </div>
             <h2 className="text-xl font-bold text-slate-800">{currentUser.name}</h2>
-            <div className="flex flex-col mt-2 gap-1 items-center">
-              <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">{currentUser.role}</span>
-              <span className="text-xs font-semibold text-slate-500">
-                {currentUser.payType === 'hourly' ? `$${currentUser.hourlyWage || 22.50}/hr` : '$45/visit'}
-              </span>
+            <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full mt-2 border border-teal-100">{currentUser.role}</span>
+          </div>
+
+          {/* --- NEW LIVE PAY TRACKER --- */}
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden">
+            <div className="absolute -right-4 -bottom-4 opacity-10"><TrendingUp size={150} /></div>
+            <div className="relative z-10">
+              <h3 className="text-slate-300 font-medium text-sm flex items-center mb-1">
+                <Activity className="h-4 w-4 mr-1.5 text-emerald-400" /> Live Pay Tracker
+              </h3>
+              <div className="text-xs text-slate-400 mb-6">
+                Current Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}
+              </div>
+              
+              <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">
+                ${totalEarnings.toFixed(2)}
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+                  <span className="text-sm text-slate-300">Completed Shifts ({completedShifts.length})</span>
+                  <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+                  <span className="text-sm text-slate-300">Approved Mileage</span>
+                  <span className="font-semibold text-white">${kmEarnings.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+                  <span className="text-sm text-slate-300">Approved Expenses</span>
+                  <span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span>
+                </div>
+              </div>
             </div>
           </div>
+          {/* --------------------------- */}
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
@@ -812,9 +832,8 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
                 const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
                 const holiday = getHoliday(dateStr);
                 
-                const safeShifts = Array.isArray(shifts) ? shifts : [];
-                const filteredShifts = safeShifts.filter(s => {
-                  if (!s || !scheduleSearch.trim()) return true;
+                const filteredShifts = shifts.filter(s => {
+                  if (!scheduleSearch.trim()) return true;
                   const emp = employees.find(e => e.id === s.employeeId);
                   const client = clients.find(c => c.id === s.clientId);
                   const searchLower = scheduleSearch.toLowerCase();
@@ -824,7 +843,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
                   );
                 });
                 
-                const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
+                const dayShifts = filteredShifts.filter(s => s.date === dateStr);
                 
                 return (
                   <div 
@@ -853,7 +872,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
                         const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
                         const client = clients.find(c => c.id === shift.clientId);
                         return (
-                          <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : emp?.name || 'Unknown'} with ${client?.name || 'Unknown'}: ${shift.startTime}-${shift.endTime}`}>
+                          <div key={shift.id} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : emp?.name || 'Unknown'} with ${client?.name || 'Unknown'}: ${shift.startTime}-${shift.endTime}`}>
                             <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>
                               {isOpen ? '🚨 OPEN SHIFT' : emp?.name?.split(' ')[0] || 'Unknown'}
                             </div>
@@ -1061,44 +1080,32 @@ export default function App() {
   };
 
   const getClientRemainingBalance = (clientId) => {
-    const safeClients = Array.isArray(clients) ? clients : [];
-    const client = safeClients.find(c => c && c.id === clientId);
+    const client = clients.find(c => c.id === clientId);
     if (!client) return 0;
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     
-    const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
-    const spentThisMonth = safeCE
-      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+    const spentThisMonth = clientExpenses
+      .filter(e => e.clientId === clientId && e.status === 'approved')
       .filter(e => {
-        if(!e.date) return false;
         const d = new Date(e.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       })
       .reduce((sum, e) => sum + Number(e.amount), 0);
       
-    const safeExp = Array.isArray(expenses) ? expenses : [];
-    const mileageThisMonth = safeExp
-      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+    const mileageThisMonth = expenses
+      .filter(e => e.clientId === clientId && e.status === 'approved')
       .filter(e => {
-        if(!e.date) return false;
         const d = new Date(e.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       })
       .reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
       
-    return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
+    return client.monthlyAllowance - spentThisMonth - mileageThisMonth;
   };
 
   if (!currentUser) {
-    return (
-      <LoginPage 
-        onLogin={handleLogin} 
-        isDbReady={Boolean(isDbReady)} 
-        hasData={Boolean(Array.isArray(employees) && employees.length > 0)} 
-        onSeedData={() => {}} 
-      />
-    );
+    return <LoginPage onLogin={handleLogin} isDbReady={isDbReady} hasData={employees.length > 0} onSeedData={() => {}} />;
   }
 
   const isAdmin = currentUser.role === 'Administrator' || currentUser.role === 'admin';
@@ -1116,9 +1123,7 @@ export default function App() {
             <div className="flex items-center space-x-3 sm:space-x-4">
               {isAdmin && (
                 <button
-                  onClick={() => {
-                    setViewMode(viewMode === 'admin' ? 'employee' : 'admin');
-                  }}
+                  onClick={() => setViewMode(viewMode === 'admin' ? 'employee' : 'admin')}
                   className="text-xs font-bold bg-teal-800 hover:bg-teal-900 text-teal-100 px-2 sm:px-3 py-1.5 rounded transition shadow-sm"
                 >
                   {viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}

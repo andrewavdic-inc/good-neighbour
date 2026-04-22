@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
-import { Heart, Search, Edit, Trash2, User, Phone, Wallet, Image as ImageIcon, Plus } from 'lucide-react';
+import { Heart, Search, Edit, Trash2, User, Phone, Wallet, Image as ImageIcon, Plus, MapPin, CalendarDays, Info } from 'lucide-react';
 
 function EditClientModal({ client, onClose, onSave }) {
-  const [name, setName] = useState(client.name);
+  const [name, setName] = useState(client.name || '');
+  const [dateOfBirth, setDateOfBirth] = useState(client.dateOfBirth || '');
+  const [phone, setPhone] = useState(client.phone || '');
+  const [address, setAddress] = useState(client.address || '');
   const [notes, setNotes] = useState(client.notes || '');
   const [emergencyName, setEmergencyName] = useState(client.emergencyContactName || '');
   const [emergencyPhone, setEmergencyPhone] = useState(client.emergencyContactPhone || '');
-  const [monthlyAllowance, setMonthlyAllowance] = useState(client.monthlyAllowance.toString());
+  const [secondaryEmergencyName, setSecondaryEmergencyName] = useState(client.secondaryEmergencyName || '');
+  const [secondaryEmergencyPhone, setSecondaryEmergencyPhone] = useState(client.secondaryEmergencyPhone || '');
+  const [monthlyAllowance, setMonthlyAllowance] = useState(client.monthlyAllowance?.toString() || '0');
   const [photoFile, setPhotoFile] = useState(null);
 
   const handleSubmit = (e) => {
@@ -15,9 +20,14 @@ function EditClientModal({ client, onClose, onSave }) {
     
     const updatedData = {
       name,
+      dateOfBirth,
+      phone,
+      address,
       notes,
       emergencyContactName: emergencyName,
       emergencyContactPhone: emergencyPhone,
+      secondaryEmergencyName,
+      secondaryEmergencyPhone,
       monthlyAllowance: Number(monthlyAllowance) || 0
     };
 
@@ -25,7 +35,9 @@ function EditClientModal({ client, onClose, onSave }) {
       updatedData.photoUrl = URL.createObjectURL(photoFile);
     }
 
-    onSave(client.id, updatedData);
+    if (onSave) {
+      onSave(client.id, updatedData);
+    }
   };
 
   return (
@@ -46,6 +58,37 @@ function EditClientModal({ client, onClose, onSave }) {
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
                 required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
+                <input 
+                  type="date" 
+                  value={dateOfBirth} 
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                <input 
+                  type="text" 
+                  value={phone} 
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Home Address</label>
+              <input 
+                type="text" 
+                value={address} 
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
               />
             </div>
             
@@ -82,23 +125,48 @@ function EditClientModal({ client, onClose, onSave }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Emergency Contact</label>
+            <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-4 mt-4">
+              <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Primary Emergency Contact</label>
                 <input 
                   type="text" 
                   value={emergencyName} 
                   onChange={(e) => setEmergencyName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                  placeholder="Name (e.g. Son)"
                 />
               </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Emergency Phone</label>
+              <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Primary Phone</label>
                 <input 
                   type="text" 
                   value={emergencyPhone} 
                   onChange={(e) => setEmergencyPhone(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                  placeholder="555-0000"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Emergency Contact</label>
+                <input 
+                  type="text" 
+                  value={secondaryEmergencyName} 
+                  onChange={(e) => setSecondaryEmergencyName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                  placeholder="Name (e.g. Daughter)"
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Phone</label>
+                <input 
+                  type="text" 
+                  value={secondaryEmergencyPhone} 
+                  onChange={(e) => setSecondaryEmergencyPhone(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                  placeholder="555-0000"
                 />
               </div>
             </div>
@@ -115,7 +183,7 @@ function EditClientModal({ client, onClose, onSave }) {
           </form>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3">
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
           <button 
             type="button" 
             onClick={onClose}
@@ -136,15 +204,22 @@ function EditClientModal({ client, onClose, onSave }) {
   );
 }
 
-export default function ClientManager({ clients, onAddClient, onRemoveClient, updateClient }) {
+export default function ClientManager({ clients = [], onAddClient, onRemoveClient, updateClient }) {
   const [newName, setNewName] = useState('');
+  const [newDateOfBirth, setNewDateOfBirth] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newAddress, setNewAddress] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [newEmergencyName, setNewEmergencyName] = useState('');
   const [newEmergencyPhone, setNewEmergencyPhone] = useState('');
+  const [newSecondaryEmergencyName, setNewSecondaryEmergencyName] = useState('');
+  const [newSecondaryEmergencyPhone, setNewSecondaryEmergencyPhone] = useState('');
   const [newPhotoFile, setNewPhotoFile] = useState(null);
   const [newMonthlyAllowance, setNewMonthlyAllowance] = useState('100');
   const [editingClient, setEditingClient] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const safeClients = Array.isArray(clients) ? clients : [];
 
   const handleAddClient = (e) => {
     e.preventDefault();
@@ -153,22 +228,36 @@ export default function ClientManager({ clients, onAddClient, onRemoveClient, up
     const newClient = {
       id: `client_${Date.now()}`,
       name: newName,
+      dateOfBirth: newDateOfBirth,
+      phone: newPhone,
+      address: newAddress,
       notes: newNotes,
       emergencyContactName: newEmergencyName,
       emergencyContactPhone: newEmergencyPhone,
+      secondaryEmergencyName: newSecondaryEmergencyName,
+      secondaryEmergencyPhone: newSecondaryEmergencyPhone,
       photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0d9488`,
       monthlyAllowance: Number(newMonthlyAllowance) || 0
     };
-    onAddClient(newClient);
+    
+    if (onAddClient) {
+      onAddClient(newClient);
+    }
+
     setNewName('');
+    setNewDateOfBirth('');
+    setNewPhone('');
+    setNewAddress('');
     setNewNotes('');
     setNewEmergencyName('');
     setNewEmergencyPhone('');
+    setNewSecondaryEmergencyName('');
+    setNewSecondaryEmergencyPhone('');
     setNewPhotoFile(null);
     setNewMonthlyAllowance('100');
   };
 
-  const filteredClients = clients.filter(client => 
+  const filteredClients = safeClients.filter(client => 
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (client.notes && client.notes.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -198,7 +287,7 @@ export default function ClientManager({ clients, onAddClient, onRemoveClient, up
 
         <div className="divide-y divide-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 p-4 gap-4 flex-1 overflow-y-auto">
           {filteredClients.map(client => (
-            <div key={client.id} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md transition bg-white relative">
+            <div key={client.id || Math.random()} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md transition bg-white relative">
               <div className="absolute top-3 right-3 flex space-x-1">
                 <button 
                   onClick={() => setEditingClient(client)}
@@ -208,7 +297,7 @@ export default function ClientManager({ clients, onAddClient, onRemoveClient, up
                   <Edit className="h-4 w-4" />
                 </button>
                 <button 
-                  onClick={() => onRemoveClient(client.id)}
+                  onClick={() => onRemoveClient && onRemoveClient(client.id)}
                   className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-md transition"
                   title="Remove Client"
                 >
@@ -233,26 +322,41 @@ export default function ClientManager({ clients, onAddClient, onRemoveClient, up
               </div>
               
               <div className="mt-auto grid grid-cols-2 gap-2">
-                <div className="bg-slate-50 rounded p-2.5 text-xs text-slate-600 border border-slate-100">
+                <div className="bg-slate-50 rounded p-2.5 text-xs text-slate-600 border border-slate-100 col-span-2">
                   <div className="font-semibold text-slate-700 mb-1 flex items-center">
-                    <Phone className="h-3 w-3 mr-1" /> Emergency Contact
+                    <Phone className="h-3 w-3 mr-1" /> Emergency Contacts
                   </div>
                   {client.emergencyContactName ? (
-                    <div>
-                      {client.emergencyContactName}
-                      <br/>
-                      <span className="text-teal-700 font-medium">{client.emergencyContactPhone}</span>
+                    <div className="mb-1">
+                      <span className="font-medium text-slate-700">Primary:</span> {client.emergencyContactName} ({client.emergencyContactPhone})
                     </div>
-                  ) : (
-                    <span className="text-slate-400 italic">Not provided</span>
+                  ) : <span className="text-slate-400 italic block">No primary contact</span>}
+                  
+                  {client.secondaryEmergencyName && (
+                    <div>
+                      <span className="font-medium text-slate-700">Secondary:</span> {client.secondaryEmergencyName} ({client.secondaryEmergencyPhone})
+                    </div>
                   )}
                 </div>
+                
                 <div className="bg-slate-50 rounded p-2.5 text-xs text-slate-600 border border-slate-100">
                   <div className="font-semibold text-slate-700 mb-1 flex items-center">
-                    <Wallet className="h-3 w-3 mr-1" /> Monthly Allowance
+                    <MapPin className="h-3 w-3 mr-1" /> Info
+                  </div>
+                  <div className="space-y-1">
+                    {client.dateOfBirth && <div>DOB: {client.dateOfBirth}</div>}
+                    {client.phone && <div>{client.phone}</div>}
+                    {client.address && <div className="truncate" title={client.address}>{client.address}</div>}
+                    {!client.dateOfBirth && !client.phone && !client.address && <span className="text-slate-400 italic">No extra info</span>}
+                  </div>
+                </div>
+                
+                <div className="bg-slate-50 rounded p-2.5 text-xs text-slate-600 border border-slate-100 flex flex-col justify-center">
+                  <div className="font-semibold text-slate-700 mb-1 flex items-center">
+                    <Wallet className="h-3 w-3 mr-1" /> Limit
                   </div>
                   <div className="text-teal-700 font-bold text-sm">
-                    ${client.monthlyAllowance}/mo
+                    ${(client.monthlyAllowance || 0).toFixed(2)}/mo
                   </div>
                 </div>
               </div>
@@ -317,7 +421,7 @@ export default function ClientManager({ clients, onAddClient, onRemoveClient, up
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Emergency Contact</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Primary Emergency Contact</label>
               <input 
                 type="text" 
                 value={newEmergencyName} 
@@ -327,11 +431,34 @@ export default function ClientManager({ clients, onAddClient, onRemoveClient, up
               />
             </div>
             <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Emergency Phone</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Primary Phone</label>
               <input 
                 type="text" 
                 value={newEmergencyPhone} 
                 onChange={(e) => setNewEmergencyPhone(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                placeholder="555-0000"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Emergency Contact</label>
+              <input 
+                type="text" 
+                value={newSecondaryEmergencyName} 
+                onChange={(e) => setNewSecondaryEmergencyName(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                placeholder="Name (e.g. Daughter)"
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Phone</label>
+              <input 
+                type="text" 
+                value={newSecondaryEmergencyPhone} 
+                onChange={(e) => setNewSecondaryEmergencyPhone(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
                 placeholder="555-0000"
               />
@@ -363,7 +490,9 @@ export default function ClientManager({ clients, onAddClient, onRemoveClient, up
           client={editingClient} 
           onClose={() => setEditingClient(null)} 
           onSave={(id, data) => {
-            updateClient(id, data);
+            if (updateClient) {
+              updateClient(id, data);
+            }
             setEditingClient(null);
           }} 
         />

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info } from 'lucide-react';
 
-// Hardcoded here so it NEVER crashes!
 const ONTARIO_REQUIREMENTS = [
   { key: 'cpr', label: 'CPR / First Aid' }, 
   { key: 'whmis', label: 'WHMIS' }, 
@@ -173,12 +172,12 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                 <h4 className="text-sm font-semibold text-slate-800 mb-3 flex items-center"><CalendarDays className="h-4 w-4 mr-1.5 text-slate-500"/> Availability Tracker</h4>
                 <div className="flex flex-wrap gap-3">
                   {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
-                    <label key={part} className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
+                    <label key={part} className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition">
                       <input 
                         type="checkbox" 
                         checked={(formData.availability || []).includes(part)}
                         onChange={() => toggleAvailability(part)}
-                        className="rounded text-teal-600 focus:ring-teal-500"
+                        className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
                       />
                       <span>{part}</span>
                     </label>
@@ -261,7 +260,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
           </form>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3">
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">
             Cancel
           </button>
@@ -527,12 +526,12 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
             <div className="flex flex-wrap gap-2">
               {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
-                <label key={part} className="flex items-center space-x-1.5 text-xs text-slate-700 cursor-pointer bg-white border border-slate-200 px-2 py-1 rounded hover:bg-slate-50">
+                <label key={part} className="flex items-center space-x-1.5 text-xs text-slate-700 cursor-pointer bg-white border border-slate-200 px-2 py-1 rounded hover:bg-slate-50 transition">
                   <input 
                     type="checkbox" 
                     checked={newAvailability.includes(part)}
                     onChange={() => toggleNewAvailability(part)}
-                    className="rounded text-teal-600 focus:ring-teal-500"
+                    className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
                   />
                   <span>{part}</span>
                 </label>
@@ -545,7 +544,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('emp-photo-upload').click()}>
               <div className="space-y-1 text-center">
                 <ImageIcon className="mx-auto h-6 w-6 text-slate-400" />
-                <div className="flex text-xs text-slate-600 justify-center">
+                <div className="flex text-sm text-slate-600 justify-center">
                   <span className="relative cursor-pointer bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-teal-500">
                     {newPhotoFile ? newPhotoFile.name : <span>Upload a photo</span>}
                   </span>

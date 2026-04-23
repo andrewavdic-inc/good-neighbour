@@ -20,7 +20,7 @@ import PaystubManager from './components/PaystubManager';
 import SettingsManager from './components/SettingsManager';
 import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
-import ClientProfileModal from './components/ClientProfileModal'; // <-- NEW IMPORT PREVENTS CRASH
+import ClientProfileModal from './components/ClientProfileModal'; 
 
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
@@ -222,15 +222,16 @@ export default function App() {
     const safeEmployees = Array.isArray(employees) ? employees : [];
     const foundEmp = safeEmployees.find(e => e && e.username && String(e.username).toLowerCase() === String(username).toLowerCase() && e.password === password);
     if (foundEmp) {
-      setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances });
+      setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl });
       setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
+      setActiveAdminTab('schedule');
     } else { alert("Invalid credentials. Please check your username and password."); }
   };
 
-  const handleLogout = () => { setCurrentUser(null); setViewMode('employee'); };
+  const handleLogout = () => { setCurrentUser(null); setViewMode('employee'); setActiveAdminTab('schedule'); };
 
-  const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId.toString());
-
+  const getDocRef = (cName, dId) => doc(db, 'artifacts', appId, 'public', 'data', cName, String(dId));
+  
   const runMutation = async (cName, dId, action, data) => {
     if(!firebaseUser) return;
     const ref = getDocRef(cName, dId);
@@ -239,7 +240,6 @@ export default function App() {
     if(action === 'delete') await deleteDoc(ref);
   };
 
-  // CORRECTED: Calculate remaining balance logic
   const getClientRemainingBalance = (clientId) => {
     const safeClients = Array.isArray(clients) ? clients : [];
     const client = safeClients.find(c => c && c.id === clientId);
@@ -292,7 +292,14 @@ export default function App() {
               {viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}
             </button>
           )}
-          <div className="flex items-center text-sm hidden sm:flex"><User className="mr-1 h-4 w-4"/> {String(currentUser.name)}</div>
+          <div className="flex items-center text-sm hidden sm:flex">
+            {currentUser.photoUrl ? (
+              <img src={currentUser.photoUrl} alt="Avatar" className="h-6 w-6 rounded-full mr-2 object-cover border border-teal-500" />
+            ) : (
+              <User className="mr-1 h-4 w-4"/> 
+            )}
+            {String(currentUser.name)}
+          </div>
           <button onClick={handleLogout} className="p-2 rounded-full hover:bg-teal-600 transition" title="Logout"><LogOut className="h-5 w-5"/></button>
         </div>
       </nav>
@@ -328,7 +335,7 @@ export default function App() {
             {activeAdminTab === 'timeoff' && <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOff={(id) => runMutation('gn_timeOffLogs', id, 'delete')} />}
             {activeAdminTab === 'paystubs' && <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} />}
             {activeAdminTab === 'documents' && <DocumentManager documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} isAdmin={true} />}
-            {activeAdminTab === 'announcements' && <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new DatetoISOString() })} currentUser={currentUser} employees={employees} /></div>}
+            {activeAdminTab === 'announcements' && <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} employees={employees} /></div>}
             {activeAdminTab === 'settings' && <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => { setPayPeriodStart(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart: v, isBonusActive, bonusAmounts: bonusSettings }); }} isBonusActive={isBonusActive} setIsBonusActive={(v) => { setIsBonusActive(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart, isBonusActive: v, bonusAmounts: bonusSettings }); }} bonusSettings={bonusSettings} setBonusSettings={(v) => { setBonusSettings(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart, isBonusActive, bonusAmounts: v }); }} />}
             
             {activeAdminTab === 'schedule' && (
@@ -392,7 +399,7 @@ export default function App() {
                                   <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{String(client?.name?.split(' ')[0] || 'Unknown Client')}</span></div>
                                   <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
                                   <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
-                                    {!isOpen && (<button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
+                                    {!isOpen && (<button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift"><UserMinus className="h-3 w-3" /></button>)}
                                     <button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'delete'); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
                                   </div>
                                 </div>
@@ -418,19 +425,16 @@ export default function App() {
             payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
             onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
             setSelectedClient={setSelectedClient}
-            getClientRemainingBalance={getClientRemainingBalance} // <-- Safely passed down!
+            getClientRemainingBalance={getClientRemainingBalance}
+            onUpdateProfile={(id, d) => {
+              runMutation('gn_employees', id, 'update', d);
+              setCurrentUser(prev => ({ ...prev, ...d })); 
+            }}
           />
         )}
       </main>
 
-      {/* RESTORED: The beautifully redesigned Client Profile Modal */}
-      {selectedClient && (
-        <ClientProfileModal 
-          client={selectedClient} 
-          remainingBalance={getClientRemainingBalance(selectedClient.id)} 
-          onClose={() => setSelectedClient(null)} 
-        />
-      )}
+      {selectedClient && <ClientProfileModal client={selectedClient} remainingBalance={getClientRemainingBalance(selectedClient.id)} onClose={() => setSelectedClient(null)} />}
     </div>
   );
 }

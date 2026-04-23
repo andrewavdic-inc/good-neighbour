@@ -1,76 +1,82 @@
 import React, { useState } from 'react';
-import { MessageSquare, Send, User } from 'lucide-react';
+import { MessageSquare, Send } from 'lucide-react';
 
 export default function Announcements({ messages = [], onSendMessage, currentUser, employees = [] }) {
-  const [newMsg, setNewMsg] = useState('');
-  
-  // Added optional chaining (?.) to prevent crashes if currentUser is temporarily undefined
-  const canSend = currentUser?.role === 'Administrator' || currentUser?.role === 'admin' || currentUser?.role === 'Block Captain';
+  const [text, setText] = useState('');
 
-  const handleSend = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    if (!newMsg.trim() || !currentUser) return;
-    onSendMessage(newMsg, currentUser.id);
-    setNewMsg('');
+    if (text.trim()) {
+      onSendMessage(text, currentUser?.id || 'unknown');
+      setText('');
+    }
+  };
+
+  // Bulletproof date sorting to prevent crashes from malformed Firebase timestamps
+  const safeSortByDateDesc = (arr) => {
+    if (!arr || !Array.isArray(arr)) return [];
+    return [...arr].filter(Boolean).sort((a, b) => {
+      let dA = 0;
+      let dB = 0;
+      
+      try { dA = a.date ? new Date(a.date).getTime() : 0; } catch(e) {}
+      try { dB = b.date ? new Date(b.date).getTime() : 0; } catch(e) {}
+      
+      return (isNaN(dB) ? 0 : dB) - (isNaN(dA) ? 0 : dA);
+    });
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="px-6 py-5 border-b border-slate-200 flex items-center bg-slate-50">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
         <MessageSquare className="h-5 w-5 mr-2 text-teal-600" />
-        <h2 className="text-lg font-semibold text-slate-800">Team Announcements</h2>
+        <h2 className="text-lg font-bold text-slate-800">Team Feed</h2>
       </div>
-      <div className="p-6 flex flex-col gap-6">
-        {canSend && (
-          <form onSubmit={handleSend} className="flex flex-col gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <label className="text-sm font-semibold text-slate-700">Broadcast New Message</label>
-            <textarea 
-              value={newMsg} 
-              onChange={(e) => setNewMsg(e.target.value)} 
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" 
-              placeholder="Write an announcement to share with the whole team..." 
-              rows="3" 
-              required
-            />
-            <button 
-              type="submit" 
-              className="self-end bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 flex items-center text-sm font-medium transition"
-            >
-              <Send className="h-4 w-4 mr-2" /> Send Announcement
-            </button>
-          </form>
-        )}
-        
-        <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-          {messages.length === 0 ? (
-            <p className="text-slate-500 text-sm text-center py-8">No announcements at this time.</p>
-          ) : (
-            messages.map(msg => {
-              const sender = employees.find(e => e.id === msg.senderId) || 
-                            (msg.senderId === 'admin1' ? { name: 'Master Admin', role: 'Administrator' } : { name: 'Unknown', role: 'Staff' });
-              return (
-                <div key={msg.id} className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow transition">
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 gap-2">
-                    <div className="font-semibold text-slate-800 text-sm flex items-center">
-                      <User className="h-4 w-4 mr-1.5 text-slate-400" />
-                      {sender.name} 
-                      <span className={`ml-2 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded ${
-                        sender.role === 'Administrator' ? 'bg-purple-100 text-purple-700' : 'bg-teal-100 text-teal-700'
-                      }`}>
-                        {sender.role}
-                      </span>
-                    </div>
-                    <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded w-fit">
-                      {new Date(msg.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                    </div>
+      
+      <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-50/50">
+        {!messages || messages.length === 0 ? (
+          <div className="text-center text-slate-500 py-8">No announcements yet.</div>
+        ) : (
+          safeSortByDateDesc(messages).map(m => {
+            if (!m) return null;
+            
+            const safeSenderId = m.senderId || '';
+            const sender = (employees || []).find(e => e && e.id === safeSenderId);
+            const isMe = currentUser && safeSenderId === currentUser.id;
+            
+            return (
+              <div key={m.id || Math.random().toString()} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] rounded-xl p-3 shadow-sm ${isMe ? 'bg-teal-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'}`}>
+                  <div className={`text-xs font-bold mb-1 ${isMe ? 'text-teal-100' : 'text-teal-700'}`}>
+                    {/* String casts prevent React Object Child rendering crashes */}
+                    {String(sender?.name || 'Unknown')}
                   </div>
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                  <div className="text-sm whitespace-pre-wrap">
+                    {String(m.text || '')}
+                  </div>
                 </div>
-              );
-            })
-          )}
-        </div>
+              </div>
+            );
+          })
+        )}
       </div>
+      
+      <form onSubmit={handleSubmit} className="p-4 border-t border-slate-200 bg-white flex gap-3">
+        <input 
+          type="text" 
+          value={text} 
+          onChange={(e) => setText(e.target.value)} 
+          className="flex-1 px-4 py-2 border border-slate-300 rounded-full focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-sm transition" 
+          placeholder="Post a message to the team..." 
+        />
+        <button 
+          type="submit" 
+          disabled={!text.trim()}
+          className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-full p-2 w-10 h-10 flex items-center justify-center transition shadow-sm"
+        >
+          <Send className="h-4 w-4 ml-0.5" />
+        </button>
+      </form>
     </div>
   );
 }

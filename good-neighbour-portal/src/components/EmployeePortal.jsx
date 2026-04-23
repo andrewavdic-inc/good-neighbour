@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity } from 'lucide-react';
+import Announcements from './Announcements';
 
 // ==========================================
 // UTILS & HELPERS

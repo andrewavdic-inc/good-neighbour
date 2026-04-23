@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen } from 'lucide-react';
 import Announcements from './Announcements';
+import DocumentManager from './DocumentManager';
 
 // ==========================================
 // UTILS & HELPERS
@@ -348,96 +349,18 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   );
 }
 
-export function ClientProfileModal({ client, remainingBalance, onClose }) {
-  if (!client) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white shrink-0">
-          <h3 className="text-lg font-bold flex items-center"><Heart className="h-5 w-5 mr-2 text-teal-200" /> Client Profile</h3>
-          <button onClick={onClose} className="text-teal-200 hover:text-white transition text-2xl leading-none">&times;</button>
-        </div>
-        <div className="p-6 space-y-6 overflow-y-auto">
-          <div className="flex items-center space-x-4">
-            {client.photoUrl ? <img src={client.photoUrl} alt={client.name} className="h-16 w-16 rounded-full border-2 border-teal-100 object-cover" /> :
-              <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-teal-600"><User className="h-8 w-8" /></div>}
-            <div>
-              <h2 className="text-xl font-bold text-slate-800">{client.name}</h2>
-              <div className="flex flex-wrap gap-2 mt-1">
-                <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
-                  <Wallet className="h-3 w-3 mr-1" /> ${Number(remainingBalance).toFixed(2)} Funds Left
-                </div>
-                {client.dateOfBirth && (
-                  <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                    <CalendarDays className="h-3 w-3 mr-1" /> DOB: {client.dateOfBirth}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {(client.phone || client.address) && (
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
-              {client.phone && <div className="text-sm text-slate-700 flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400" /> {client.phone}</div>}
-              {client.address && <div className="text-sm text-slate-700 flex items-center"><MapPin className="h-4 w-4 mr-2 text-slate-400" /> {client.address}</div>}
-            </div>
-          )}
-
-          {client.accountHolderName && (
-            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-              <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center"><User className="h-4 w-4 mr-1.5" /> Account Holder</h4>
-              <div className="space-y-1">
-                <div className="font-semibold text-indigo-900">{client.accountHolderName}</div>
-                {client.accountHolderPhone && <div className="text-sm text-indigo-700 flex items-center"><Phone className="h-3 w-3 mr-1" /> {client.accountHolderPhone}</div>}
-                {client.accountHolderEmail && <div className="text-sm text-indigo-700 flex items-center"><Mail className="h-3 w-3 mr-1" /> {client.accountHolderEmail}</div>}
-                {client.accountHolderAddress && <div className="text-sm text-indigo-700 flex items-center"><MapPin className="h-3 w-3 mr-1" /> {client.accountHolderAddress}</div>}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Info className="h-4 w-4 mr-1.5" /> Care Notes & Routine</h4>
-            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions provided.'}</p>
-          </div>
-          <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-            <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center"><Phone className="h-4 w-4 mr-1.5" /> Emergency Contacts</h4>
-            {client.emergencyContactName ? (
-              <div className="mb-3 border-b border-red-100 pb-3">
-                <div className="text-sm font-semibold text-red-900">Primary: {client.emergencyContactName}</div>
-                <div className="text-lg font-bold text-red-700 mt-0.5">{client.emergencyContactPhone}</div>
-              </div>
-            ) : <span className="text-sm text-red-600 italic block mb-2">No primary contact listed.</span>}
-            
-            {client.secondaryEmergencyName && (
-              <div>
-                <div className="text-sm font-semibold text-red-900">Secondary: {client.secondaryEmergencyName}</div>
-                <div className="text-md font-bold text-red-700 mt-0.5">{client.secondaryEmergencyPhone}</div>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Close</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
+export function EmployeeMileageLog({ myExpenses = [], onAddExpense }) {
   const [date, setDate] = useState('');
-  const [clientId, setClientId] = useState('');
   const [kilometers, setKilometers] = useState('');
   const [description, setDescription] = useState('');
   
   const safeExpenses = Array.isArray(myExpenses) ? myExpenses : [];
-  const safeClients = Array.isArray(clients) ? clients : [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!date || !kilometers) return;
-    if (onAddExpense) onAddExpense({ date, clientId: clientId || 'general', kilometers: Number(kilometers), description });
-    setDate(''); setClientId(''); setKilometers(''); setDescription('');
+    if (onAddExpense) onAddExpense({ date, clientId: 'general', kilometers: Number(kilometers), description });
+    setDate(''); setKilometers(''); setDescription('');
   };
 
   return (
@@ -449,17 +372,14 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Client *</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required><option value="" disabled>Select client</option>{safeClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label>
               <input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required />
             </div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
           </div>
+          <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
           <div className="bg-amber-50 border border-amber-100 rounded p-2 text-amber-800 text-[10px] font-medium leading-tight">
-            * Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client (not to and from the client's home).
+            * Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client.
           </div>
           <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit</button>
         </form>
@@ -486,15 +406,13 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
   );
 }
 
-export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense }) {
+export function EmployeeClientExpenseLog({ myClientExpenses = [], onAddClientExpense }) {
   const [date, setDate] = useState('');
-  const [clientId, setClientId] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [receiptFile, setReceiptFile] = useState(null);
   
   const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : [];
-  const safeClients = Array.isArray(clients) ? clients : [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -502,13 +420,13 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
     if(onAddClientExpense) {
       onAddClientExpense({ 
         date, 
-        clientId: clientId || 'general', 
+        clientId: 'general', 
         amount: Number(amount), 
         description, 
         receiptDetails: receiptFile ? receiptFile.name : '' 
       });
     }
-    setDate(''); setClientId(''); setAmount(''); setDescription(''); setReceiptFile(null);
+    setDate(''); setAmount(''); setDescription(''); setReceiptFile(null);
   };
 
   return (
@@ -520,12 +438,9 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Client *</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required><option value="" disabled>Select client</option>{safeClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
           </div>
+          <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Upload Receipt</label>
             <div className="mt-1 flex justify-center px-4 py-2 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('receipt-upload').click()}>
@@ -592,9 +507,8 @@ export function EmployeePaystubs({ myPaystubs = [] }) {
   );
 }
 
-export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], messages = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings }) {
+export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, paystubs = [], timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings, setSelectedClient }) {
   const [activeTab, setActiveTab] = useState('schedule');
-  const [selectedClient, setSelectedClient] = useState(null);
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -620,6 +534,61 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
+
+  const renderSchedule = () => {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{monthNames[month]} {year}</h2>
+          <div className="flex space-x-2">
+            <button onClick={prevMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
+            <button onClick={nextMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
+          {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[100px] opacity-50 p-2"></div>))}
+          {daysArray.map(day => {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
+            const holiday = getHoliday(dateStr);
+            const dayShifts = myShifts.filter(s => s && s.date === dateStr);
+            
+            return (
+              <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : ''}`}>
+                <div className="font-medium text-sm text-slate-600 mb-1">{day}</div>
+                <div className="space-y-1">
+                  {dayShifts.map(shift => {
+                    const client = clients.find(c => c && c.id === shift.clientId);
+                    return (
+                      <div 
+                        key={shift.id} 
+                        onClick={() => setSelectedClient(client)}
+                        className="text-xs p-1.5 rounded bg-teal-100 text-teal-800 border border-teal-200 cursor-pointer hover:bg-teal-200 transition shadow-sm"
+                      >
+                        <div className="font-semibold truncate flex items-center">
+                          <Heart className="h-2.5 w-2.5 mr-1 shrink-0 text-teal-600" />
+                          {client?.name?.split(' ')[0] || 'Unknown'}
+                        </div>
+                        <div className="text-[10px] mt-0.5 opacity-90 flex items-center">
+                          <Clock className="h-2.5 w-2.5 mr-1 shrink-0" />
+                          {shift.startTime}-{shift.endTime}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -698,6 +667,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
               {isBonusActive && (
                 <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Awards</button>
               )}
+              <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'documents' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Documents</button>
               <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
               <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Team Feed</button>
             </div>
@@ -745,60 +715,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                       )}
                     </div>
                   ) : (
-                    <div>
-                      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white">
-                        <h3 className="text-md font-semibold text-slate-800 flex items-center">
-                          {monthNames[month]} {year}
-                        </h3>
-                        <div className="flex space-x-2">
-                          <button onClick={prevMonth} className="p-1.5 rounded hover:bg-slate-100 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
-                          <button onClick={nextMonth} className="p-1.5 rounded hover:bg-slate-100 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                          <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
-                        ))}
-                      </div>
-
-                      <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
-                        {blanksArray.map(blank => (
-                          <div key={`blank-${blank}`} className="bg-white min-h-[100px] opacity-50 p-2"></div>
-                        ))}
-                        {daysArray.map(day => {
-                          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                          const dayShifts = myShifts.filter(s => s && s.date === dateStr);
-                          
-                          return (
-                            <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative`}>
-                              <div className="font-medium text-sm text-slate-600 mb-1">{day}</div>
-                              <div className="space-y-1">
-                                {dayShifts.map(shift => {
-                                  const client = clients.find(c => c && c.id === shift.clientId);
-                                  return (
-                                    <div 
-                                      key={shift.id} 
-                                      onClick={() => setSelectedClient(client)}
-                                      className="text-xs p-1.5 rounded bg-teal-100 text-teal-800 border border-teal-200 cursor-pointer hover:bg-teal-200 transition shadow-sm"
-                                    >
-                                      <div className="font-semibold truncate flex items-center">
-                                        <Heart className="h-2.5 w-2.5 mr-1 shrink-0 text-teal-600" />
-                                        {client?.name?.split(' ')[0] || 'Unknown'}
-                                      </div>
-                                      <div className="text-[10px] mt-0.5 opacity-90 flex items-center">
-                                        <Clock className="h-2.5 w-2.5 mr-1 shrink-0" />
-                                        {shift.startTime}-{shift.endTime}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    renderSchedule()
                   )}
                 </div>
               )}
@@ -837,12 +754,10 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
                   <EmployeeMileageLog 
                     myExpenses={myExpenses} 
-                    clients={safeClients} 
                     onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
                   />
                   <EmployeeClientExpenseLog 
                     myClientExpenses={myClientExpenses} 
-                    clients={safeClients} 
                     onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} 
                   />
                 </div>
@@ -861,6 +776,13 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 </div>
               )}
 
+              {activeTab === 'documents' && (
+                <DocumentManager 
+                  documents={documents} 
+                  isAdmin={false} 
+                />
+              )}
+
               {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
 
               {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />}
@@ -868,14 +790,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
           </div>
         </div>
       </div>
-
-      {selectedClient && (
-        <ClientProfileModal 
-          client={selectedClient} 
-          remainingBalance={getClientRemainingBalance ? getClientRemainingBalance(selectedClient.id) : 0}
-          onClose={() => setSelectedClient(null)} 
-        />
-      )}
     </div>
   );
 }

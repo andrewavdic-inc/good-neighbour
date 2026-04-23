@@ -5,9 +5,6 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
-// --- UTILS & COMPONENTS ---
-import { parseLocal, isBiweeklyPayday, getHoliday } from './utils';
-
 import LoginPage from './components/LoginPage';
 import Announcements from './components/Announcements';
 import EmployeeManager from './components/EmployeeManager';
@@ -24,12 +21,22 @@ import ClientProfileModal from './components/ClientProfileModal';
 
 // --- CUSTOM CAPTAIN HAT ICON ---
 const CaptainHatIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
     <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
     <circle cx="12" cy="10" r="1.5" />
   </svg>
 );
+
+// --- URL CLEANER (Fixes broken markdown URLs from database) ---
+const cleanPhotoUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('[')) {
+    const match = url.match(/\]\((.*?)\)/);
+    if (match && match[1]) return match[1];
+  }
+  return url;
+};
 
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
@@ -61,6 +68,54 @@ const parseLocalSafe = (dateStr) => {
     if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
     return new Date(y, m - 1, d);
   } catch (e) { return new Date(); }
+};
+
+const getOntarioHolidays = (year) => {
+  const holidays = [];
+  holidays.push({ date: `${year}-01-01`, name: "New Year's Day" });
+  const feb1 = new Date(year, 1, 1);
+  let famOffset = 1 - feb1.getDay();
+  if (famOffset < 0) famOffset += 7;
+  const famDate = 1 + famOffset + 14;
+  holidays.push({ date: `${year}-02-${String(famDate).padStart(2, '0')}`, name: "Family Day" });
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451), n = h + l - 7 * m + 114;
+  const month = Math.floor(n / 31) - 1, day = (n % 31) + 1;
+  const easter = new Date(year, month, day);
+  easter.setDate(easter.getDate() - 2); 
+  holidays.push({ date: `${year}-${String(easter.getMonth() + 1).padStart(2, '0')}-${String(easter.getDate()).padStart(2, '0')}`, name: "Good Friday" });
+  const may25 = new Date(year, 4, 25);
+  let vicOffset = may25.getDay() - 1;
+  if (vicOffset <= 0) vicOffset += 7;
+  const vicDate = 25 - vicOffset;
+  holidays.push({ date: `${year}-05-${String(vicDate).padStart(2, '0')}`, name: "Victoria Day" });
+  holidays.push({ date: `${year}-07-01`, name: "Canada Day" });
+  const sep1 = new Date(year, 8, 1);
+  let labOffset = 1 - sep1.getDay();
+  if (labOffset < 0) labOffset += 7;
+  const labDate = 1 + labOffset;
+  holidays.push({ date: `${year}-09-${String(labDate).padStart(2, '0')}`, name: "Labour Day" });
+  const oct1 = new Date(year, 9, 1);
+  let thanksOffset = 1 - oct1.getDay();
+  if (thanksOffset < 0) thanksOffset += 7;
+  const thanksDate = 1 + thanksOffset + 7;
+  holidays.push({ date: `${year}-10-${String(thanksDate).padStart(2, '0')}`, name: "Thanksgiving" });
+  holidays.push({ date: `${year}-12-25`, name: "Christmas Day" });
+  holidays.push({ date: `${year}-12-26`, name: "Boxing Day" });
+  return holidays;
+};
+
+const CACHED_HOLIDAYS = {};
+const getHoliday = (dateStr) => {
+  if (!dateStr) return null;
+  const year = parseInt(dateStr.split('-')[0], 10);
+  if (!CACHED_HOLIDAYS[year]) {
+    CACHED_HOLIDAYS[year] = getOntarioHolidays(year);
+  }
+  return CACHED_HOLIDAYS[year].find(h => h.date === dateStr);
 };
 
 // ==========================================
@@ -291,6 +346,9 @@ export default function App() {
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
+  // Clean the URL before trying to render it to prevent broken image icons
+  const finalCurrentUserPhotoUrl = cleanPhotoUrl(currentUser.photoUrl);
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
       <nav className="bg-teal-700 text-white shadow-md px-6 py-4 flex justify-between items-center">
@@ -302,9 +360,8 @@ export default function App() {
             </button>
           )}
           <div className="flex items-center text-sm hidden sm:flex">
-            {/* THE CAPTAIN'S HAT IN THE NAVBAR */}
-            {currentUser.photoUrl ? (
-              <img src={currentUser.photoUrl} alt="Avatar" className="h-6 w-6 rounded-full mr-2 object-cover border border-teal-500" />
+            {finalCurrentUserPhotoUrl ? (
+              <img src={finalCurrentUserPhotoUrl} alt="Avatar" className="h-6 w-6 rounded-full mr-2 object-cover border border-teal-500 bg-white" />
             ) : (
               String(currentUser.role).includes('Admin') ? <CaptainHatIcon className="mr-1.5 h-5 w-5"/> : <User className="mr-1.5 h-4 w-4"/> 
             )}
@@ -407,7 +464,7 @@ export default function App() {
                                 <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`}>
                                   <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{isOpen ? '🚨 OPEN SHIFT' : String(emp?.name?.split(' ')[0] || 'Unknown')}</div>
                                   <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{String(client?.name?.split(' ')[0] || 'Unknown Client')}</span></div>
-                                  <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
+                                  <div className="text-[10px] mt-0.5 opacity-90">{String(shift.startTime)}-{String(shift.endTime)}</div>
                                   <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
                                     {!isOpen && (<button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift"><UserMinus className="h-3 w-3" /></button>)}
                                     <button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'delete'); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>

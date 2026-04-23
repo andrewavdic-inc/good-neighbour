@@ -2,18 +2,29 @@ import React, { useState, useMemo } from 'react';
 import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
+import ClientProfileModal from './ClientProfileModal'; 
 
-// --- CUSTOM CAPTAIN HAT ICON (CRASH FIX) ---
+// --- CUSTOM CAPTAIN HAT ICON ---
 const CaptainHatIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
     <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
     <circle cx="12" cy="10" r="1.5" />
   </svg>
 );
 
+// --- URL CLEANER (Fixes broken markdown URLs from database) ---
+const cleanPhotoUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('[')) {
+    const match = url.match(/\]\((.*?)\)/);
+    if (match && match[1]) return match[1];
+  }
+  return url;
+};
+
 // ==========================================
-// INLINE HELPERS
+// INLINE HELPERS (Prevents Import Crashes)
 // ==========================================
 const parseLocalSafe = (dateStr) => {
   try {
@@ -412,6 +423,8 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
+  const finalPhotoUrl = cleanPhotoUrl(currentUser.photoUrl);
+
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
     if (file && onUpdateProfile) {
@@ -479,13 +492,13 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-6">
         <div className="md:w-1/3 space-y-6">
+          
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
             <div className="relative mb-4 group">
-              {currentUser.photoUrl ? (
-                <img src={currentUser.photoUrl} alt={currentUser.name} className="h-24 w-24 rounded-full border-4 border-teal-50 object-cover shadow-sm" />
+              {finalPhotoUrl ? (
+                <img src={finalPhotoUrl} alt={currentUser.name} className="h-24 w-24 rounded-full border-4 border-teal-50 object-cover shadow-sm" />
               ) : (
                 <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm">
-                  {/* --- THE CAPTAIN'S HAT IS HERE --- */}
                   {String(currentUser.role).includes('Admin') ? <CaptainHatIcon className="h-12 w-12" /> : <User className="h-10 w-10" />}
                 </div>
               )}

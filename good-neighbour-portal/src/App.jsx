@@ -20,6 +20,7 @@ import PaystubManager from './components/PaystubManager';
 import SettingsManager from './components/SettingsManager';
 import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
+import ClientProfileModal from './components/ClientProfileModal'; // <-- NEW IMPORT PREVENTS CRASH
 
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
@@ -193,16 +194,17 @@ export default function App() {
 
     const getCol = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
     const unsubs = [];
+    const handleError = (err) => console.error("Firestore Error:", err);
 
-    unsubs.push(onSnapshot(getCol('gn_employees'), snap => { setEmployees(snap.docs.map(d => ({ ...d.data(), id: d.id }))); setIsDbReady(true); }));
-    unsubs.push(onSnapshot(getCol('gn_shifts'), snap => setShifts(snap.docs.map(d => ({ ...d.data(), id: d.id })))));
-    unsubs.push(onSnapshot(getCol('gn_clients'), snap => setClients(snap.docs.map(d => ({ ...d.data(), id: d.id })))));
-    unsubs.push(onSnapshot(getCol('gn_expenses'), snap => setExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id })))));
-    unsubs.push(onSnapshot(getCol('gn_clientExpenses'), snap => setClientExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id })))));
-    unsubs.push(onSnapshot(getCol('gn_paystubs'), snap => setPaystubs(snap.docs.map(d => ({ ...d.data(), id: d.id })))));
-    unsubs.push(onSnapshot(getCol('gn_timeOffLogs'), snap => setTimeOffLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })))));
-    unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id })))));
-    unsubs.push(onSnapshot(getCol('gn_documents'), snap => setDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id })))));
+    unsubs.push(onSnapshot(getCol('gn_employees'), snap => { setEmployees(snap.docs.map(d => ({ ...d.data(), id: d.id }))); setIsDbReady(true); }, handleError));
+    unsubs.push(onSnapshot(getCol('gn_shifts'), snap => setShifts(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_clients'), snap => setClients(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_expenses'), snap => setExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_clientExpenses'), snap => setClientExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_paystubs'), snap => setPaystubs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_timeOffLogs'), snap => setTimeOffLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_documents'), snap => setDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
     unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
       if (snap.exists()) {
@@ -211,7 +213,7 @@ export default function App() {
         if (data.isBonusActive !== undefined) setIsBonusActive(data.isBonusActive);
         if (data.bonusAmounts) setBonusSettings(data.bonusAmounts);
       }
-    }));
+    }, handleError));
 
     return () => unsubs.forEach(unsub => unsub());
   }, [firebaseUser]);
@@ -222,14 +224,13 @@ export default function App() {
     if (foundEmp) {
       setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances });
       setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
-      setActiveAdminTab('schedule');
     } else { alert("Invalid credentials. Please check your username and password."); }
   };
 
-  const handleLogout = () => { setCurrentUser(null); setViewMode('employee'); setActiveAdminTab('schedule'); };
+  const handleLogout = () => { setCurrentUser(null); setViewMode('employee'); };
 
-  const getDocRef = (cName, dId) => doc(db, 'artifacts', appId, 'public', 'data', cName, String(dId));
-  
+  const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId.toString());
+
   const runMutation = async (cName, dId, action, data) => {
     if(!firebaseUser) return;
     const ref = getDocRef(cName, dId);
@@ -237,6 +238,41 @@ export default function App() {
     if(action === 'update') await updateDoc(ref, data);
     if(action === 'delete') await deleteDoc(ref);
   };
+
+  // CORRECTED: Calculate remaining balance logic
+  const getClientRemainingBalance = (clientId) => {
+    const safeClients = Array.isArray(clients) ? clients : [];
+    const client = safeClients.find(c => c && c.id === clientId);
+    if (!client) return 0;
+    
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
+    const spentThisMonth = safeCE
+      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+      .filter(e => {
+        const d = parseLocalSafe(e.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      
+    const safeExp = Array.isArray(expenses) ? expenses : [];
+    const mileageThisMonth = safeExp
+      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+      .filter(e => {
+        const d = parseLocalSafe(e.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
+      
+    return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
+  };
+
+  if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={Boolean(isDbReady)} hasData={Boolean(Array.isArray(employees) && employees.length > 0)} onSeedData={() => {}} />;
+
+  const isAdmin = String(currentUser.role).includes('Admin');
+  const showAdminView = isAdmin && viewMode === 'admin';
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -246,23 +282,23 @@ export default function App() {
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
-  if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={isDbReady} hasData={employees.length > 0} onSeedData={() => {}} />;
-
-  const isAdmin = String(currentUser.role).includes('Admin');
-
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
       <nav className="bg-teal-700 text-white shadow-md px-6 py-4 flex justify-between items-center">
         <div className="font-bold text-xl flex items-center"><Briefcase className="mr-2 h-6 w-6 text-teal-200"/> Good Neighbour</div>
         <div className="flex items-center space-x-4">
-          {isAdmin && (<button onClick={() => { setViewMode(viewMode === 'admin' ? 'employee' : 'admin'); }} className="text-xs bg-teal-800 hover:bg-teal-900 px-3 py-1.5 rounded font-bold transition shadow-sm">{viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}</button>)}
-          <div className="flex items-center text-sm hidden sm:flex"><User className="mr-1 h-4 w-4"/> {currentUser.name}</div>
+          {isAdmin && (
+            <button onClick={() => { setViewMode(viewMode === 'admin' ? 'employee' : 'admin'); setActiveAdminTab('schedule'); }} className="text-xs bg-teal-800 hover:bg-teal-900 px-3 py-1.5 rounded font-bold transition shadow-sm">
+              {viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}
+            </button>
+          )}
+          <div className="flex items-center text-sm hidden sm:flex"><User className="mr-1 h-4 w-4"/> {String(currentUser.name)}</div>
           <button onClick={handleLogout} className="p-2 rounded-full hover:bg-teal-600 transition" title="Logout"><LogOut className="h-5 w-5"/></button>
         </div>
       </nav>
 
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-        {isAdmin && viewMode === 'admin' ? (
+        {showAdminView ? (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
@@ -292,10 +328,9 @@ export default function App() {
             {activeAdminTab === 'timeoff' && <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOff={(id) => runMutation('gn_timeOffLogs', id, 'delete')} />}
             {activeAdminTab === 'paystubs' && <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} />}
             {activeAdminTab === 'documents' && <DocumentManager documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} isAdmin={true} />}
-            {activeAdminTab === 'announcements' && <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} employees={employees} /></div>}
+            {activeAdminTab === 'announcements' && <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new DatetoISOString() })} currentUser={currentUser} employees={employees} /></div>}
             {activeAdminTab === 'settings' && <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => { setPayPeriodStart(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart: v, isBonusActive, bonusAmounts: bonusSettings }); }} isBonusActive={isBonusActive} setIsBonusActive={(v) => { setIsBonusActive(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart, isBonusActive: v, bonusAmounts: bonusSettings }); }} bonusSettings={bonusSettings} setBonusSettings={(v) => { setBonusSettings(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart, isBonusActive, bonusAmounts: v }); }} />}
             
-            {/* --- RESTORED ADMIN SCHEDULE GRID --- */}
             {activeAdminTab === 'schedule' && (
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
@@ -306,11 +341,14 @@ export default function App() {
                       <input type="text" placeholder="Search employee or client..." value={scheduleSearch} onChange={(e) => setScheduleSearch(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition" />
                     </div>
                   </div>
+                  {scheduleSearch.trim() !== '' && (
+                    <div className="text-xs text-teal-700 font-semibold bg-teal-50 px-3 py-1.5 rounded-full border border-teal-100 whitespace-nowrap">Filtered View Active</div>
+                  )}
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                   <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-                    <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{monthNames[month]} {year}</h2>
+                    <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{String(monthNames[month])} {year}</h2>
                     <div className="flex space-x-2">
                       <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
                       <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
@@ -349,12 +387,12 @@ export default function App() {
                               const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
                               const client = clients.find(c => c.id === shift.clientId);
                               return (
-                                <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`}>
+                                <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${String(client?.name || 'Unknown')}: ${shift.startTime}-${shift.endTime}`}>
                                   <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{isOpen ? '🚨 OPEN SHIFT' : String(emp?.name?.split(' ')[0] || 'Unknown')}</div>
                                   <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{String(client?.name?.split(' ')[0] || 'Unknown Client')}</span></div>
-                                  <div className="text-[10px] mt-0.5 opacity-90">{String(shift.startTime)}-{String(shift.endTime)}</div>
+                                  <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
                                   <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
-                                    {!isOpen && (<button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift"><UserMinus className="h-3 w-3" /></button>)}
+                                    {!isOpen && (<button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
                                     <button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'delete'); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
                                   </div>
                                 </div>
@@ -378,13 +416,20 @@ export default function App() {
             paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
             onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
             payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
-            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} setSelectedClient={setSelectedClient}
+            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
+            setSelectedClient={setSelectedClient}
+            getClientRemainingBalance={getClientRemainingBalance} // <-- Safely passed down!
           />
         )}
       </main>
 
-      {isModalOpen && (
-        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={employees} clients={clients} onSave={(shifts) => shifts.forEach(s => runMutation('gn_shifts', Date.now() + Math.random(), 'set', { ...s, id: Date.now().toString() + Math.random().toString(36).substring(2, 7) }))} />
+      {/* RESTORED: The beautifully redesigned Client Profile Modal */}
+      {selectedClient && (
+        <ClientProfileModal 
+          client={selectedClient} 
+          remainingBalance={getClientRemainingBalance(selectedClient.id)} 
+          onClose={() => setSelectedClient(null)} 
+        />
       )}
     </div>
   );

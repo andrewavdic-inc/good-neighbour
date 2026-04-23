@@ -128,7 +128,6 @@ const getHoliday = (dateStr) => {
   return holidays[String(dateStr)] || null;
 };
 
-// Bonus Logic Helpers
 const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses) => {
   if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, total: 0 };
   
@@ -176,7 +175,7 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
 
 
 // ==========================================
-// INLINE COMPONENTS
+// INLINE COMPONENTS (EMPLOYEE DASHBOARD SPECIFIC)
 // ==========================================
 
 function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonusActive, bonusSettings }) {
@@ -281,7 +280,7 @@ function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonu
                     {idx === 1 && <Medal className="h-4 w-4 mr-2 text-slate-400"/>}
                     {idx === 2 && <Award className="h-4 w-4 mr-2 text-amber-600"/>}
                     {idx > 2 && <span className="w-6 font-normal text-slate-400 text-xs">{idx+1}.</span>}
-                    {s.emp.name || 'Unknown'}
+                    {s.emp.name}
                   </td>
                   <td className="px-6 py-4 text-center font-semibold text-yellow-600">{s.gold}</td>
                   <td className="px-6 py-4 text-center font-semibold text-slate-500">{s.silver}</td>
@@ -387,13 +386,172 @@ function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, pay
   );
 }
 
-function EmployeeMileageLog({ myExpenses = [], onAddExpense }) {
+function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], onSave }) {
+  const safeEmps = Array.isArray(employees) ? employees : [];
+  const safeClients = Array.isArray(clients) ? clients : [];
+  const [employeeId, setEmployeeId] = useState(safeEmps[0]?.id || '');
+  const [clientId, setClientId] = useState(safeClients[0]?.id || '');
+  const [startTime, setStartTime] = useState('09:00');
+  const [endTime, setEndTime] = useState('17:00');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceWeeks, setRecurrenceWeeks] = useState(4);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const newShifts = [];
+    const baseDate = parseLocalSafe(selectedDate);
+
+    if (isRecurring) {
+      for (let i = 0; i < recurrenceWeeks; i++) {
+        const nextDate = new Date(baseDate);
+        nextDate.setDate(baseDate.getDate() + (i * 7));
+        const dateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+        
+        if (getHoliday(dateStr)) continue;
+        newShifts.push({ employeeId, clientId, date: dateStr, startTime, endTime });
+      }
+    } else {
+      newShifts.push({ employeeId, clientId, date: selectedDate, startTime, endTime });
+    }
+    if (onSave) onSave(newShifts);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+          <h3 className="text-lg font-bold text-slate-800">Assign New Shift</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition text-2xl leading-none">&times;</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" value={selectedDate} readOnly className="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-500 cursor-not-allowed focus:outline-none" /></div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
+            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+              {safeEmps.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Start</label><input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Client</label>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+              {safeClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+            </select>
+          </div>
+          <div className="pt-2 border-t border-slate-200">
+            <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+              <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
+              <span>Repeat Weekly</span>
+            </label>
+            {isRecurring && (
+              <select value={recurrenceWeeks} onChange={(e) => setRecurrenceWeeks(Number(e.target.value))} className="w-full mt-3 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                <option value={4}>4 Weeks (1 Month)</option>
+                <option value={12}>12 Weeks (3 Months)</option>
+                <option value={26}>26 Weeks (6 Months)</option>
+                <option value={52}>52 Weeks (1 Year)</option>
+              </select>
+            )}
+          </div>
+          <div className="pt-4 flex justify-end space-x-3">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Cancel</button>
+            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition">Save Shift</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ClientProfileModal({ client, remainingBalance, onClose }) {
+  if (!client) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white shrink-0">
+          <h3 className="text-lg font-bold flex items-center"><Heart className="h-5 w-5 mr-2 text-teal-200" /> Client Profile</h3>
+          <button onClick={onClose} className="text-teal-200 hover:text-white transition text-2xl leading-none">&times;</button>
+        </div>
+        <div className="p-6 space-y-6 overflow-y-auto">
+          <div className="flex items-center space-x-4">
+            {client.photoUrl ? <img src={client.photoUrl} alt={client.name} className="h-16 w-16 rounded-full border-2 border-teal-100 object-cover" /> :
+              <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-teal-600"><User className="h-8 w-8" /></div>}
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">{client.name}</h2>
+              <div className="flex flex-wrap gap-2 mt-1">
+                <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+                  <Wallet className="h-3 w-3 mr-1" /> ${Number(remainingBalance).toFixed(2)} Funds Left
+                </div>
+                {client.dateOfBirth && (
+                  <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    <CalendarDays className="h-3 w-3 mr-1" /> DOB: {client.dateOfBirth}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {(client.phone || client.address) && (
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
+              {client.phone && <div className="text-sm text-slate-700 flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400" /> {client.phone}</div>}
+              {client.address && <div className="text-sm text-slate-700 flex items-center"><MapPin className="h-4 w-4 mr-2 text-slate-400" /> {client.address}</div>}
+            </div>
+          )}
+
+          {client.accountHolderName && (
+            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+              <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center"><User className="h-4 w-4 mr-1.5" /> Account Holder</h4>
+              <div className="space-y-1">
+                <div className="font-semibold text-indigo-900">{client.accountHolderName}</div>
+                {client.accountHolderPhone && <div className="text-sm text-indigo-700 flex items-center"><Phone className="h-3 w-3 mr-1" /> {client.accountHolderPhone}</div>}
+                {client.accountHolderEmail && <div className="text-sm text-indigo-700 flex items-center"><Mail className="h-3 w-3 mr-1" /> {client.accountHolderEmail}</div>}
+                {client.accountHolderAddress && <div className="text-sm text-indigo-700 flex items-center"><MapPin className="h-3 w-3 mr-1" /> {client.accountHolderAddress}</div>}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Info className="h-4 w-4 mr-1.5" /> Care Notes & Routine</h4>
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions provided.'}</p>
+          </div>
+          <div className="bg-red-50 p-4 rounded-lg border border-red-100">
+            <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center"><Phone className="h-4 w-4 mr-1.5" /> Emergency Contacts</h4>
+            {client.emergencyContactName ? (
+              <div className="mb-3 border-b border-red-100 pb-3">
+                <div className="text-sm font-semibold text-red-900">Primary: {client.emergencyContactName}</div>
+                <div className="text-lg font-bold text-red-700 mt-0.5">{client.emergencyContactPhone}</div>
+              </div>
+            ) : <span className="text-sm text-red-600 italic block mb-2">No primary contact listed.</span>}
+            
+            {client.secondaryEmergencyName && (
+              <div>
+                <div className="text-sm font-semibold text-red-900">Secondary: {client.secondaryEmergencyName}</div>
+                <div className="text-md font-bold text-red-700 mt-0.5">{client.secondaryEmergencyPhone}</div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
   const [date, setDate] = useState('');
   const [clientId, setClientId] = useState('');
   const [kilometers, setKilometers] = useState('');
   const [description, setDescription] = useState('');
   
   const safeExpenses = Array.isArray(myExpenses) ? myExpenses : [];
+  const safeClients = Array.isArray(clients) ? clients : [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -411,12 +569,15 @@ function EmployeeMileageLog({ myExpenses = [], onAddExpense }) {
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Client *</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required><option value="" disabled>Select client</option>{safeClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label>
               <input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required />
             </div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
           </div>
-          <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
           <div className="bg-amber-50 border border-amber-100 rounded p-2 text-amber-800 text-[10px] font-medium leading-tight">
             * Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client (not to and from the client's home).
           </div>
@@ -445,7 +606,7 @@ function EmployeeMileageLog({ myExpenses = [], onAddExpense }) {
   );
 }
 
-function EmployeeClientExpenseLog({ myClientExpenses = [], onAddClientExpense }) {
+function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense }) {
   const [date, setDate] = useState('');
   const [clientId, setClientId] = useState('');
   const [amount, setAmount] = useState('');
@@ -453,6 +614,7 @@ function EmployeeClientExpenseLog({ myClientExpenses = [], onAddClientExpense })
   const [receiptFile, setReceiptFile] = useState(null);
   
   const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : [];
+  const safeClients = Array.isArray(clients) ? clients : [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -478,9 +640,12 @@ function EmployeeClientExpenseLog({ myClientExpenses = [], onAddClientExpense })
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Client *</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required><option value="" disabled>Select client</option>{safeClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           </div>
-          <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
+          </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1">Upload Receipt</label>
             <div className="mt-1 flex justify-center px-4 py-2 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('receipt-upload').click()}>
@@ -547,14 +712,14 @@ function EmployeePaystubs({ myPaystubs = [] }) {
   );
 }
 
-function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, paystubs = [], timeOffLogs = [], messages = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings }) {
+function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings }) {
   const [activeTab, setActiveTab] = useState('schedule');
+  const [selectedClient, setSelectedClient] = useState(null);
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeClients = Array.isArray(clients) ? clients : [];
-  const safeEmployees = Array.isArray(employees) ? employees : [];
   
   const myShifts = safeShifts.filter(s => s && s.employeeId === currentUser.id);
   const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id);
@@ -600,7 +765,7 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
             clientExpenses={clientExpenses} 
             payPeriodStart={payPeriodStart} 
             isBonusActive={isBonusActive}
-            employees={safeEmployees}
+            employees={employees}
             bonusSettings={bonusSettings}
           />
 
@@ -622,14 +787,27 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
                   </div>
                   <div className="flex items-center text-slate-700">
                     <Heart className="h-5 w-5 mr-3 text-slate-400" />
-                    <span className="font-medium">{safeClients.find(c => c && c.id === nextShift.clientId)?.name || 'Unknown Client'}</span>
+                    <span className="font-medium">{safeClients.find(c => c.id === nextShift.clientId)?.name || 'Unknown Client'}</span>
                   </div>
+                  <button onClick={() => setSelectedClient(safeClients.find(c => c.id === nextShift.clientId))} className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded transition text-sm flex items-center justify-center">
+                    <Info className="h-4 w-4 mr-2" /> View Client Plan
+                  </button>
                 </div>
               ) : (
                 <div className="text-center text-slate-500 py-4">No upcoming shifts scheduled.</div>
               )}
             </div>
           </div>
+
+          {openShifts.length > 0 && (
+            <div className="bg-amber-50 rounded-xl shadow-sm border border-amber-200 p-4">
+              <div className="flex items-center text-amber-800 font-bold mb-2">
+                <AlertCircle className="h-5 w-5 mr-2" /> Open Shifts Available!
+              </div>
+              <p className="text-sm text-amber-700 mb-3">There are {openShifts.length} shift(s) that need coverage.</p>
+              <button onClick={() => setActiveTab('open-shifts')} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded transition text-sm">View Open Shifts</button>
+            </div>
+          )}
         </div>
 
         <div className="md:w-2/3 space-y-6">
@@ -661,15 +839,13 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
                       ) : (
                         upcomingShifts.map(shift => {
                           if(!shift) return null;
-                          const client = safeClients.find(c => c && c.id === shift.clientId);
-                          const d = parseLocalSafe(shift.date);
-                          const isInvalid = isNaN(d.getTime());
+                          const client = safeClients.find(c => c.id === shift.clientId);
                           return (
                             <div key={shift.id || Math.random()} className="p-4 hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                               <div className="flex items-start space-x-4">
                                 <div className="bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px]">
-                                  <div className="text-xs font-bold text-teal-600 uppercase">{!isInvalid ? d.toLocaleDateString('en-US', { month: 'short' }) : ''}</div>
-                                  <div className="text-xl font-extrabold text-teal-800">{!isInvalid ? d.getDate() : ''}</div>
+                                  <div className="text-xs font-bold text-teal-600 uppercase">{shift.date ? parseLocalSafe(shift.date).toLocaleDateString('en-US', { month: 'short' }) : ''}</div>
+                                  <div className="text-xl font-extrabold text-teal-800">{shift.date ? parseLocalSafe(shift.date).getDate() : ''}</div>
                                 </div>
                                 <div>
                                   <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
@@ -678,6 +854,9 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
                                   </div>
                                 </div>
                               </div>
+                              <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
+                                Care Plan
+                              </button>
                             </div>
                           );
                         })
@@ -707,16 +886,20 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
                         ))}
                         {daysArray.map(day => {
                           const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                          const dayShifts = myShifts.filter(s => s && s.date === dateStr);
+                          const dayShifts = myShifts.filter(s => s.date === dateStr);
                           
                           return (
                             <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative`}>
                               <div className="font-medium text-sm text-slate-600 mb-1">{day}</div>
                               <div className="space-y-1">
                                 {dayShifts.map(shift => {
-                                  const client = safeClients.find(c => c && c.id === shift.clientId);
+                                  const client = clients.find(c => c.id === shift.clientId);
                                   return (
-                                    <div key={shift.id || Math.random()} className="text-xs p-1.5 rounded bg-teal-100 text-teal-800 border border-teal-200 shadow-sm">
+                                    <div 
+                                      key={shift.id} 
+                                      onClick={() => setSelectedClient(client)}
+                                      className="text-xs p-1.5 rounded bg-teal-100 text-teal-800 border border-teal-200 cursor-pointer hover:bg-teal-200 transition shadow-sm"
+                                    >
                                       <div className="font-semibold truncate flex items-center">
                                         <Heart className="h-2.5 w-2.5 mr-1 shrink-0 text-teal-600" />
                                         {client?.name?.split(' ')[0] || 'Unknown'}
@@ -738,14 +921,46 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
                 </div>
               )}
 
+              {activeTab === 'open-shifts' && (
+                <div className="bg-amber-50/30 p-4">
+                  <h3 className="font-bold text-amber-800 mb-4 flex items-center"><AlertCircle className="h-5 w-5 mr-2"/> Shifts Needing Coverage</h3>
+                  <div className="space-y-3">
+                    {openShifts.length === 0 ? (
+                      <p className="text-sm text-slate-500 text-center py-4">No open shifts at this time.</p>
+                    ) : (
+                      openShifts.map(shift => {
+                        if(!shift) return null;
+                        const client = safeClients.find(c => c.id === shift.clientId);
+                        return (
+                          <div key={shift.id || Math.random()} className="bg-white border border-amber-200 rounded-lg p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div>
+                              <div className="font-bold text-slate-800">{shift.date ? parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : ''}</div>
+                              <div className="text-sm text-slate-600 mt-1">{shift.startTime} - {shift.endTime} &bull; {client?.name}</div>
+                            </div>
+                            <button 
+                              onClick={() => { if(onPickupShift) onPickupShift(shift.id, currentUser.id); }}
+                              className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded transition w-full sm:w-auto"
+                            >
+                              Pick Up Shift
+                            </button>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'expenses' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
                   <EmployeeMileageLog 
                     myExpenses={myExpenses} 
+                    clients={safeClients} 
                     onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
                   />
                   <EmployeeClientExpenseLog 
                     myClientExpenses={myClientExpenses} 
+                    clients={safeClients} 
                     onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} 
                   />
                 </div>
@@ -754,8 +969,8 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
               {activeTab === 'awards' && isBonusActive && (
                 <div className="p-6">
                   <AwardsLeaderboard 
-                    employees={safeEmployees} 
-                    shifts={safeShifts} 
+                    employees={employees} 
+                    shifts={shifts} 
                     expenses={expenses} 
                     clientExpenses={clientExpenses} 
                     isBonusActive={isBonusActive} 
@@ -766,25 +981,291 @@ function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients =
 
               {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
 
-              {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} />}
+              {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />}
             </div>
           </div>
         </div>
       </div>
+
+      {selectedClient && (
+        <ClientProfileModal 
+          client={selectedClient} 
+          remainingBalance={getClientRemainingBalance ? getClientRemainingBalance(selectedClient.id) : 0}
+          onClose={() => setSelectedClient(null)} 
+        />
+      )}
     </div>
   );
 }
 
-// ==========================================
-// MAIN APP COMPONENT
-// ==========================================
+function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, messages = [], onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDateStr, setSelectedDateStr] = useState('');
+  const [activeTab, setActiveTab] = useState('schedule');
+  const [scheduleSearch, setScheduleSearch] = useState('');
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  const isMasterAdmin = currentUser?.id === 'admin1';
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
+  
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  const handleDayClick = (day) => {
+    const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setSelectedDateStr(formattedDate);
+    setIsModalOpen(true);
+  };
+
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Admin Dashboard</h1>
+          <p className="text-slate-500">Manage schedule and personnel.</p>
+        </div>
+        {activeTab === 'schedule' && (
+          <button 
+            onClick={() => handleDayClick(new Date().getDate() || 1)}
+            className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Add Shift</span>
+          </button>
+        )}
+      </div>
+
+      <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide">
+        <button onClick={() => setActiveTab('schedule')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+          <div className="flex items-center space-x-2"><CalendarIcon className="h-4 w-4"/><span>Schedule</span></div>
+        </button>
+        <button onClick={() => setActiveTab('employees')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'employees' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+          <div className="flex items-center space-x-2"><Users className="h-4 w-4"/><span>Employees</span></div>
+        </button>
+        <button onClick={() => setActiveTab('clients')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'clients' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+          <div className="flex items-center space-x-2"><Heart className="h-4 w-4"/><span>Clients</span></div>
+        </button>
+        <button onClick={() => setActiveTab('client-funds')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'client-funds' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+          <div className="flex items-center space-x-2"><Wallet className="h-4 w-4"/><span>Client Funds</span></div>
+        </button>
+        <button onClick={() => setActiveTab('expenses')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+          <div className="flex items-center space-x-2"><Receipt className="h-4 w-4"/><span>Reimbursements</span></div>
+        </button>
+        {isMasterAdmin && (
+          <button onClick={() => setActiveTab('earnings')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'earnings' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+            <div className="flex items-center space-x-2"><Coins className="h-4 w-4"/><span>Earnings</span></div>
+          </button>
+        )}
+        <button onClick={() => setActiveTab('timeoff')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'timeoff' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+          <div className="flex items-center space-x-2"><CalendarDays className="h-4 w-4"/><span>Time Off</span></div>
+        </button>
+        <button onClick={() => setActiveTab('paystubs')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'paystubs' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+          <div className="flex items-center space-x-2"><FileText className="h-4 w-4"/><span>Paystubs</span></div>
+        </button>
+        <button onClick={() => setActiveTab('announcements')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+          <div className="flex items-center space-x-2"><MessageSquare className="h-4 w-4"/><span>Announcements</span></div>
+        </button>
+        {isMasterAdmin && (
+          <button onClick={() => setActiveTab('settings')} className={`pb-2 px-1 font-medium transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+            <div className="flex items-center space-x-2"><Settings className="h-4 w-4"/><span>Settings</span></div>
+          </button>
+        )}
+      </div>
+
+      {activeTab === 'employees' ? (
+        <EmployeeManager employees={employees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />
+      ) : activeTab === 'clients' ? (
+        <ClientManager clients={clients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} />
+      ) : activeTab === 'client-funds' ? (
+        <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />
+      ) : activeTab === 'expenses' ? (
+        <ExpenseManager 
+          expenses={expenses} 
+          clientExpenses={clientExpenses}
+          employees={employees} 
+          clients={clients}
+          onUpdateExpense={onUpdateExpense} 
+          onUpdateClientExpense={onUpdateClientExpense}
+        />
+      ) : activeTab === 'earnings' && isMasterAdmin ? (
+        <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} />
+      ) : activeTab === 'timeoff' ? (
+        <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />
+      ) : activeTab === 'paystubs' ? (
+        <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />
+      ) : activeTab === 'announcements' ? (
+        <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>
+      ) : activeTab === 'settings' && isMasterAdmin ? (
+        <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} />
+      ) : activeTab === 'schedule' ? (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
+            <div className="flex items-center space-x-3 w-full sm:w-auto">
+              <label htmlFor="schedule-search" className="text-sm font-semibold text-slate-700 whitespace-nowrap">Filter Schedule:</label>
+              <div className="relative w-full sm:w-72">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  id="schedule-search"
+                  type="text"
+                  placeholder="Search employee or client..."
+                  value={scheduleSearch}
+                  onChange={(e) => setScheduleSearch(e.target.value)}
+                  className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition"
+                />
+              </div>
+            </div>
+            {scheduleSearch.trim() !== '' && (
+              <div className="text-xs text-teal-700 font-semibold bg-teal-50 px-3 py-1.5 rounded-full border border-teal-100 whitespace-nowrap">
+                Filtered View Active
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+                <CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />
+                {monthNames[month]} {year}
+              </h2>
+              <div className="flex space-x-2">
+                <button onClick={prevMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
+                <button onClick={nextMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
+              {blanksArray.map(blank => (
+                <div key={`blank-${blank}`} className="bg-white min-h-[120px] opacity-50 p-2"></div>
+              ))}
+              {daysArray.map(day => {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
+                const holiday = getHoliday(dateStr);
+                
+                const safeShifts = Array.isArray(shifts) ? shifts : [];
+                const filteredShifts = safeShifts.filter(s => {
+                  if (!s || !scheduleSearch.trim()) return true;
+                  const emp = employees.find(e => e.id === s.employeeId);
+                  const client = clients.find(c => c.id === s.clientId);
+                  const searchLower = scheduleSearch.toLowerCase();
+                  return (
+                    (emp && emp.name && emp.name.toLowerCase().includes(searchLower)) ||
+                    (client && client.name && client.name.toLowerCase().includes(searchLower))
+                  );
+                });
+                
+                const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
+                
+                return (
+                  <div 
+                    key={day} 
+                    onClick={() => handleDayClick(day)}
+                    className={`min-h-[120px] p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}
+                  >
+                    <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
+                      <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
+                      <div className="flex flex-col items-end gap-1">
+                        {holiday && (
+                          <span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>
+                            🍁 {holiday.name.toUpperCase()}
+                          </span>
+                        )}
+                        {isPayday && (
+                          <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday">
+                            <Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      {dayShifts.map(shift => {
+                        const isOpen = shift.employeeId === 'unassigned';
+                        const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
+                        const client = clients.find(c => c.id === shift.clientId);
+                        return (
+                          <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : emp?.name || 'Unknown'} with ${client?.name || 'Unknown'}: ${shift.startTime}-${shift.endTime}`}>
+                            <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>
+                              {isOpen ? '🚨 OPEN SHIFT' : emp?.name?.split(' ')[0] || 'Unknown'}
+                            </div>
+                            <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}>
+                              <Heart className="h-2.5 w-2.5 mr-1 shrink-0" />
+                              <span className="truncate">{client?.name?.split(' ')[0] || 'Unknown Client'}</span>
+                            </div>
+                            <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
+                            
+                            <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
+                              {!isOpen && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }}
+                                  className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded"
+                                  title="Mark as Open Shift (Sick Call)"
+                                >
+                                  <UserMinus className="h-3 w-3" />
+                                </button>
+                              )}
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }}
+                                className="text-red-500 hover:text-red-700 transition p-0.5 rounded"
+                                title="Delete Shift"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isModalOpen && (
+        <AddShiftModal 
+          isOpen={isModalOpen} 
+          onClose={() => setIsModalOpen(false)} 
+          selectedDate={selectedDateStr}
+          employees={employees}
+          clients={clients}
+          onSave={onAddShift}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [isDbReady, setIsDbReady] = useState(false);
   const [viewMode, setViewMode] = useState('employee');
-  const [activeTab, setActiveTab] = useState('schedule');
-  
+  const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
+  const [isBonusActive, setIsBonusActive] = useState(false);
+  const [bonusSettings, setBonusSettings] = useState({ monthly: [100, 50, 20], annual: [3000, 2000, 1000] });
+
   // App State
   const [shifts, setShifts] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -794,11 +1275,6 @@ export default function App() {
   const [paystubs, setPaystubs] = useState([]);
   const [timeOffLogs, setTimeOffLogs] = useState([]);
   const [messages, setMessages] = useState([]);
-  
-  // Settings State
-  const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
-  const [isBonusActive, setIsBonusActive] = useState(false);
-  const [bonusSettings, setBonusSettings] = useState({ monthly: [100, 50, 20], annual: [3000, 2000, 1000] });
 
   // Setup Firebase Auth
   useEffect(() => {
@@ -887,6 +1363,18 @@ export default function App() {
   // Firestore CRUD Handlers
   const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId.toString());
 
+  const onAddShift = async (newShifts) => {
+    if (!firebaseUser) return;
+    const arr = Array.isArray(newShifts) ? newShifts : [newShifts];
+    for (const s of arr) {
+      const id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+      await setDoc(getDocRef('gn_shifts', id), { ...s, id });
+    }
+  };
+  const onRemoveShift = async (id) => firebaseUser && await deleteDoc(getDocRef('gn_shifts', id));
+  const onMarkShiftOpen = async (id) => firebaseUser && await updateDoc(getDocRef('gn_shifts', id), { employeeId: 'unassigned' });
+  const onPickupShift = async (shiftId, empId) => firebaseUser && await updateDoc(getDocRef('gn_shifts', shiftId), { employeeId: empId });
+
   const onAddExpense = async (newExpense) => {
     if (!firebaseUser) return;
     const id = Date.now().toString();
@@ -901,10 +1389,86 @@ export default function App() {
   };
   const onUpdateClientExpense = async (id, status) => firebaseUser && await updateDoc(getDocRef('gn_clientExpenses', id), { status });
 
+  const onAddPaystub = async (newPaystub) => {
+    if (!firebaseUser) return;
+    const id = Date.now().toString();
+    await setDoc(getDocRef('gn_paystubs', id), { ...newPaystub, id });
+  };
+  const onRemovePaystub = async (id) => firebaseUser && await deleteDoc(getDocRef('gn_paystubs', id));
+
+  const onAddTimeOffLog = async (log) => {
+    if (!firebaseUser) return;
+    const id = Date.now().toString();
+    await setDoc(getDocRef('gn_timeOffLogs', id), { ...log, id });
+  };
+  const onRemoveTimeOffLog = async (id) => firebaseUser && await deleteDoc(getDocRef('gn_timeOffLogs', id));
+
+  const onAddClient = async (newClient) => firebaseUser && await setDoc(getDocRef('gn_clients', newClient.id), newClient);
+  const onRemoveClient = async (id) => firebaseUser && await deleteDoc(getDocRef('gn_clients', id));
+  const updateClient = async (id, updatedData) => firebaseUser && await updateDoc(getDocRef('gn_clients', id), updatedData);
+
+  const onAddEmployee = async (newEmp) => firebaseUser && await setDoc(getDocRef('gn_employees', newEmp.id), newEmp);
+  const onRemoveEmployee = async (id) => firebaseUser && await deleteDoc(getDocRef('gn_employees', id));
+  const updateEmployee = async (id, updatedData) => {
+    if (!firebaseUser) return;
+    await updateDoc(getDocRef('gn_employees', id), updatedData);
+    if (currentUser && currentUser.id === id) {
+      setCurrentUser(prev => ({ ...prev, ...updatedData }));
+    }
+  };
+
   const onSendMessage = async (text, senderId) => {
     if (!firebaseUser) return;
     const id = Date.now().toString();
     await setDoc(getDocRef('gn_messages', id), { id, text, senderId, date: new Date().toISOString() });
+  };
+
+  const handleSaveSettings = async (field, value) => {
+    if (!firebaseUser) return;
+    
+    if (field === 'payPeriodStart') setPayPeriodStart(value);
+    if (field === 'isBonusActive') setIsBonusActive(value);
+    if (field === 'bonusAmounts') setBonusSettings(value);
+    
+    await setDoc(
+      getDocRef('gn_settings', 'global'), 
+      { 
+        payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, 
+        isBonusActive: field === 'isBonusActive' ? value : isBonusActive,
+        bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings
+      }, 
+      { merge: true }
+    );
+  };
+
+  const getClientRemainingBalance = (clientId) => {
+    const safeClients = Array.isArray(clients) ? clients : [];
+    const client = safeClients.find(c => c && c.id === clientId);
+    if (!client) return 0;
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
+    const spentThisMonth = safeCE
+      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+      .filter(e => {
+        if(!e.date) return false;
+        const d = parseLocalSafe(e.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      
+    const safeExp = Array.isArray(expenses) ? expenses : [];
+    const mileageThisMonth = safeExp
+      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+      .filter(e => {
+        if(!e.date) return false;
+        const d = parseLocalSafe(e.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
+      
+    return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
   };
 
   if (!currentUser) {
@@ -935,25 +1499,41 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 w-full">
+      <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {viewMode === 'admin' ? (
-          <div className="space-y-6">
-            <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide pb-2">
-              <button onClick={() => setActiveTab('schedule')} className={`px-2 py-1 font-medium capitalize whitespace-nowrap ${activeTab === 'schedule' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>Schedule</button>
-              <button onClick={() => setActiveTab('employees')} className={`px-2 py-1 font-medium capitalize whitespace-nowrap ${activeTab === 'employees' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>Employees</button>
-              <button onClick={() => setActiveTab('clients')} className={`px-2 py-1 font-medium capitalize whitespace-nowrap ${activeTab === 'clients' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>Clients</button>
-              <button onClick={() => setActiveTab('expenses')} className={`px-2 py-1 font-medium capitalize whitespace-nowrap ${activeTab === 'expenses' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>Reimbursements</button>
-              <button onClick={() => setActiveTab('earnings')} className={`px-2 py-1 font-medium capitalize whitespace-nowrap ${activeTab === 'earnings' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>Earnings</button>
-              <button onClick={() => setActiveTab('settings')} className={`px-2 py-1 font-medium capitalize whitespace-nowrap ${activeTab === 'settings' ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>Settings</button>
-            </div>
-            
-            {activeTab === 'employees' && <EmployeeManager employees={employees} onAddEmployee={(d) => setDoc(getDocRef('gn_employees', d.id), d)} updateEmployee={(id, d) => updateDoc(getDocRef('gn_employees', id), d)} onRemoveEmployee={(id) => deleteDoc(getDocRef('gn_employees', id))} currentUser={currentUser} />}
-            {activeTab === 'clients' && <ClientManager clients={clients} onAddClient={(d) => setDoc(getDocRef('gn_clients', d.id), d)} onRemoveClient={(id) => deleteDoc(getDocRef('gn_clients', id))} updateClient={(id, d) => updateDoc(getDocRef('gn_clients', id), d)} />}
-            {activeTab === 'expenses' && <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={employees} clients={clients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />}
-            {activeTab === 'earnings' && <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} />}
-            {activeTab === 'settings' && <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => { setPayPeriodStart(v); updateDoc(getDocRef('gn_settings', 'global'), { payPeriodStart: v }); }} isBonusActive={isBonusActive} setIsBonusActive={(v) => { setIsBonusActive(v); updateDoc(getDocRef('gn_settings', 'global'), { isBonusActive: v }); }} bonusSettings={bonusSettings} setBonusSettings={(v) => { setBonusSettings(v); updateDoc(getDocRef('gn_settings', 'global'), { bonusAmounts: v }); }} />}
-            {activeTab === 'schedule' && <div className="p-8 text-center text-slate-500 bg-white rounded-xl shadow-sm border border-slate-200">Please use your standalone App.jsx routing logic for Schedule (omitted for brevity during debugging).</div>}
-          </div>
+          <AdminDashboard 
+            shifts={shifts} 
+            employees={employees} 
+            onAddEmployee={onAddEmployee}
+            onRemoveEmployee={onRemoveEmployee}
+            updateEmployee={updateEmployee}
+            clients={clients}
+            onAddClient={onAddClient}
+            onRemoveClient={onRemoveClient}
+            updateClient={updateClient}
+            expenses={expenses}
+            onUpdateExpense={onUpdateExpense}
+            clientExpenses={clientExpenses}
+            onUpdateClientExpense={onUpdateClientExpense}
+            paystubs={paystubs}
+            onAddPaystub={onAddPaystub}
+            onRemovePaystub={onRemovePaystub}
+            timeOffLogs={timeOffLogs}
+            onAddTimeOffLog={onAddTimeOffLog}
+            onRemoveTimeOffLog={onRemoveTimeOffLog}
+            messages={messages}
+            onSendMessage={onSendMessage}
+            currentUser={currentUser}
+            payPeriodStart={payPeriodStart}
+            setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)}
+            isBonusActive={isBonusActive}
+            setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)}
+            bonusSettings={bonusSettings}
+            setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)}
+            onAddShift={onAddShift} 
+            onRemoveShift={onRemoveShift}
+            onMarkShiftOpen={onMarkShiftOpen}
+          />
         ) : (
           <EmployeeDashboard 
             shifts={shifts} 
@@ -964,11 +1544,13 @@ export default function App() {
             onAddExpense={onAddExpense}
             clientExpenses={clientExpenses}
             onAddClientExpense={onAddClientExpense}
+            getClientRemainingBalance={getClientRemainingBalance}
             paystubs={paystubs}
             timeOffLogs={timeOffLogs}
             messages={messages}
             onSendMessage={onSendMessage}
             payPeriodStart={payPeriodStart} 
+            onPickupShift={onPickupShift}
             isBonusActive={isBonusActive}
             bonusSettings={bonusSettings}
           />

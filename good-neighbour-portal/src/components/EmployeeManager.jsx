@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
 import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, DollarSign, CheckCircle } from 'lucide-react';
 
+// --- CUSTOM CAPTAIN HAT ICON ---
+const CaptainHatIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
+    <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
+    <circle cx="12" cy="10" r="1.5" />
+  </svg>
+);
+
 const ONTARIO_REQUIREMENTS = [
   { key: 'cpr', label: 'CPR / First Aid' }, 
   { key: 'whmis', label: 'WHMIS' }, 
@@ -36,32 +45,9 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   const [photoFile, setPhotoFile] = useState(null); 
   const [activeTab, setActiveTab] = useState('profile'); 
   
-  const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleReqChange = (reqKey, field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      requirements: {
-        ...prev.requirements,
-        [reqKey]: {
-          ...(prev.requirements[reqKey] || {}),
-          [field]: value
-        }
-      }
-    }));
-  };
-
-  const handleTimeOffChange = (type, value) => {
-    setFormData(prev => ({
-      ...prev,
-      timeOffBalances: {
-        ...prev.timeOffBalances,
-        [type]: Number(value) || 0
-      }
-    }));
-  };
+  const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+  const handleReqChange = (reqKey, field, value) => setFormData(prev => ({ ...prev, requirements: { ...prev.requirements, [reqKey]: { ...(prev.requirements[reqKey] || {}), [field]: value } } }));
+  const handleTimeOffChange = (type, value) => setFormData(prev => ({ ...prev, timeOffBalances: { ...prev.timeOffBalances, [type]: Number(value) || 0 } }));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -97,15 +83,9 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
 
         {/* Navigation Tabs */}
         <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 space-x-6 overflow-x-auto shrink-0">
-          <button type="button" onClick={() => setActiveTab('profile')} className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'profile' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-            Personal & Contact
-          </button>
-          <button type="button" onClick={() => setActiveTab('compliance')} className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'compliance' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-            Certificates & Clearances
-          </button>
-          <button type="button" onClick={() => setActiveTab('financial')} className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'financial' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-            Pay Structure & Time Off
-          </button>
+          <button type="button" onClick={() => setActiveTab('profile')} className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'profile' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Personal & Contact</button>
+          <button type="button" onClick={() => setActiveTab('compliance')} className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'compliance' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Certificates & Clearances</button>
+          <button type="button" onClick={() => setActiveTab('financial')} className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'financial' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>Pay Structure & Time Off</button>
         </div>
 
         {/* Scrollable Form Content */}
@@ -117,19 +97,10 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <h4 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2">Basic Information</h4>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
-                    <input type="text" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required />
-                  </div>
+                  <div><label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label><input type="text" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Username *</label>
-                      <input type="text" value={formData.username} onChange={(e) => handleChange('username', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Password *</label>
-                      <input type="text" value={formData.password} onChange={(e) => handleChange('password', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required />
-                    </div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Username *</label><input type="text" value={formData.username} onChange={(e) => handleChange('username', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Password *</label><input type="text" value={formData.password} onChange={(e) => handleChange('password', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">System Role</label>
@@ -143,31 +114,16 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
 
                 <div className="space-y-4">
                   <h4 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2">Contact Information</h4>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
-                    <input type="text" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
-                    <input type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Home Address</label>
-                    <input type="text" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" />
-                  </div>
+                  <div><label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label><input type="text" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" /></div>
+                  <div><label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label><input type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" /></div>
+                  <div><label className="block text-sm font-medium text-slate-700 mb-1">Home Address</label><input type="text" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" /></div>
                 </div>
 
                 <div className="space-y-4 md:col-span-2">
                   <h4 className="text-sm font-bold text-red-800 border-b border-red-200 pb-2 flex items-center"><AlertCircle className="h-4 w-4 mr-1.5"/> Emergency Contact</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Contact Name</label>
-                      <input type="text" value={formData.emergencyContactName} onChange={(e) => handleChange('emergencyContactName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-red-500 focus:border-red-500" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label>
-                      <input type="text" value={formData.emergencyContactPhone} onChange={(e) => handleChange('emergencyContactPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-red-500 focus:border-red-500" />
-                    </div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Contact Name</label><input type="text" value={formData.emergencyContactName} onChange={(e) => handleChange('emergencyContactName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-red-500 focus:border-red-500" /></div>
+                    <div><label className="block text-sm font-medium text-slate-700 mb-1">Contact Phone</label><input type="text" value={formData.emergencyContactPhone} onChange={(e) => handleChange('emergencyContactPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-red-500 focus:border-red-500" /></div>
                   </div>
                 </div>
               </div>
@@ -188,32 +144,14 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                     <div key={req.key} className={`bg-white border rounded-lg shadow-sm transition ${currentData.status === 'valid' ? 'border-emerald-200' : currentData.status === 'expired' ? 'border-red-300' : 'border-slate-200'}`}>
                       <div className="p-3 border-b border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-2 bg-slate-50/50 rounded-t-lg">
                         <label className="text-sm font-semibold text-slate-800">{req.label}</label>
-                        <select 
-                          value={currentData.status} 
-                          onChange={(e) => handleReqChange(req.key, 'status', e.target.value)} 
-                          className={`text-xs font-bold rounded border px-2 py-1 outline-none ${
-                            currentData.status === 'missing' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
-                            currentData.status === 'valid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                            currentData.status === 'expired' ? 'bg-red-50 text-red-700 border-red-200' : 
-                            'bg-slate-100 text-slate-600 border-slate-300'
-                          }`}
-                        >
-                          <option value="missing">Missing</option>
-                          <option value="valid">Valid</option>
-                          <option value="expired">Expired</option>
-                          <option value="not_applicable">N/A</option>
+                        <select value={currentData.status} onChange={(e) => handleReqChange(req.key, 'status', e.target.value)} className={`text-xs font-bold rounded border px-2 py-1 outline-none ${currentData.status === 'missing' ? 'bg-amber-50 text-amber-700 border-amber-200' : currentData.status === 'valid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : currentData.status === 'expired' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-100 text-slate-600 border-slate-300'}`}>
+                          <option value="missing">Missing</option><option value="valid">Valid</option><option value="expired">Expired</option><option value="not_applicable">N/A</option>
                         </select>
                       </div>
                       <div className="p-3 bg-white rounded-b-lg">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium text-slate-500">Expiry Date:</span>
-                          <input 
-                            type="date" 
-                            value={currentData.expiryDate || ''} 
-                            onChange={(e) => handleReqChange(req.key, 'expiryDate', e.target.value)} 
-                            disabled={currentData.status === 'not_applicable'} 
-                            className="w-32 px-2 py-1 border border-slate-300 rounded text-xs text-slate-700 focus:ring-teal-500 disabled:bg-slate-100 disabled:text-slate-400"
-                          />
+                          <input type="date" value={currentData.expiryDate || ''} onChange={(e) => handleReqChange(req.key, 'expiryDate', e.target.value)} disabled={currentData.status === 'not_applicable'} className="w-32 px-2 py-1 border border-slate-300 rounded text-xs text-slate-700 focus:ring-teal-500 disabled:bg-slate-100 disabled:text-slate-400"/>
                         </div>
                       </div>
                     </div>
@@ -225,100 +163,50 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
             {/* TAB: FINANCIAL */}
             <div className={activeTab === 'financial' ? 'block space-y-6' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
                 <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center">
-                    <DollarSign className="h-4 w-4 mr-1.5 text-slate-500"/> Pay Structure
-                  </h4>
+                  <h4 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center"><DollarSign className="h-4 w-4 mr-1.5 text-slate-500"/> Pay Structure</h4>
                   <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
                     <div>
                       <label className="block text-sm font-semibold text-slate-800 mb-1">Active Calculation Method</label>
-                      <select 
-                        value={formData.payType} 
-                        onChange={(e) => handleChange('payType', e.target.value)} 
-                        className="w-full px-3 py-2 border border-teal-300 rounded-md text-sm bg-teal-50 font-medium text-teal-800 focus:ring-teal-500 focus:border-teal-500"
-                      >
+                      <select value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-teal-300 rounded-md text-sm bg-teal-50 font-medium text-teal-800 focus:ring-teal-500 focus:border-teal-500">
                         <option value="per_visit">Pay Per Visit (Flat Rate)</option>
                         <option value="hourly">Hourly Wage</option>
                       </select>
-                      <p className="text-[10px] text-slate-500 mt-1">This determines how the Live Pay Tracker calculates their earnings.</p>
                     </div>
-                    
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Per Visit Rate ($)</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-2 text-slate-400 text-sm">$</span>
-                          <input 
-                            type="number" min="0" step="0.50" 
-                            value={formData.perVisitRate} 
-                            onChange={(e) => handleChange('perVisitRate', e.target.value)} 
-                            className={`w-full pl-6 pr-3 py-2 border rounded-md text-sm focus:ring-teal-500 ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-300 bg-slate-100 text-slate-500'}`}
-                          />
-                        </div>
+                        <div className="relative"><span className="absolute left-3 top-2 text-slate-400 text-sm">$</span><input type="number" min="0" step="0.50" value={formData.perVisitRate} onChange={(e) => handleChange('perVisitRate', e.target.value)} className={`w-full pl-6 pr-3 py-2 border rounded-md text-sm focus:ring-teal-500 ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-300 bg-slate-100 text-slate-500'}`}/></div>
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Hourly Wage ($)</label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-2 text-slate-400 text-sm">$</span>
-                          <input 
-                            type="number" min="0" step="0.50" 
-                            value={formData.hourlyWage} 
-                            onChange={(e) => handleChange('hourlyWage', e.target.value)} 
-                            className={`w-full pl-6 pr-3 py-2 border rounded-md text-sm focus:ring-teal-500 ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-300 bg-slate-100 text-slate-500'}`}
-                          />
-                        </div>
+                        <div className="relative"><span className="absolute left-3 top-2 text-slate-400 text-sm">$</span><input type="number" min="0" step="0.50" value={formData.hourlyWage} onChange={(e) => handleChange('hourlyWage', e.target.value)} className={`w-full pl-6 pr-3 py-2 border rounded-md text-sm focus:ring-teal-500 ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-300 bg-slate-100 text-slate-500'}`}/></div>
                       </div>
                     </div>
                   </div>
                 </div>
-
                 <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center">
-                    <CalendarDays className="h-4 w-4 mr-1.5 text-slate-500"/> Time Off Balances
-                  </h4>
+                  <h4 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center"><CalendarDays className="h-4 w-4 mr-1.5 text-slate-500"/> Time Off Balances</h4>
                   <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-800">Sick Days</div>
-                        <div className="text-xs text-slate-500">Total days allotted per year</div>
-                      </div>
-                      <input 
-                        type="number" min="0" step="1" 
-                        value={formData.timeOffBalances.sick} 
-                        onChange={(e) => handleTimeOffChange('sick', e.target.value)} 
-                        className="w-20 px-3 py-1.5 border border-slate-300 rounded text-sm text-center font-bold text-slate-700 focus:ring-teal-500" 
-                      />
+                      <div><div className="text-sm font-semibold text-slate-800">Sick Days</div><div className="text-xs text-slate-500">Total days allotted per year</div></div>
+                      <input type="number" min="0" step="1" value={formData.timeOffBalances.sick} onChange={(e) => handleTimeOffChange('sick', e.target.value)} className="w-20 px-3 py-1.5 border border-slate-300 rounded text-sm text-center font-bold text-slate-700 focus:ring-teal-500" />
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-800">Vacation Days</div>
-                        <div className="text-xs text-slate-500">Total days allotted per year</div>
-                      </div>
-                      <input 
-                        type="number" min="0" step="1" 
-                        value={formData.timeOffBalances.vacation} 
-                        onChange={(e) => handleTimeOffChange('vacation', e.target.value)} 
-                        className="w-20 px-3 py-1.5 border border-slate-300 rounded text-sm text-center font-bold text-slate-700 focus:ring-teal-500" 
-                      />
+                      <div><div className="text-sm font-semibold text-slate-800">Vacation Days</div><div className="text-xs text-slate-500">Total days allotted per year</div></div>
+                      <input type="number" min="0" step="1" value={formData.timeOffBalances.vacation} onChange={(e) => handleTimeOffChange('vacation', e.target.value)} className="w-20 px-3 py-1.5 border border-slate-300 rounded text-sm text-center font-bold text-slate-700 focus:ring-teal-500" />
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
-
           </form>
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition shadow-sm">
-            Cancel
-          </button>
-          <button type="submit" form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition shadow-sm flex items-center">
-            <CheckCircle className="h-4 w-4 mr-2" /> Save Profile
-          </button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition shadow-sm">Cancel</button>
+          <button type="submit" form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition shadow-sm flex items-center"><CheckCircle className="h-4 w-4 mr-2" /> Save Profile</button>
         </div>
       </div>
     </div>
@@ -364,10 +252,7 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
 
     if (onAddEmployee) onAddEmployee(newEmp); 
     
-    setNewName(''); 
-    setNewUsername(''); 
-    setNewPassword(''); 
-    setNewPhotoFile(null);
+    setNewName(''); setNewUsername(''); setNewPassword(''); setNewPhotoFile(null);
   };
 
   const getComplianceIssues = (emp) => { 
@@ -394,21 +279,11 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
           <div className="flex items-center">
             <Users className="h-5 w-5 mr-2 text-teal-600" />
             <h2 className="text-lg font-semibold text-slate-800">Staff Directory</h2>
-            <span className="ml-3 bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
-              {filteredEmployees.length} Members
-            </span>
+            <span className="ml-3 bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-0.5 rounded-full">{filteredEmployees.length} Members</span>
           </div>
           <div className="relative w-full sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-slate-400" />
-            </div>
-            <input 
-              type="text" 
-              placeholder="Search staff..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 sm:text-sm transition" 
-            />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div>
+            <input type="text" placeholder="Search staff..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 sm:text-sm transition" />
           </div>
         </div>
 
@@ -429,13 +304,9 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
                     
                     {!isProtected && (
                       <div className="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-md p-1">
-                        <button onClick={() => setEditingEmployee(emp)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="Edit Profile">
-                          <Edit className="h-4 w-4" />
-                        </button>
+                        <button onClick={() => setEditingEmployee(emp)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="Edit Profile"><Edit className="h-4 w-4" /></button>
                         {emp.id !== 'admin1' && (
-                          <button onClick={() => onRemoveEmployee && onRemoveEmployee(emp.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete Profile">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          <button onClick={() => onRemoveEmployee && onRemoveEmployee(emp.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete Profile"><Trash2 className="h-4 w-4" /></button>
                         )}
                       </div>
                     )}
@@ -445,14 +316,13 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
                         <img src={emp.photoUrl} alt={emp.name} className="h-14 w-14 rounded-full border-2 border-teal-100 object-cover shadow-sm shrink-0" />
                       ) : (
                         <div className="h-14 w-14 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-2 border-teal-50 shadow-sm shrink-0">
-                          <User className="h-7 w-7" />
+                          {/* THE CAPTAIN'S HAT FALLBACK */}
+                          {String(emp.role).includes('Admin') ? <CaptainHatIcon className="h-7 w-7" /> : <User className="h-7 w-7" />}
                         </div>
                       )}
                       <div>
                         <h3 className="font-bold text-slate-800 text-lg leading-tight">{String(emp.name)}</h3>
-                        <span className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-0.5 rounded inline-block mt-1 tracking-wide uppercase">
-                          {String(emp.role)}
-                        </span>
+                        <span className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-0.5 rounded inline-block mt-1 tracking-wide uppercase">{String(emp.role)}</span>
                       </div>
                     </div>
 
@@ -463,13 +333,9 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
 
                     <div className="mt-auto border-t border-slate-100 pt-4">
                       {issuesCount > 0 ? (
-                        <div className="flex items-center justify-center text-xs font-bold bg-red-50 text-red-700 py-2 px-3 rounded-lg border border-red-100">
-                          <AlertCircle className="h-4 w-4 mr-2 shrink-0" /> {issuesCount} Compliance Issue(s)
-                        </div>
+                        <div className="flex items-center justify-center text-xs font-bold bg-red-50 text-red-700 py-2 px-3 rounded-lg border border-red-100"><AlertCircle className="h-4 w-4 mr-2 shrink-0" /> {issuesCount} Compliance Issue(s)</div>
                       ) : (
-                        <div className="flex items-center justify-center text-xs font-bold bg-emerald-50 text-emerald-700 py-2 px-3 rounded-lg border border-emerald-100">
-                          <ShieldCheck className="h-4 w-4 mr-2 shrink-0" /> Fully Compliant
-                        </div>
+                        <div className="flex items-center justify-center text-xs font-bold bg-emerald-50 text-emerald-700 py-2 px-3 rounded-lg border border-emerald-100"><ShieldCheck className="h-4 w-4 mr-2 shrink-0" /> Fully Compliant</div>
                       )}
                     </div>
                   </div>
@@ -482,24 +348,13 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
 
       {/* Add Employee Column */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-fit">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-lg font-semibold text-slate-800">Add New Employee</h2>
-        </div>
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50"><h2 className="text-lg font-semibold text-slate-800">Add New Employee</h2></div>
         <form onSubmit={handleAddEmployee} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
-            <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" placeholder="e.g. Jane Doe" required />
-          </div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label><input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
           
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Username *</label>
-              <input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password *</label>
-              <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required />
-            </div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Username *</label><input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Password *</label><input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
           </div>
           
           <div>
@@ -518,14 +373,8 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
               <option value="hourly">Hourly Wage</option>
             </select>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit ($)</label>
-                <input type="number" min="0" step="1" value={newPerVisitRate} onChange={(e) => setNewPerVisitRate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500" required />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Hourly ($)</label>
-                <input type="number" min="0" step="0.50" value={newHourlyWage} onChange={(e) => setNewHourlyWage(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500" required />
-              </div>
+              <div><label className="block text-xs font-medium text-slate-700 mb-1">Per Visit ($)</label><input type="number" min="0" step="1" value={newPerVisitRate} onChange={(e) => setNewPerVisitRate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500" required /></div>
+              <div><label className="block text-xs font-medium text-slate-700 mb-1">Hourly ($)</label><input type="number" min="0" step="0.50" value={newHourlyWage} onChange={(e) => setNewHourlyWage(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500" required /></div>
             </div>
           </div>
 
@@ -540,36 +389,18 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
                   </span>
                 </div>
               </div>
-              <input 
-                id="emp-photo-upload" 
-                type="file" 
-                accept="image/*" 
-                className="sr-only" 
-                onChange={(e) => setNewPhotoFile(e.target.files[0])}
-              />
+              <input id="emp-photo-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => setNewPhotoFile(e.target.files[0])}/>
             </div>
           </div>
 
-          <button 
-            type="submit"
-            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none transition"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Employee Profile</span>
+          <button type="submit" className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none transition">
+            <Plus className="h-4 w-4" /><span>Add Employee Profile</span>
           </button>
         </form>
       </div>
 
-      {/* Edit Modal Container */}
       {editingEmployee && (
-        <EditEmployeeModal 
-          employee={editingEmployee} 
-          onClose={() => setEditingEmployee(null)} 
-          onSave={(id, data) => {
-            if (updateEmployee) updateEmployee(id, data);
-            setEditingEmployee(null);
-          }} 
-        />
+        <EditEmployeeModal employee={editingEmployee} onClose={() => setEditingEmployee(null)} onSave={(id, data) => { if (updateEmployee) updateEmployee(id, data); setEditingEmployee(null); }} />
       )}
     </div>
   );

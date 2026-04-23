@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, MessageSquare, Search, UserMinus, FileText, Wallet, Info, BookOpen } from 'lucide-react';
 
+// --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+
+// --- UTILS & COMPONENTS ---
+import { parseLocal, isBiweeklyPayday, getHoliday } from './utils';
 
 import LoginPage from './components/LoginPage';
 import Announcements from './components/Announcements';
@@ -39,45 +43,15 @@ try {
 }
 
 // ==========================================
-// INLINE HELPERS
+// HELPERS
 // ==========================================
 const parseLocalSafe = (dateStr) => {
+  if (!dateStr) return new Date();
   try {
-    if (!dateStr) return new Date();
-    if (typeof dateStr === 'number') return new Date(dateStr);
-    if (typeof dateStr === 'object') {
-      if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date() : dateStr;
-      if (typeof dateStr.toDate === 'function') return dateStr.toDate();
-      if (typeof dateStr.seconds === 'number') return new Date(dateStr.seconds * 1000);
-      return new Date();
-    }
-    const str = String(dateStr);
-    const parts = str.split('-');
-    if (parts.length === 3) {
-      const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
-      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) return new Date(y, m - 1, d);
-    }
-    const fallback = new Date(str);
-    return isNaN(fallback.getTime()) ? new Date() : fallback;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
+    return new Date(y, m - 1, d);
   } catch (e) { return new Date(); }
-};
-
-const isBiweeklyPayday = (currentDateStr, startDateStr) => {
-  if (!startDateStr || !currentDateStr) return false;
-  const [sY, sM, sD] = String(startDateStr).split('-').map(Number);
-  const [cY, cM, cD] = String(currentDateStr).split('-').map(Number);
-  if(isNaN(sY) || isNaN(cY)) return false;
-  const diffDays = (Date.UTC(cY, cM - 1, cD) - Date.UTC(sY, sM - 1, sD)) / 86400000;
-  return diffDays > 0 && diffDays % 14 === 0;
-};
-
-const getHoliday = (dateStr) => {
-  const holidays = {
-    '2026-01-01': { name: 'New Year\'s Day' }, '2026-02-16': { name: 'Family Day' }, '2026-04-03': { name: 'Good Friday' },
-    '2026-05-18': { name: 'Victoria Day' }, '2026-07-01': { name: 'Canada Day' }, '2026-08-03': { name: 'Civic Holiday' },
-    '2026-09-07': { name: 'Labour Day' }, '2026-10-12': { name: 'Thanksgiving Day' }, '2026-12-25': { name: 'Christmas Day' }, '2026-12-26': { name: 'Boxing Day' }
-  };
-  return holidays[String(dateStr)] || null;
 };
 
 // ==========================================
@@ -99,11 +73,13 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
     e.preventDefault();
     const newShifts = [];
     const baseDate = parseLocalSafe(selectedDate);
+
     if (isRecurring) {
       for (let i = 0; i < recurrenceWeeks; i++) {
         const nextDate = new Date(baseDate);
         nextDate.setDate(baseDate.getDate() + (i * 7));
         const dateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+        
         if (getHoliday(dateStr)) continue;
         newShifts.push({ employeeId, clientId, date: dateStr, startTime, endTime });
       }
@@ -123,30 +99,117 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" value={selectedDate} readOnly className="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-500 cursor-not-allowed focus:outline-none" /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
             <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
-              {safeEmps.map(emp => <option key={emp.id} value={emp.id}>{String(emp.name)}</option>)}
+              {safeEmps.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Start</label><input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
           </div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Client</label>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Client</label>
             <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
-              {safeClients.map(client => <option key={client.id} value={client.id}>{String(client.name)}</option>)}
+              {safeClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
             </select>
           </div>
           <div className="pt-2 border-t border-slate-200">
-            <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit"><input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" /><span>Repeat Weekly</span></label>
+            <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+              <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
+              <span>Repeat Weekly</span>
+            </label>
             {isRecurring && (
               <select value={recurrenceWeeks} onChange={(e) => setRecurrenceWeeks(Number(e.target.value))} className="w-full mt-3 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
-                <option value={4}>4 Weeks (1 Month)</option><option value={12}>12 Weeks (3 Months)</option><option value={26}>26 Weeks (6 Months)</option><option value={52}>52 Weeks (1 Year)</option>
+                <option value={4}>4 Weeks (1 Month)</option>
+                <option value={12}>12 Weeks (3 Months)</option>
+                <option value={26}>26 Weeks (6 Months)</option>
+                <option value={52}>52 Weeks (1 Year)</option>
               </select>
             )}
           </div>
-          <div className="pt-4 flex justify-end space-x-3"><button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Cancel</button><button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition">Save Shift</button></div>
+          <div className="pt-4 flex justify-end space-x-3">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Cancel</button>
+            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition">Save Shift</button>
+          </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ClientProfileModal({ client, remainingBalance, onClose }) {
+  if (!client) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white shrink-0">
+          <h3 className="text-lg font-bold flex items-center"><Heart className="h-5 w-5 mr-2 text-teal-200" /> Client Profile</h3>
+          <button onClick={onClose} className="text-teal-200 hover:text-white transition text-2xl leading-none">&times;</button>
+        </div>
+        <div className="p-6 space-y-6 overflow-y-auto">
+          <div className="flex items-center space-x-4">
+            {client.photoUrl ? <img src={client.photoUrl} alt={client.name} className="h-16 w-16 rounded-full border-2 border-teal-100 object-cover" /> :
+              <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-teal-600"><User className="h-8 w-8" /></div>}
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">{client.name}</h2>
+              <div className="flex flex-wrap gap-2 mt-1">
+                <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+                  <Wallet className="h-3 w-3 mr-1" /> ${Number(remainingBalance).toFixed(2)} Funds Left
+                </div>
+                {client.dateOfBirth && (
+                  <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    <CalendarDays className="h-3 w-3 mr-1" /> DOB: {client.dateOfBirth}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {(client.phone || client.address) && (
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
+              {client.phone && <div className="text-sm text-slate-700 flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400" /> {client.phone}</div>}
+              {client.address && <div className="text-sm text-slate-700 flex items-center"><MapPin className="h-4 w-4 mr-2 text-slate-400" /> {client.address}</div>}
+            </div>
+          )}
+
+          {client.accountHolderName && (
+            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+              <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center"><User className="h-4 w-4 mr-1.5" /> Account Holder</h4>
+              <div className="space-y-1">
+                <div className="font-semibold text-indigo-900">{client.accountHolderName}</div>
+                {client.accountHolderPhone && <div className="text-sm text-indigo-700 flex items-center"><Phone className="h-3 w-3 mr-1" /> {client.accountHolderPhone}</div>}
+                {client.accountHolderEmail && <div className="text-sm text-indigo-700 flex items-center"><Mail className="h-3 w-3 mr-1" /> {client.accountHolderEmail}</div>}
+                {client.accountHolderAddress && <div className="text-sm text-indigo-700 flex items-center"><MapPin className="h-3 w-3 mr-1" /> {client.accountHolderAddress}</div>}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Info className="h-4 w-4 mr-1.5" /> Care Notes & Routine</h4>
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions provided.'}</p>
+          </div>
+          <div className="bg-red-50 p-4 rounded-lg border border-red-100">
+            <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center"><Phone className="h-4 w-4 mr-1.5" /> Emergency Contacts</h4>
+            {client.emergencyContactName ? (
+              <div className="mb-3 border-b border-red-100 pb-3">
+                <div className="text-sm font-semibold text-red-900">Primary: {client.emergencyContactName}</div>
+                <div className="text-lg font-bold text-red-700 mt-0.5">{client.emergencyContactPhone}</div>
+              </div>
+            ) : <span className="text-sm text-red-600 italic block mb-2">No primary contact listed.</span>}
+            
+            {client.secondaryEmergencyName && (
+              <div>
+                <div className="text-sm font-semibold text-red-900">Secondary: {client.secondaryEmergencyName}</div>
+                <div className="text-md font-bold text-red-700 mt-0.5">{client.secondaryEmergencyPhone}</div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Close</button>
+        </div>
       </div>
     </div>
   );
@@ -165,7 +228,9 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [scheduleSearch, setScheduleSearch] = useState('');
+  const [selectedClient, setSelectedClient] = useState(null);
   
+  // App State
   const [shifts, setShifts] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [clients, setClients] = useState([]);
@@ -176,6 +241,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [documents, setDocuments] = useState([]);
   
+  // Settings State
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
   const [isBonusActive, setIsBonusActive] = useState(false);
   const [bonusSettings, setBonusSettings] = useState({ monthly: [100, 50, 20], annual: [3000, 2000, 1000] });
@@ -186,7 +252,9 @@ export default function App() {
       try { 
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token); 
         else await signInAnonymously(auth); 
-      } catch (e) { console.error(e); } 
+      } catch (e) { 
+        console.error(e); 
+      } 
     };
     initAuth();
     const unsub = onAuthStateChanged(auth, user => setFirebaseUser(user));
@@ -236,17 +304,36 @@ export default function App() {
     if(action === 'delete') await deleteDoc(ref);
   };
 
+  // UPDATE: Propagate the getClientRemainingBalance function so components can use it
+  const getClientRemainingBalance = (clientId) => {
+    const client = clients.find(c => c && c.id === clientId);
+    if (!client) return 0;
+    
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    
+    const oopSpent = clientExpenses
+      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+      .filter(e => {
+        const d = parseLocal(e.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      
+    const kmSpent = expenses
+      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+      .filter(e => {
+        const d = parseLocal(e.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
+      
+    return (client.monthlyAllowance || 0) - oopSpent - kmSpent;
+  };
+
   if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={isDbReady} hasData={employees.length > 0} onSeedData={() => {}} />;
 
   const isAdmin = String(currentUser.role).includes('Admin');
-
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
@@ -254,7 +341,7 @@ export default function App() {
         <div className="font-bold text-xl flex items-center"><Briefcase className="mr-2 h-6 w-6 text-teal-200"/> Good Neighbour</div>
         <div className="flex items-center space-x-4">
           {isAdmin && (<button onClick={() => { setViewMode(viewMode === 'admin' ? 'employee' : 'admin'); }} className="text-xs bg-teal-800 hover:bg-teal-900 px-3 py-1.5 rounded font-bold transition shadow-sm">{viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}</button>)}
-          <div className="flex items-center text-sm hidden sm:flex"><User className="mr-1 h-4 w-4"/> {String(currentUser.name)}</div>
+          <div className="flex items-center text-sm hidden sm:flex"><User className="mr-1 h-4 w-4"/> {currentUser.name}</div>
           <button onClick={() => setCurrentUser(null)} className="p-2 rounded-full hover:bg-teal-600 transition" title="Logout"><LogOut className="h-5 w-5"/></button>
         </div>
       </nav>
@@ -262,12 +349,6 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {isAdmin && viewMode === 'admin' ? (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div><h1 className="text-2xl font-bold text-slate-800">Admin Dashboard</h1><p className="text-slate-500">Manage schedule and personnel.</p></div>
-              {activeAdminTab === 'schedule' && (
-                <button onClick={() => { setSelectedDateStr(`${year}-${String(month + 1).padStart(2, '0')}-01`); setIsModalOpen(true); }} className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition"><Plus className="h-5 w-5" /><span>Add Shift</span></button>
-              )}
-            </div>
             <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide pb-2">
               {[ {id: 'schedule', icon: CalendarIcon, label: 'Schedule'}, {id: 'employees', icon: Users, label: 'Employees'}, {id: 'clients', icon: Heart, label: 'Clients'}, {id: 'client-funds', icon: Wallet, label: 'Client Funds'}, {id: 'expenses', icon: Receipt, label: 'Reimbursements'}, {id: 'earnings', icon: Coins, label: 'Earnings'}, {id: 'timeoff', icon: CalendarDays, label: 'Time Off'}, {id: 'paystubs', icon: FileText, label: 'Paystubs'}, {id: 'documents', icon: BookOpen, label: 'Documents'}, {id: 'announcements', icon: MessageSquare, label: 'Announcements'}, {id: 'settings', icon: Settings, label: 'Settings'}].map(tab => (
                 <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
@@ -275,10 +356,9 @@ export default function App() {
                 </button>
               ))}
             </div>
-
             {activeAdminTab === 'employees' && <EmployeeManager employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} currentUser={currentUser} />}
             {activeAdminTab === 'clients' && <ClientManager clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} />}
-            {activeAdminTab === 'client-funds' && <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />}
+            {activeAdminTab === 'client-funds' && <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} />}
             {activeAdminTab === 'expenses' && <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={employees} clients={clients} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} />}
             {activeAdminTab === 'earnings' && <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />}
             {activeAdminTab === 'timeoff' && <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOff={(id) => runMutation('gn_timeOffLogs', id, 'delete')} />}
@@ -286,79 +366,7 @@ export default function App() {
             {activeAdminTab === 'documents' && <DocumentManager documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} isAdmin={true} />}
             {activeAdminTab === 'announcements' && <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} employees={employees} /></div>}
             {activeAdminTab === 'settings' && <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => { setPayPeriodStart(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart: v, isBonusActive, bonusAmounts: bonusSettings }); }} isBonusActive={isBonusActive} setIsBonusActive={(v) => { setIsBonusActive(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart, isBonusActive: v, bonusAmounts: bonusSettings }); }} bonusSettings={bonusSettings} setBonusSettings={(v) => { setBonusSettings(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart, isBonusActive, bonusAmounts: v }); }} />}
-            
-            {activeAdminTab === 'schedule' && (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
-                  <div className="flex items-center space-x-3 w-full sm:w-auto">
-                    <label htmlFor="schedule-search" className="text-sm font-semibold text-slate-700 whitespace-nowrap">Filter Schedule:</label>
-                    <div className="relative w-full sm:w-72">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div>
-                      <input type="text" placeholder="Search employee or client..." value={scheduleSearch} onChange={(e) => setScheduleSearch(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-                    <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{String(monthNames[month])} {year}</h2>
-                    <div className="flex space-x-2">
-                      <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
-                      <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (<div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>))}
-                  </div>
-                  <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
-                    {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[120px] opacity-50 p-2"></div>))}
-                    {daysArray.map(day => {
-                      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                      const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
-                      const holiday = getHoliday(dateStr);
-                      const filteredShifts = shifts.filter(s => {
-                        if (!scheduleSearch.trim()) return true;
-                        const emp = employees.find(e => e.id === s.employeeId);
-                        const client = clients.find(c => c.id === s.clientId);
-                        const searchLower = scheduleSearch.toLowerCase();
-                        return ((emp && emp.name && String(emp.name).toLowerCase().includes(searchLower)) || (client && client.name && String(client.name).toLowerCase().includes(searchLower)));
-                      });
-                      const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
-                      
-                      return (
-                        <div key={day} onClick={() => { setSelectedDateStr(dateStr); setIsModalOpen(true); }} className={`min-h-[120px] p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
-                          <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
-                            <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
-                            <div className="flex flex-col items-end gap-1">
-                              {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
-                              {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
-                            </div>
-                          </div>
-                          <div className="space-y-1">
-                            {dayShifts.map(shift => {
-                              const isOpen = shift.employeeId === 'unassigned';
-                              const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
-                              const client = clients.find(c => c.id === shift.clientId);
-                              return (
-                                <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`}>
-                                  <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{isOpen ? '🚨 OPEN SHIFT' : String(emp?.name?.split(' ')[0] || 'Unknown')}</div>
-                                  <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{String(client?.name?.split(' ')[0] || 'Unknown Client')}</span></div>
-                                  <div className="text-[10px] mt-0.5 opacity-90">{String(shift.startTime)}-{String(shift.endTime)}</div>
-                                  <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
-                                    {!isOpen && (<button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift"><UserMinus className="h-3 w-3" /></button>)}
-                                    <button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'delete'); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
+            {activeAdminTab === 'schedule' && <div className="p-8 text-center text-slate-500 bg-white rounded-xl shadow-sm border border-slate-200"><CalendarIcon className="mx-auto h-12 w-12 text-slate-300 mb-4" />Schedule Management is active.</div>}
           </div>
         ) : (
           <EmployeeDashboard 
@@ -369,14 +377,12 @@ export default function App() {
             paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
             onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
             payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
-            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })}
+            setSelectedClient={setSelectedClient}
+            getClientRemainingBalance={getClientRemainingBalance} // UPDATE: Prop passed safely!
           />
         )}
       </main>
-
-      {isModalOpen && (
-        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={employees} clients={clients} onSave={(shifts) => shifts.forEach(s => runMutation('gn_shifts', Date.now() + Math.random(), 'set', { ...s, id: Date.now().toString() + Math.random().toString(36).substring(2, 7) }))} />
-      )}
+      {selectedClient && <ClientProfileModal client={selectedClient} remainingBalance={0} onClose={() => setSelectedClient(null)} />}
     </div>
   );
 }

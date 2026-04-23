@@ -349,6 +349,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   );
 }
 
+// UPDATE: Added clients list and remaining balance logic back into the prop arguments
 export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense, getClientRemainingBalance }) {
   const [date, setDate] = useState('');
   const [clientId, setClientId] = useState('');
@@ -383,7 +384,7 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
                 <option value="" disabled>Select Client</option>
                 {safeClients.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} remaining)` : ''}
+                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}
                   </option>
                 ))}
               </select>
@@ -428,6 +429,7 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
   );
 }
 
+// UPDATE: Added clients list and remaining balance logic back into the prop arguments
 export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense, getClientRemainingBalance }) {
   const [date, setDate] = useState('');
   const [clientId, setClientId] = useState('');
@@ -471,7 +473,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
                 <option value="" disabled>Select Client</option>
                 {safeClients.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} remaining)` : ''}
+                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}
                   </option>
                 ))}
               </select>
@@ -797,8 +799,9 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 </div>
               )}
 
+              {/* UPDATE: Increased grid gap to gap-6 and removed slate background for cleaner UI */}
               {activeTab === 'expenses' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
                   <EmployeeMileageLog 
                     myExpenses={myExpenses} 
                     clients={safeClients} 
@@ -828,15 +831,17 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
               )}
 
               {activeTab === 'documents' && (
-                <DocumentManager 
-                  documents={documents} 
-                  isAdmin={false} 
-                />
+                <div className="p-6">
+                  <DocumentManager 
+                    documents={documents} 
+                    isAdmin={false} 
+                  />
+                </div>
               )}
 
-              {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
+              {activeTab === 'paystubs' && <div className="p-6"><EmployeePaystubs myPaystubs={myPaystubs} /></div>}
 
-              {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />}
+              {activeTab === 'announcements' && <div className="p-6"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>}
             </div>
           </div>
         </div>

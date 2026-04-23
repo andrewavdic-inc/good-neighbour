@@ -2,70 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
+import { parseLocal, isBiweeklyPayday, getPayPeriodBounds, getHoliday } from '../utils';
 
 // ==========================================
-// UTILS & HELPERS
+// HELPERS SPECIFIC TO PORTAL
 // ==========================================
-const parseLocalSafe = (dateStr) => {
-  try {
-    if (!dateStr) return new Date();
-    if (typeof dateStr === 'number') return new Date(dateStr);
-    if (typeof dateStr === 'object') {
-      if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date() : dateStr;
-      if (typeof dateStr.toDate === 'function') return dateStr.toDate();
-      if (typeof dateStr.seconds === 'number') return new Date(dateStr.seconds * 1000);
-      return new Date();
-    }
-    const str = String(dateStr);
-    const parts = str.split('-');
-    if (parts.length === 3) {
-      const y = parseInt(parts[0], 10);
-      const m = parseInt(parts[1], 10);
-      const d = parseInt(parts[2], 10);
-      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-        return new Date(y, m - 1, d);
-      }
-    }
-    const fallback = new Date(str);
-    return isNaN(fallback.getTime()) ? new Date() : fallback;
-  } catch (e) { 
-    return new Date(); 
-  }
-};
-
-const safeSortByDateDesc = (arr) => {
-  if (!arr || !Array.isArray(arr)) return [];
-  try {
-    return [...arr].filter(Boolean).sort((a, b) => {
-      const dA = parseLocalSafe(a.date).getTime();
-      const dB = parseLocalSafe(b.date).getTime();
-      return dB - dA;
-    });
-  } catch (e) {
-    return [];
-  }
-};
-
-const isBiweeklyPayday = (currentDateStr, startDateStr) => {
-  if (!startDateStr || !currentDateStr) return false;
-  const [sY, sM, sD] = String(startDateStr).split('-').map(Number);
-  const [cY, cM, cD] = String(currentDateStr).split('-').map(Number);
-  if(isNaN(sY) || isNaN(cY)) return false;
-  const diffDays = (Date.UTC(cY, cM - 1, cD) - Date.UTC(sY, sM - 1, sD)) / 86400000;
-  return diffDays > 0 && diffDays % 14 === 0;
-};
-
-const getPayPeriodBounds = (anchorDateStr) => {
-  const now = new Date();
-  const anchor = parseLocalSafe(anchorDateStr);
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (today < anchor) return { start: anchor, end: new Date(anchor.getTime() + 13 * 86400000) };
-  const diffDays = Math.floor((today - anchor) / 86400000);
-  const cycles = Math.floor(diffDays / 14);
-  const start = new Date(anchor.getTime() + cycles * 14 * 86400000);
-  return { start, end: new Date(start.getTime() + 13 * 86400000) };
-};
-
 const safeShiftsSort = (arr) => {
   if (!Array.isArray(arr)) return [];
   return [...arr].filter(Boolean).sort((a, b) => {
@@ -73,22 +14,6 @@ const safeShiftsSort = (arr) => {
     const dB = b.date && b.startTime ? new Date(`${b.date}T${b.startTime}`).getTime() : 0;
     return (isNaN(dA) ? 0 : dA) - (isNaN(dB) ? 0 : dB);
   });
-};
-
-const getHoliday = (dateStr) => {
-  const holidays = {
-    '2026-01-01': { name: 'New Year\'s Day' },
-    '2026-02-16': { name: 'Family Day' },
-    '2026-04-03': { name: 'Good Friday' },
-    '2026-05-18': { name: 'Victoria Day' },
-    '2026-07-01': { name: 'Canada Day' },
-    '2026-08-03': { name: 'Civic Holiday' },
-    '2026-09-07': { name: 'Labour Day' },
-    '2026-10-12': { name: 'Thanksgiving Day' },
-    '2026-12-25': { name: 'Christmas Day' },
-    '2026-12-26': { name: 'Boxing Day' }
-  };
-  return holidays[String(dateStr)] || null;
 };
 
 const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses) => {
@@ -116,8 +41,8 @@ const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses) =>
 
   shiftEarnings = isHourly ? (totalHours * (Number(emp.hourlyWage) || 22.5)) : (empShifts.length * (Number(emp.perVisitRate) || 45));
 
-  const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
-  const oop = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= start && parseLocal(e.date) <= end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
+  const oop = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= start && parseLocal(e.date) <= end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
   return { shiftCount: empShifts.length, totalHours, shiftEarnings, kmEarnings, oop, total: shiftEarnings + kmEarnings + oop };
 };
@@ -136,14 +61,11 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
   return results.slice(0, 3);
 };
 
-
 // ==========================================
 // SUB-COMPONENTS
 // ==========================================
-
 export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonusActive, bonusSettings }) {
   const now = new Date();
-  
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   
   const currentLeaderboard = useMemo(() => {
@@ -190,10 +112,6 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
           <Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> 
           {now.toLocaleString('default', { month: 'long' })} Leaderboard
         </h2>
-        <p className="text-teal-100 mb-6 relative z-10 text-sm">
-          Top 3 earners with 10+ shifts qualify for monthly cash bonuses!
-        </p>
-        
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
           {currentLeaderboard.map((winner, index) => (
             <div key={winner.emp.id || Math.random().toString()} className={`${colors[index]} rounded-xl p-4 shadow-md border transform hover:-translate-y-1 transition duration-300 flex flex-col items-center text-center`}>
@@ -205,24 +123,11 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
               </div>
             </div>
           ))}
-          {currentLeaderboard.length === 0 && (
-            <div className="col-span-3 text-center py-8 bg-black/10 rounded-lg text-sm border border-white/20 backdrop-blur-sm">
-              <p className="font-semibold text-lg mb-1">The race is on!</p>
-              <p className="opacity-90">No employees have completed the 10 shifts required to qualify for the leaderboard yet.</p>
-            </div>
-          )}
         </div>
       </div>
-
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center">
-            <Trophy className="h-5 w-5 mr-2 text-yellow-500" /> 
-            Annual Trophy Standings
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Top 3 badge earners at year-end win grand prizes of ${safeBonusSettings.annual[0]}, ${safeBonusSettings.annual[1]}, and ${safeBonusSettings.annual[2]}!
-          </p>
+          <h2 className="text-lg font-semibold text-slate-800 flex items-center"><Trophy className="h-5 w-5 mr-2 text-yellow-500" /> Annual Trophy Standings</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -251,11 +156,6 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
                   <td className="px-6 py-4 text-right font-black text-slate-800">{s.totalScore} pts</td>
                 </tr>
               ))}
-              {annualStandings.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-slate-500">No badges have been awarded yet this year.</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -273,7 +173,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
     if (!s || s.employeeId !== currentUser.id || !s.date || !s.endTime) return false;
     const shiftEnd = new Date(`${s.date}T${s.endTime}`);
     if (isNaN(shiftEnd.getTime())) return false;
-    return shiftEnd <= now && new Date(s.date) >= periodBounds.start && new Date(s.date) <= periodBounds.end;
+    return shiftEnd <= now && parseLocal(s.date) >= periodBounds.start && parseLocal(s.date) <= periodBounds.end;
   });
 
   let shiftEarnings = 0;
@@ -293,10 +193,10 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
     shiftEarnings = completedShifts.length * (Number(currentUser.perVisitRate) || 45);
   }
 
-  const myPeriodExp = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
+  const myPeriodExp = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocal(e.date) >= periodBounds.start && parseLocal(e.date) <= periodBounds.end);
   const kmEarnings = myPeriodExp.reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
 
-  const myPeriodCE = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
+  const myPeriodCE = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocal(e.date) >= periodBounds.start && parseLocal(e.date) <= periodBounds.end);
   const oopEarnings = myPeriodCE.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
   let bonusEarnings = 0;
@@ -319,14 +219,12 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
         <div className="text-xs text-slate-400 mb-6">
           Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}
         </div>
-        
         <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">
           ${totalEarnings.toFixed(2)}
         </div>
-        
         <div className="space-y-3">
           <div className="flex justify-between items-center bg-white/5 p-2 rounded">
-            <span className="text-sm text-slate-300">Completed Shifts ({completedShifts.length})</span>
+            <span className="text-sm text-slate-300">Completed Shifts</span>
             <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
           </div>
           <div className="flex justify-between items-center bg-white/5 p-2 rounded">
@@ -354,8 +252,6 @@ export function EmployeeMileageLog({ myExpenses = [], onAddExpense }) {
   const [kilometers, setKilometers] = useState('');
   const [description, setDescription] = useState('');
   
-  const safeExpenses = Array.isArray(myExpenses) ? myExpenses : [];
-
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!date || !kilometers) return;
@@ -378,29 +274,8 @@ export function EmployeeMileageLog({ myExpenses = [], onAddExpense }) {
             </div>
           </div>
           <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" /></div>
-          <div className="bg-amber-50 border border-amber-100 rounded p-2 text-amber-800 text-[10px] font-medium leading-tight">
-            * Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client.
-          </div>
           <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit</button>
         </form>
-      </div>
-      <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {safeExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logged yet.</div> :
-          safeSortByDateDesc(safeExpenses).map(exp => {
-            if(!exp) return null;
-            const d = parseLocalSafe(exp.date);
-            const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString();
-            return (
-              <div key={exp.id || `exp_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-                <div>
-                  <div className="font-semibold text-sm text-slate-800">{dateStr}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{String(exp.kilometers || 0)} km &bull; {String(exp.description || '')}</div>
-                </div>
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{String(exp.status || 'pending')}</span>
-              </div>
-            )
-          })
-        }
       </div>
     </div>
   );
@@ -412,19 +287,11 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], onAddClientExp
   const [description, setDescription] = useState('');
   const [receiptFile, setReceiptFile] = useState(null);
   
-  const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : [];
-
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!date || !amount) return;
     if(onAddClientExpense) {
-      onAddClientExpense({ 
-        date, 
-        clientId: 'general', 
-        amount: Number(amount), 
-        description, 
-        receiptDetails: receiptFile ? receiptFile.name : '' 
-      });
+      onAddClientExpense({ date, clientId: 'general', amount: Number(amount), description, receiptDetails: receiptFile ? receiptFile.name : '' });
     }
     setDate(''); setAmount(''); setDescription(''); setReceiptFile(null);
   };
@@ -454,47 +321,26 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], onAddClientExp
           <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Expense</button>
         </form>
       </div>
-      <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {safeClientExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged yet.</div> :
-          safeSortByDateDesc(safeClientExpenses).map(exp => {
-            if(!exp) return null;
-            const d = parseLocalSafe(exp.date);
-            const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString();
-            return (
-              <div key={exp.id || `ce_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-                <div>
-                  <div className="font-semibold text-sm text-slate-800">{dateStr}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">${Number(exp.amount || 0).toFixed(2)} &bull; {String(exp.description || '')}</div>
-                </div>
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{String(exp.status || 'pending')}</span>
-              </div>
-            )
-          })
-        }
-      </div>
     </div>
   );
 }
 
 export function EmployeePaystubs({ myPaystubs = [] }) {
   const safePaystubs = Array.isArray(myPaystubs) ? myPaystubs : [];
-  
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center"><FileText className="h-5 w-5 mr-2 text-teal-600" /><h2 className="text-lg font-semibold text-slate-800">My Paystubs</h2></div>
       <div className="p-6">
         {safePaystubs.length === 0 ? <div className="text-center text-slate-500 py-4">No paystubs available.</div> :
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {safeSortByDateDesc(safePaystubs).map(ps => {
+            {safePaystubs.map(ps => {
               if(!ps) return null;
-              const d = parseLocalSafe(ps.date);
-              const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
               return (
                 <div key={ps.id || `ps_${Math.random()}`} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
                   <FileText className="h-8 w-8 text-teal-600 mr-3 opacity-70 group-hover:opacity-100 transition" />
                   <div>
-                    <div className="font-semibold text-slate-800 text-sm">{dateStr}</div>
-                    <div className="text-xs text-slate-500 truncate w-32" title={String(ps.fileName || '')}>{String(ps.fileName || 'Unnamed File')}</div>
+                    <div className="font-semibold text-slate-800 text-sm">{ps.date}</div>
+                    <div className="text-xs text-slate-500 truncate w-32">{ps.fileName || 'Unnamed File'}</div>
                   </div>
                   <Download className="h-4 w-4 text-slate-400 ml-auto group-hover:text-teal-600 transition" />
                 </div>
@@ -628,7 +474,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 <div className="space-y-4">
                   <div className="flex items-center text-slate-700">
                     <CalendarDays className="h-5 w-5 mr-3 text-slate-400" />
-                    <span className="font-medium">{parseLocalSafe(nextShift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+                    <span className="font-medium">{nextShift.date}</span>
                   </div>
                   <div className="flex items-center text-slate-700">
                     <Clock className="h-5 w-5 mr-3 text-slate-400" />
@@ -733,7 +579,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                         return (
                           <div key={shift.id || Math.random()} className="bg-white border border-amber-200 rounded-lg p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
                             <div>
-                              <div className="font-bold text-slate-800">{shift.date ? parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : ''}</div>
+                              <div className="font-bold text-slate-800">{shift.date}</div>
                               <div className="text-sm text-slate-600 mt-1">{shift.startTime} - {shift.endTime} &bull; {client?.name}</div>
                             </div>
                             <button 

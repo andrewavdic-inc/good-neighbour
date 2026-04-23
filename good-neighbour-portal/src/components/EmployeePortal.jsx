@@ -349,8 +349,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   );
 }
 
-// UPDATE: Added clients dropdown prop and logic
-export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
+export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense, getClientRemainingBalance }) {
   const [date, setDate] = useState('');
   const [clientId, setClientId] = useState('');
   const [kilometers, setKilometers] = useState('');
@@ -361,7 +360,7 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!date || !kilometers || !clientId) return;
+    if (!date || !clientId || !kilometers) return;
     if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description });
     setDate(''); setClientId(''); setKilometers(''); setDescription('');
   };
@@ -382,7 +381,11 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
               <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
                 <option value="" disabled>Select Client</option>
-                {safeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {safeClients.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} remaining)` : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -425,8 +428,7 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
   );
 }
 
-// UPDATE: Added clients dropdown prop and logic
-export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense }) {
+export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense, getClientRemainingBalance }) {
   const [date, setDate] = useState('');
   const [clientId, setClientId] = useState('');
   const [amount, setAmount] = useState('');
@@ -467,7 +469,11 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
               <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
                 <option value="" disabled>Select Client</option>
-                {safeClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {safeClients.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} remaining)` : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -548,7 +554,7 @@ export function EmployeePaystubs({ myPaystubs = [] }) {
   );
 }
 
-export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, paystubs = [], timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings, setSelectedClient }) {
+export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings, setSelectedClient }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -795,13 +801,15 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
                   <EmployeeMileageLog 
                     myExpenses={myExpenses} 
-                    clients={safeClients} // <--- Added Client Array
+                    clients={safeClients} 
                     onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
+                    getClientRemainingBalance={getClientRemainingBalance}
                   />
                   <EmployeeClientExpenseLog 
                     myClientExpenses={myClientExpenses} 
-                    clients={safeClients} // <--- Added Client Array
+                    clients={safeClients} 
                     onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} 
+                    getClientRemainingBalance={getClientRemainingBalance}
                   />
                 </div>
               )}

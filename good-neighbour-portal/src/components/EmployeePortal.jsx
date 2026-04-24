@@ -1,12 +1,61 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Sun, Moon, TreePine, Sailboat, Cloud, Zap } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
-// --- PHOTO CLEANER (Ignores broken dicebear links from mock data) ---
-const getValidPhoto = (url) => {
-  if (!url || typeof url !== 'string' || url.includes('dicebear.com')) return null;
-  return url.startsWith('[') ? (url.match(/\]\((.*?)\)/)?.[1] || null) : url;
+// --- CUSTOM CAPTAIN HAT ICON ---
+const CaptainHatIcon = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
+    <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
+    <circle cx="12" cy="10" r="1.5" />
+  </svg>
+);
+
+// --- URL CLEANER ---
+const cleanPhotoUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('[')) {
+    const match = url.match(/\]\((.*?)\)/);
+    if (match && match[1]) return match[1];
+  }
+  return url;
+};
+
+// --- SAFE AVATAR COMPONENT ---
+const SafeAvatar = ({ url, name, role, className }) => {
+  const [imgError, setImgError] = React.useState(false);
+  
+  let cleanUrl = cleanPhotoUrl(url);
+
+  const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
+  const iconIndex = name ? name.length % ICONS.length : 0;
+  const iconName = ICONS[iconIndex];
+
+  const renderIcon = () => {
+    if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
+    if (iconName === 'Star') return <Star className={className} fill="currentColor" />;
+    if (iconName === 'Sun') return <Sun className={className} />;
+    if (iconName === 'Moon') return <Moon className={className} />;
+    if (iconName === 'TreePine') return <TreePine className={className} />;
+    if (iconName === 'Sailboat') return <Sailboat className={className} />;
+    if (iconName === 'Cloud') return <Cloud className={className} />;
+    if (iconName === 'Zap') return <Zap className={className} fill="currentColor" />;
+    return <User className={className} />;
+  };
+
+  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
+    return renderIcon();
+  }
+
+  return (
+    <img 
+      src={cleanUrl} 
+      alt={name || 'Avatar'} 
+      className={`h-full w-full object-cover bg-white ${className}`} 
+      onError={() => setImgError(true)} 
+    />
+  );
 };
 
 // ==========================================
@@ -154,7 +203,7 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
         <p className="text-teal-100 mb-6 relative z-10 text-sm">Top 3 earners with 10+ shifts qualify for monthly cash bonuses!</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
           {currentLeaderboard.map((winner, index) => (
-            <div key={winner.emp.id || Math.random().toString()} className={`${colors[index]} rounded-xl p-4 shadow-md border transform hover:-translate-y-1 transition duration-300 flex flex-col items-center text-center`}>
+            <div key={winner.emp.id || Math.random().toString()} className={`${colors[index]} rounded-xl p-4 shadow-md flex flex-col items-center text-center`}>
               {badgeIcons[index]}<div className="font-bold text-lg leading-tight">{String(winner.emp.name || 'Unknown')}</div>
               <div className="text-sm font-semibold opacity-90 mb-3">{index + 1}{index===0?'st':index===1?'nd':'rd'} Place</div>
               <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm flex items-center">+${Number(safeBonusSettings.monthly[index] || 0).toFixed(0)} Bonus</div>
@@ -253,10 +302,21 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   );
 }
 
-export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
-  const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [kilometers, setKilometers] = useState(''); const [description, setDescription] = useState('');
-  const safeExpenses = Array.isArray(myExpenses) ? myExpenses : []; const safeClients = Array.isArray(clients) ? clients : [];
-  const handleSubmit = (e) => { e.preventDefault(); if (!date || !clientId || !kilometers) return; if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description }); setDate(''); setClientId(''); setKilometers(''); setDescription(''); };
+export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense, getClientRemainingBalance }) {
+  const [date, setDate] = useState(''); 
+  const [clientId, setClientId] = useState(''); 
+  const [kilometers, setKilometers] = useState(''); 
+  const [description, setDescription] = useState('');
+  
+  const safeExpenses = Array.isArray(myExpenses) ? myExpenses : []; 
+  const safeClients = Array.isArray(clients) ? clients : [];
+  
+  const handleSubmit = (e) => { 
+    e.preventDefault(); 
+    if (!date || !clientId || !kilometers) return; 
+    if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description }); 
+    setDate(''); setClientId(''); setKilometers(''); setDescription(''); 
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
@@ -264,18 +324,22 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
       <div className="p-6 border-b border-slate-200 bg-slate-50/50">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required /></div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
               <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
-                <option value="" disabled>Select Client</option>
-                {safeClients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                <option value="" disabled>Select client</option>
+                {safeClients.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label><input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. Park trip" /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label><input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" placeholder="e.g. Park trip" /></div>
           </div>
           <div className="bg-amber-50 border border-amber-100 rounded p-2 text-amber-800 text-[10px] font-medium leading-tight mt-3">* Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client.</div>
           <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Log</button>
@@ -298,9 +362,15 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
   );
 }
 
-export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense }) {
-  const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [amount, setAmount] = useState(''); const [description, setDescription] = useState(''); const [receiptFile, setReceiptFile] = useState(null);
-  const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : []; const safeClients = Array.isArray(clients) ? clients : [];
+export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense, getClientRemainingBalance }) {
+  const [date, setDate] = useState(''); 
+  const [clientId, setClientId] = useState(''); 
+  const [amount, setAmount] = useState(''); 
+  const [description, setDescription] = useState(''); 
+  const [receiptFile, setReceiptFile] = useState(null);
+  
+  const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : []; 
+  const safeClients = Array.isArray(clients) ? clients : [];
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -315,18 +385,22 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
       <div className="p-6 border-b border-slate-200 bg-slate-50/50">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required /></div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
               <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
-                <option value="" disabled>Select Client</option>
-                {safeClients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                <option value="" disabled>Select client</option>
+                {safeClients.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. Lunch" /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" placeholder="e.g. Lunch" /></div>
           </div>
           <div className="mt-3">
             <label className="block text-xs font-medium text-slate-700 mb-1">Upload Receipt</label>
@@ -369,7 +443,7 @@ export function EmployeePaystubs({ myPaystubs = [] }) {
               return (
                 <div key={ps.id || Math.random()} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
                   <FileText className="h-8 w-8 text-teal-600 mr-3 opacity-70 group-hover:opacity-100 transition" />
-                  <div><div className="font-semibold text-slate-800 text-sm">{dateStr}</div><div className="text-xs text-slate-500 truncate w-32" title={ps.fileName}>{String(ps.fileName || 'Unnamed File')}</div></div>
+                  <div><div className="font-semibold text-slate-800 text-sm">{dateStr}</div><div className="text-xs text-slate-500 truncate w-32" title={String(ps.fileName || '')}>{String(ps.fileName || 'Unnamed File')}</div></div>
                   <Download className="h-4 w-4 text-slate-400 ml-auto group-hover:text-teal-600 transition" />
                 </div>
               );
@@ -409,7 +483,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
-  const finalPhotoUrl = getValidPhoto(currentUser.photoUrl);
+  const finalPhotoUrl = cleanPhotoUrl(currentUser.photoUrl);
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
@@ -482,7 +556,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
             <div className="relative mb-4 group">
               <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden">
-                {finalPhotoUrl ? <img src={finalPhotoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" /> : <User className="h-10 w-10" />}
+                <SafeAvatar url={currentUser.photoUrl} name={currentUser.name} role={currentUser.role} className="h-10 w-10" />
               </div>
               <label htmlFor="profile-upload" className="absolute bottom-0 right-0 bg-teal-600 p-1.5 rounded-full text-white cursor-pointer shadow-md hover:bg-teal-700 transition opacity-80 group-hover:opacity-100">
                 <Camera className="h-4 w-4" />
@@ -647,11 +721,13 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                     myExpenses={myExpenses} 
                     clients={safeClients} 
                     onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
+                    getClientRemainingBalance={getClientRemainingBalance}
                   />
                   <EmployeeClientExpenseLog 
                     myClientExpenses={myClientExpenses} 
                     clients={safeClients} 
                     onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} 
+                    getClientRemainingBalance={getClientRemainingBalance}
                   />
                 </div>
               )}

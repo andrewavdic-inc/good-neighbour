@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, MessageSquare, Search, UserMinus, FileText, Wallet, Info, BookOpen, AlertCircle, Phone, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Send, Download, TrendingUp, Trophy, Medal, Award, Activity, Sun, CheckCircle, XCircle } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, MessageSquare, Search, UserMinus, FileText, Wallet, Info, BookOpen, AlertCircle, Phone, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Send, Download, TrendingUp, Trophy, Medal, Award, Activity, Sun, CheckCircle, XCircle, Camera, Moon, TreePine, Sailboat, Cloud, Zap } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -31,7 +31,7 @@ const CaptainHatIcon = ({ className }) => (
   </svg>
 );
 
-// --- URL CLEANER ---
+// --- URL CLEANER & DYNAMIC AVATAR RENDERER ---
 const cleanPhotoUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('[')) {
@@ -39,6 +39,36 @@ const cleanPhotoUrl = (url) => {
     if (match && match[1]) return match[1];
   }
   return url;
+};
+
+const renderAvatar = (url, name, role, className) => {
+  let cleanUrl = cleanPhotoUrl(url);
+  
+  // Intercept broken dicebear URLs and map them to basic built-in icons
+  if (cleanUrl.includes('dicebear.com')) {
+    const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
+    const iconIndex = name ? name.length % ICONS.length : 0;
+    cleanUrl = `icon-${ICONS[iconIndex]}`;
+  }
+
+  if (cleanUrl.startsWith('icon-')) {
+    const iconName = cleanUrl.replace('icon-', '');
+    if (iconName === 'Star') return <Star className={className} fill="currentColor" />;
+    if (iconName === 'Sun') return <Sun className={className} />;
+    if (iconName === 'Moon') return <Moon className={className} />;
+    if (iconName === 'TreePine') return <TreePine className={className} />;
+    if (iconName === 'Sailboat') return <Sailboat className={className} />;
+    if (iconName === 'Cloud') return <Cloud className={className} />;
+    if (iconName === 'Zap') return <Zap className={className} fill="currentColor" />;
+  }
+
+  if (cleanUrl && cleanUrl.startsWith('blob:')) {
+    return <img src={cleanUrl} alt={name} className="h-full w-full object-cover" />;
+  }
+
+  // Fallbacks
+  if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
+  return <User className={className} />;
 };
 
 // --- FIREBASE INITIALIZATION ---
@@ -160,298 +190,77 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
 
 function ClientProfileModal({ client, remainingBalance, onClose }) {
   if (!client) return null;
-  const clientPhotoUrl = cleanPhotoUrl(client.photoUrl);
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden relative max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
-        <div className="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white shrink-0">
-          <div className="flex items-center space-x-3">
-            <Heart className="h-6 w-6 text-teal-200 fill-current" />
-            <h3 className="text-xl font-bold tracking-wide">Client Care Plan</h3>
-          </div>
-          <button onClick={onClose} className="p-2 bg-teal-800/50 hover:bg-teal-800 rounded-full transition text-teal-100 hover:text-white">
-            <XCircle className="h-5 w-5" />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white shrink-0">
+          <h3 className="text-lg font-bold flex items-center"><Heart className="h-5 w-5 mr-2 text-teal-200" /> Client Profile</h3>
+          <button onClick={onClose} className="text-teal-200 hover:text-white transition text-2xl leading-none">&times;</button>
         </div>
-
-        <div className="p-6 overflow-y-auto bg-slate-50 flex-1">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-            {clientPhotoUrl ? (
-              <img src={clientPhotoUrl} alt={client.name} className="h-24 w-24 rounded-full border-4 border-teal-50 object-cover shadow-sm" />
-            ) : (
-              <div className="h-24 w-24 rounded-full bg-teal-100 border-4 border-teal-50 flex items-center justify-center shadow-sm">
-                <User className="h-12 w-12 text-teal-600" />
-              </div>
-            )}
-            <div className="flex-1">
-              <h2 className="text-3xl font-extrabold text-slate-800 mb-3">{client.name}</h2>
-              <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  <Wallet className="h-3.5 w-3.5 mr-1.5" /> ${Number(remainingBalance || 0).toFixed(2)} Monthly Funds Left
-                </span>
+        <div className="p-6 space-y-6 overflow-y-auto">
+          <div className="flex items-center space-x-4">
+            <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-2 border-teal-100 overflow-hidden shrink-0">
+              {renderAvatar(client.photoUrl, client.name, '', "h-8 w-8")}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">{client.name}</h2>
+              <div className="flex flex-wrap gap-2 mt-1">
+                <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">
+                  <Wallet className="h-3 w-3 mr-1" /> ${Number(remainingBalance).toFixed(2)} Funds Left
+                </div>
                 {client.dateOfBirth && (
-                  <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                    <CalendarDays className="h-3.5 w-3.5 mr-1.5" /> DOB: {client.dateOfBirth}
-                  </span>
+                  <div className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                    <CalendarDays className="h-3 w-3 mr-1" /> DOB: {client.dateOfBirth}
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-teal-500"></div>
-                <h4 className="text-sm font-bold text-teal-800 uppercase tracking-wider mb-4 flex items-center">
-                  <Info className="h-5 w-5 mr-2" /> Care Notes & Routine
-                </h4>
-                <p className="text-slate-700 leading-relaxed whitespace-pre-wrap text-sm">
-                  {client.notes || 'No specific care notes or routine instructions provided.'}
-                </p>
-              </div>
-
-              {(client.phone || client.address) && (
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Client Location & Contact</h4>
-                  <div className="space-y-4">
-                    {client.phone && (
-                      <div className="flex items-center text-sm text-slate-700">
-                        <div className="p-2 bg-slate-100 rounded-lg mr-3"><Phone className="h-4 w-4 text-slate-500" /></div>
-                        <span className="font-semibold text-lg">{client.phone}</span>
-                      </div>
-                    )}
-                    {client.address && (
-                      <div className="flex items-start text-sm text-slate-700">
-                        <div className="p-2 bg-slate-100 rounded-lg mr-3 mt-0.5"><MapPin className="h-4 w-4 text-slate-500" /></div>
-                        <span className="font-medium leading-relaxed">{client.address}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+          {(client.phone || client.address) && (
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
+              {client.phone && <div className="text-sm text-slate-700 flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400" /> {client.phone}</div>}
+              {client.address && <div className="text-sm text-slate-700 flex items-center"><MapPin className="h-4 w-4 mr-2 text-slate-400" /> {client.address}</div>}
             </div>
+          )}
 
-            <div className="space-y-6">
-              <div className="bg-red-50 p-6 rounded-xl border border-red-100 shadow-sm">
-                <h4 className="text-sm font-bold text-red-800 uppercase tracking-wider mb-4 flex items-center">
-                  <ShieldAlert className="h-5 w-5 mr-2" /> Emergency Contacts
-                </h4>
-                <div className="space-y-4">
-                  {client.emergencyContactName ? (
-                    <div className="bg-white p-4 rounded-lg border border-red-100 shadow-sm relative overflow-hidden">
-                      <div className="absolute left-0 top-0 w-1 h-full bg-red-500"></div>
-                      <div className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Primary Contact</div>
-                      <div className="font-bold text-slate-800 text-base">{client.emergencyContactName}</div>
-                      <div className="text-xl font-black text-red-600 mt-1 flex items-center"><Phone className="h-5 w-5 mr-2" /> {client.emergencyContactPhone}</div>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-red-600 italic bg-white p-4 rounded-lg border border-red-100">No primary emergency contact listed.</div>
-                  )}
-
-                  {client.secondaryEmergencyName && (
-                    <div className="bg-white p-4 rounded-lg border border-red-100 shadow-sm opacity-90 relative overflow-hidden">
-                      <div className="absolute left-0 top-0 w-1 h-full bg-red-300"></div>
-                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Secondary Contact</div>
-                      <div className="font-bold text-slate-800">{client.secondaryEmergencyName}</div>
-                      <div className="text-lg font-bold text-red-600 mt-1 flex items-center"><Phone className="h-4 w-4 mr-2" /> {client.secondaryEmergencyPhone}</div>
-                    </div>
-                  )}
-                </div>
+          {client.accountHolderName && (
+            <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+              <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center"><User className="h-4 w-4 mr-1.5" /> Account Holder</h4>
+              <div className="space-y-1">
+                <div className="font-semibold text-indigo-900">{client.accountHolderName}</div>
+                {client.accountHolderPhone && <div className="text-sm text-indigo-700 flex items-center"><Phone className="h-3 w-3 mr-1" /> {client.accountHolderPhone}</div>}
+                {client.accountHolderEmail && <div className="text-sm text-indigo-700 flex items-center"><Mail className="h-3 w-3 mr-1" /> {client.accountHolderEmail}</div>}
+                {client.accountHolderAddress && <div className="text-sm text-indigo-700 flex items-center"><MapPin className="h-3 w-3 mr-1" /> {client.accountHolderAddress}</div>}
               </div>
-
-              {client.accountHolderName && (
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                  <h4 className="text-sm font-bold text-indigo-800 uppercase tracking-wider mb-4 flex items-center">
-                    <User className="h-5 w-5 mr-2 text-indigo-500" /> Account Holder
-                  </h4>
-                  <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 space-y-3">
-                    <div className="font-extrabold text-slate-800 text-base pb-2 border-b border-indigo-100/50">{client.accountHolderName}</div>
-                    {client.accountHolderPhone && <div className="flex items-center text-sm text-slate-700 font-medium"><Phone className="h-4 w-4 mr-2.5 text-indigo-400" /> {client.accountHolderPhone}</div>}
-                    {client.accountHolderEmail && <div className="flex items-center text-sm text-slate-700 font-medium"><Mail className="h-4 w-4 mr-2.5 text-indigo-400" /> {client.accountHolderEmail}</div>}
-                    {client.accountHolderAddress && <div className="flex items-start text-sm text-slate-700 font-medium mt-1"><MapPin className="h-4 w-4 mr-2.5 text-indigo-400 mt-0.5" /> <span className="leading-relaxed">{client.accountHolderAddress}</span></div>}
-                  </div>
-                </div>
-              )}
             </div>
+          )}
+
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Info className="h-4 w-4 mr-1.5" /> Care Notes & Routine</h4>
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions provided.'}</p>
           </div>
-        </div>
-
-        <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end shrink-0">
-          <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg hover:bg-slate-200 transition shadow-sm">
-            Close Care Plan
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ==========================================
-// ADMIN DASHBOARD
-// ==========================================
-function AdminDashboard({ shifts = [], employees = [], clients = [], expenses = [], clientExpenses = [], paystubs = [], timeOffLogs = [], messages = [], documents = [], currentUser, payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, onAddEmployee, onRemoveEmployee, updateEmployee, onAddClient, onRemoveClient, updateClient, onUpdateExpense, onUpdateClientExpense, onAddPaystub, onRemovePaystub, onAddTimeOffLog, onRemoveTimeOffLog, onAddDocument, onRemoveDocument, onSendMessage, onAddShift, onRemoveShift, onMarkShiftOpen }) {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedDateStr, setSelectedDateStr] = useState('');
-  const [activeTab, setActiveTab] = useState('schedule');
-  const [scheduleSearch, setScheduleSearch] = useState('');
-
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-
-  const handleDayClick = (day) => {
-    const formattedDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    setSelectedDateStr(formattedDate);
-    setIsModalOpen(true);
-  };
-
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
-
-  const safeShifts = Array.isArray(shifts) ? shifts : [];
-
-  const renderAdminTab = () => {
-    switch (activeTab) {
-      case 'employees': return <EmployeeManager employees={employees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
-      case 'clients': return <ClientManager clients={clients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} />;
-      case 'client-funds': return <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />;
-      case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={employees} clients={clients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
-      case 'earnings': return <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
-      case 'timeoff': return <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />;
-      case 'paystubs': return <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
-      case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />;
-      case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>;
-      case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} />;
-      case 'schedule':
-      default: return (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
-            <div className="flex items-center space-x-3 w-full sm:w-auto">
-              <label htmlFor="schedule-search" className="text-sm font-semibold text-slate-700 whitespace-nowrap">Filter Schedule:</label>
-              <div className="relative w-full sm:w-72">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div>
-                <input type="text" placeholder="Search employee or client..." value={scheduleSearch} onChange={(e) => setScheduleSearch(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition" />
+          <div className="bg-red-50 p-4 rounded-lg border border-red-100">
+            <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center"><Phone className="h-4 w-4 mr-1.5" /> Emergency Contacts</h4>
+            {client.emergencyContactName ? (
+              <div className="mb-3 border-b border-red-100 pb-3">
+                <div className="text-sm font-semibold text-red-900">Primary: {client.emergencyContactName}</div>
+                <div className="text-lg font-bold text-red-700 mt-0.5">{client.emergencyContactPhone}</div>
               </div>
-            </div>
-            {scheduleSearch.trim() !== '' && (
-              <div className="text-xs text-teal-700 font-semibold bg-teal-50 px-3 py-1.5 rounded-full border border-teal-100 whitespace-nowrap">Filtered View Active</div>
+            ) : <span className="text-sm text-red-600 italic block mb-2">No primary contact listed.</span>}
+            
+            {client.secondaryEmergencyName && (
+              <div>
+                <div className="text-sm font-semibold text-red-900">Secondary: {client.secondaryEmergencyName}</div>
+                <div className="text-md font-bold text-red-700 mt-0.5">{client.secondaryEmergencyPhone}</div>
+              </div>
             )}
           </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-              <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{monthNames[month]} {year}</h2>
-              <div className="flex space-x-2">
-                <button onClick={prevMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
-                <button onClick={nextMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
-              {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[120px] opacity-50 p-2"></div>))}
-              {daysArray.map(day => {
-                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
-                const holiday = getHoliday(dateStr);
-                
-                const filteredShifts = safeShifts.filter(s => {
-                  if (!s || !scheduleSearch.trim()) return true;
-                  const emp = employees.find(e => e.id === s.employeeId);
-                  const client = clients.find(c => c.id === s.clientId);
-                  const searchLower = scheduleSearch.toLowerCase();
-                  return ((emp && emp.name && String(emp.name).toLowerCase().includes(searchLower)) || (client && client.name && String(client.name).toLowerCase().includes(searchLower)));
-                });
-                const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
-                
-                return (
-                  <div key={day} onClick={() => handleDayClick(day)} className={`min-h-[120px] p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
-                    <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
-                      <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
-                      <div className="flex flex-col items-end gap-1">
-                        {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {holiday.name.toUpperCase()}</span>)}
-                        {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      {dayShifts.map(shift => {
-                        const isOpen = shift.employeeId === 'unassigned';
-                        const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
-                        const client = clients.find(c => c.id === shift.clientId);
-                        return (
-                          <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${String(client?.name || 'Unknown')}: ${shift.startTime}-${shift.endTime}`}>
-                            <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{isOpen ? '🚨 OPEN SHIFT' : String(emp?.name?.split(' ')[0] || 'Unknown')}</div>
-                            <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{String(client?.name?.split(' ')[0] || 'Unknown Client')}</span></div>
-                            <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
-                            <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
-                              {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
-                              <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </div>
-      );
-    }
-  };
-
-  const adminTabs = [
-    { id: 'schedule', icon: CalendarIcon, label: 'Schedule' },
-    { id: 'employees', icon: Users, label: 'Employees' },
-    { id: 'clients', icon: Heart, label: 'Clients' },
-    { id: 'client-funds', icon: Wallet, label: 'Client Funds' },
-    { id: 'expenses', icon: Receipt, label: 'Reimbursements' },
-    { id: 'earnings', icon: Coins, label: 'Earnings' },
-    { id: 'timeoff', icon: CalendarDays, label: 'Time Off' },
-    { id: 'paystubs', icon: FileText, label: 'Paystubs' },
-    { id: 'documents', icon: BookOpen, label: 'Documents' },
-    { id: 'announcements', icon: MessageSquare, label: 'Announcements' },
-    { id: 'settings', icon: Settings, label: 'Settings' }
-  ];
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Admin Dashboard</h1>
-          <p className="text-slate-500">Manage schedule and personnel.</p>
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Close</button>
         </div>
-        {activeTab === 'schedule' && (
-          <button onClick={() => handleDayClick(new Date().getDate() || 1)} className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition">
-            <Plus className="h-5 w-5" /><span>Add Shift</span>
-          </button>
-        )}
       </div>
-
-      <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide pb-2">
-        {adminTabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
-            <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
-          </button>
-        ))}
-      </div>
-      
-      {renderAdminTab()}
-
-      {isModalOpen && (
-        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={employees} clients={clients} onSave={onAddShift} />
-      )}
     </div>
   );
 }
@@ -464,6 +273,11 @@ export default function App() {
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [isDbReady, setIsDbReady] = useState(false);
   const [viewMode, setViewMode] = useState('employee');
+  const [activeAdminTab, setActiveAdminTab] = useState('schedule');
+  const [selectedDateStr, setSelectedDateStr] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [scheduleSearch, setScheduleSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
   
   // App State
@@ -530,37 +344,17 @@ export default function App() {
     return () => unsubs.forEach(unsub => unsub());
   }, [firebaseUser]);
 
-  const handleSeedData = async () => {
-    if (!firebaseUser || !db) return;
-    try {
-      const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, String(docId));
-
-      for (const e of MOCK_EMPLOYEES) await setDoc(getDocRef('gn_employees', e.id), e);
-      for (const c of MOCK_CLIENTS) await setDoc(getDocRef('gn_clients', c.id), c);
-      for (const s of INITIAL_SHIFTS) await setDoc(getDocRef('gn_shifts', s.id.toString()), { ...s, id: s.id.toString() });
-      for (const ex of INITIAL_EXPENSES) await setDoc(getDocRef('gn_expenses', ex.id.toString()), { ...ex, id: ex.id.toString() });
-      for (const ce of INITIAL_CLIENT_EXPENSES) await setDoc(getDocRef('gn_clientExpenses', ce.id.toString()), { ...ce, id: ce.id.toString() });
-      for (const p of INITIAL_PAYSTUBS) await setDoc(getDocRef('gn_paystubs', p.id.toString()), { ...p, id: p.id.toString() });
-      for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
-      for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
-      
-      alert("Demo database initialized successfully! You can now log in.");
-    } catch (err) {
-      console.error("Error seeding data:", err);
-      alert("Error seeding data. Check console logs.");
-    }
-  };
-
   const handleLogin = (username, password) => {
     const safeEmployees = Array.isArray(employees) ? employees : [];
     const foundEmp = safeEmployees.find(e => e && e.username && String(e.username).toLowerCase() === String(username).toLowerCase() && e.password === password);
     if (foundEmp) {
       setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl });
       setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
+      setActiveAdminTab('schedule');
     } else { alert("Invalid credentials. Please check your username and password."); }
   };
 
-  const handleLogout = () => { setCurrentUser(null); setViewMode('employee'); };
+  const handleLogout = () => { setCurrentUser(null); setViewMode('employee'); setActiveAdminTab('schedule'); };
 
   const getDocRef = (cName, dId) => doc(db, 'artifacts', appId, 'public', 'data', cName, String(dId));
   
@@ -570,14 +364,6 @@ export default function App() {
     if(action === 'set') await setDoc(ref, data);
     if(action === 'update') await updateDoc(ref, data);
     if(action === 'delete') await deleteDoc(ref);
-  };
-
-  const handleSaveSettings = async (field, value) => {
-    if (!firebaseUser) return;
-    if (field === 'payPeriodStart') setPayPeriodStart(value);
-    if (field === 'isBonusActive') setIsBonusActive(value);
-    if (field === 'bonusAmounts') setBonusSettings(value);
-    await setDoc(getDocRef('gn_settings', 'global'), { payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, isBonusActive: field === 'isBonusActive' ? value : isBonusActive, bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings }, { merge: true });
   };
 
   const getClientRemainingBalance = (clientId) => {
@@ -609,12 +395,37 @@ export default function App() {
     return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
   };
 
+  // Helper for DB Resets
+  const handleSeedData = async () => {
+    if (!firebaseUser || !db) return;
+    try {
+      for (const e of MOCK_EMPLOYEES) await setDoc(getDocRef('gn_employees', e.id), e);
+      for (const c of MOCK_CLIENTS) await setDoc(getDocRef('gn_clients', c.id), c);
+      for (const s of INITIAL_SHIFTS) await setDoc(getDocRef('gn_shifts', s.id.toString()), { ...s, id: s.id.toString() });
+      for (const ex of INITIAL_EXPENSES) await setDoc(getDocRef('gn_expenses', ex.id.toString()), { ...ex, id: ex.id.toString() });
+      for (const ce of INITIAL_CLIENT_EXPENSES) await setDoc(getDocRef('gn_clientExpenses', ce.id.toString()), { ...ce, id: ce.id.toString() });
+      for (const p of INITIAL_PAYSTUBS) await setDoc(getDocRef('gn_paystubs', p.id.toString()), { ...p, id: p.id.toString() });
+      for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
+      for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
+      alert("Demo database initialized successfully!");
+    } catch (err) {
+      console.error("Error seeding data:", err);
+      alert("Error seeding data. Check console logs.");
+    }
+  };
+
   if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={Boolean(isDbReady)} hasData={Boolean(Array.isArray(employees) && employees.length > 0)} onSeedData={handleSeedData} />;
 
   const isAdmin = String(currentUser.role).includes('Admin');
   const showAdminView = isAdmin && viewMode === 'admin';
 
-  const finalCurrentUserPhotoUrl = cleanPhotoUrl(currentUser.photoUrl);
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
@@ -622,16 +433,14 @@ export default function App() {
         <div className="font-bold text-xl flex items-center"><Briefcase className="mr-2 h-6 w-6 text-teal-200"/> Good Neighbour</div>
         <div className="flex items-center space-x-4">
           {isAdmin && (
-            <button onClick={() => { setViewMode(viewMode === 'admin' ? 'employee' : 'admin'); }} className="text-xs bg-teal-800 hover:bg-teal-900 px-3 py-1.5 rounded font-bold transition shadow-sm">
+            <button onClick={() => { setViewMode(viewMode === 'admin' ? 'employee' : 'admin'); setActiveAdminTab('schedule'); }} className="text-xs bg-teal-800 hover:bg-teal-900 px-3 py-1.5 rounded font-bold transition shadow-sm">
               {viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}
             </button>
           )}
           <div className="flex items-center text-sm hidden sm:flex">
-            {finalCurrentUserPhotoUrl ? (
-              <img src={finalCurrentUserPhotoUrl} alt="Avatar" className="h-6 w-6 rounded-full mr-2 object-cover border border-teal-500 bg-white" />
-            ) : (
-              String(currentUser.role).includes('Admin') ? <CaptainHatIcon className="mr-1.5 h-5 w-5"/> : <User className="mr-1.5 h-4 w-4"/> 
-            )}
+            <div className="h-6 w-6 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-500 overflow-hidden mr-2 shrink-0">
+              {renderAvatar(currentUser.photoUrl, currentUser.name, currentUser.role, "h-4 w-4")}
+            </div>
             {String(currentUser.name)}
           </div>
           <button onClick={handleLogout} className="p-2 rounded-full hover:bg-teal-600 transition" title="Logout"><LogOut className="h-5 w-5"/></button>
@@ -640,18 +449,115 @@ export default function App() {
 
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {showAdminView ? (
-          <AdminDashboard 
-            shifts={shifts} employees={employees} clients={clients} expenses={expenses} clientExpenses={clientExpenses} paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} currentUser={currentUser} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
-            onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} 
-            onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} 
-            onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} 
-            onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} 
-            onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} 
-            onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} 
-            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
-            setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
-            onAddShift={(d) => runMutation('gn_shifts', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveShift={(id) => runMutation('gn_shifts', id, 'delete')} onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
-          />
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-800">Admin Dashboard</h1>
+                <p className="text-slate-500">Manage schedule and personnel.</p>
+              </div>
+              {activeAdminTab === 'schedule' && (
+                <button onClick={() => { setSelectedDateStr(`${year}-${String(month + 1).padStart(2, '0')}-01`); setIsModalOpen(true); }} className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition">
+                  <Plus className="h-5 w-5" /><span>Add Shift</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide pb-2">
+              {[ {id: 'schedule', icon: CalendarIcon, label: 'Schedule'}, {id: 'employees', icon: Users, label: 'Employees'}, {id: 'clients', icon: Heart, label: 'Clients'}, {id: 'client-funds', icon: Wallet, label: 'Client Funds'}, {id: 'expenses', icon: Receipt, label: 'Reimbursements'}, {id: 'earnings', icon: Coins, label: 'Earnings'}, {id: 'timeoff', icon: CalendarDays, label: 'Time Off'}, {id: 'paystubs', icon: FileText, label: 'Paystubs'}, {id: 'documents', icon: BookOpen, label: 'Documents'}, {id: 'announcements', icon: MessageSquare, label: 'Announcements'}, {id: 'settings', icon: Settings, label: 'Settings'}].map(tab => (
+                <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {activeAdminTab === 'employees' && <EmployeeManager employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} currentUser={currentUser} />}
+            {activeAdminTab === 'clients' && <ClientManager clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} />}
+            {activeAdminTab === 'client-funds' && <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />}
+            {activeAdminTab === 'expenses' && <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={employees} clients={clients} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} />}
+            {activeAdminTab === 'earnings' && <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />}
+            {activeAdminTab === 'timeoff' && <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOff={(id) => runMutation('gn_timeOffLogs', id, 'delete')} />}
+            {activeAdminTab === 'paystubs' && <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} />}
+            {activeAdminTab === 'documents' && <DocumentManager documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} isAdmin={true} />}
+            {activeAdminTab === 'announcements' && <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} employees={employees} /></div>}
+            {activeAdminTab === 'settings' && <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => { setPayPeriodStart(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart: v, isBonusActive, bonusAmounts: bonusSettings }); }} isBonusActive={isBonusActive} setIsBonusActive={(v) => { setIsBonusActive(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart, isBonusActive: v, bonusAmounts: bonusSettings }); }} bonusSettings={bonusSettings} setBonusSettings={(v) => { setBonusSettings(v); runMutation('gn_settings', 'global', 'set', { payPeriodStart, isBonusActive, bonusAmounts: v }); }} />}
+            
+            {activeAdminTab === 'schedule' && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
+                  <div className="flex items-center space-x-3 w-full sm:w-auto">
+                    <label htmlFor="schedule-search" className="text-sm font-semibold text-slate-700 whitespace-nowrap">Filter Schedule:</label>
+                    <div className="relative w-full sm:w-72">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div>
+                      <input type="text" placeholder="Search employee or client..." value={scheduleSearch} onChange={(e) => setScheduleSearch(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition" />
+                    </div>
+                  </div>
+                  {scheduleSearch.trim() !== '' && (
+                    <div className="text-xs text-teal-700 font-semibold bg-teal-50 px-3 py-1.5 rounded-full border border-teal-100 whitespace-nowrap">Filtered View Active</div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{monthNames[month]} {year}</h2>
+                    <div className="flex space-x-2">
+                      <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
+                      <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (<div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>))}
+                  </div>
+                  <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
+                    {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[120px] opacity-50 p-2"></div>))}
+                    {daysArray.map(day => {
+                      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
+                      const holiday = getHoliday(dateStr);
+                      
+                      const filteredShifts = shifts.filter(s => {
+                        if (!scheduleSearch.trim()) return true;
+                        const emp = employees.find(e => e.id === s.employeeId);
+                        const client = clients.find(c => c.id === s.clientId);
+                        const searchLower = scheduleSearch.toLowerCase();
+                        return ((emp && emp.name && String(emp.name).toLowerCase().includes(searchLower)) || (client && client.name && String(client.name).toLowerCase().includes(searchLower)));
+                      });
+                      const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
+                      
+                      return (
+                        <div key={day} onClick={() => handleDayClick(day)} className={`min-h-[120px] p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
+                          <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
+                            <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
+                            <div className="flex flex-col items-end gap-1">
+                              {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
+                              {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            {dayShifts.map(shift => {
+                              const isOpen = shift.employeeId === 'unassigned';
+                              const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
+                              const client = clients.find(c => c.id === shift.clientId);
+                              return (
+                                <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : emp?.name || 'Unknown'} with ${client?.name || 'Unknown'}: ${shift.startTime}-${shift.endTime}`}>
+                                  <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{isOpen ? '🚨 OPEN SHIFT' : emp?.name?.split(' ')[0] || 'Unknown'}</div>
+                                  <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{client?.name?.split(' ')[0] || 'Unknown Client'}</span></div>
+                                  <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
+                                  <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
+                                    {!isOpen && (<button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
+                                    <button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'delete'); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <EmployeeDashboard 
             shifts={shifts} employees={employees} currentUser={currentUser} clients={clients} expenses={expenses} 
@@ -661,8 +567,7 @@ export default function App() {
             paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
             onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
             payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
-            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
-            setSelectedClient={setSelectedClient}
+            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} setSelectedClient={setSelectedClient}
             getClientRemainingBalance={getClientRemainingBalance}
             onUpdateProfile={(id, d) => {
               runMutation('gn_employees', id, 'update', d);

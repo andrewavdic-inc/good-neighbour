@@ -10,22 +10,22 @@ const CaptainHatIcon = ({ className }) => (
   </svg>
 );
 
-// --- DYNAMIC AVATAR RENDERER ---
-const renderAvatar = (url, name, role, className) => {
+// --- SAFE AVATAR COMPONENT (CATCHES BROKEN LINKS) ---
+const SafeAvatar = ({ url, name, role, className }) => {
+  const [imgError, setImgError] = React.useState(false);
+  
   let cleanUrl = url || '';
   if (cleanUrl.startsWith('[')) {
     const match = cleanUrl.match(/\]\((.*?)\)/);
     if (match && match[1]) cleanUrl = match[1];
   }
 
-  // Intercept broken dicebear URLs or empty URLs and assign a random nature/space icon
-  if (cleanUrl.includes('dicebear.com') || cleanUrl === '') {
+  const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
+  const iconIndex = name ? name.length % ICONS.length : 0;
+  const iconName = ICONS[iconIndex];
+
+  const renderIcon = () => {
     if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
-    
-    const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
-    const iconIndex = name ? name.length % ICONS.length : 0;
-    const iconName = ICONS[iconIndex];
-    
     if (iconName === 'Star') return <Star className={className} fill="currentColor" />;
     if (iconName === 'Sun') return <Sun className={className} />;
     if (iconName === 'Moon') return <Moon className={className} />;
@@ -33,14 +33,21 @@ const renderAvatar = (url, name, role, className) => {
     if (iconName === 'Sailboat') return <Sailboat className={className} />;
     if (iconName === 'Cloud') return <Cloud className={className} />;
     if (iconName === 'Zap') return <Zap className={className} fill="currentColor" />;
+    return <User className={className} />;
+  };
+
+  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
+    return renderIcon();
   }
 
-  if (cleanUrl.startsWith('blob:') || cleanUrl.startsWith('http')) {
-    return <img src={cleanUrl} alt={name} className="h-full w-full object-cover bg-white" />;
-  }
-
-  if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
-  return <User className={className} />;
+  return (
+    <img 
+      src={cleanUrl} 
+      alt={name || 'Avatar'} 
+      className="h-full w-full object-cover bg-white" 
+      onError={() => setImgError(true)} 
+    />
+  );
 };
 
 const ONTARIO_REQUIREMENTS = [
@@ -183,7 +190,7 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
       <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[700px]">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
           <div className="flex items-center"><Users className="h-5 w-5 mr-2 text-teal-600" /><h2 className="text-lg font-semibold text-slate-800">Staff Directory</h2><span className="ml-3 bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-0.5 rounded-full">{filteredEmployees.length} Members</span></div>
-          <div className="relative w-full sm:w-64"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div><input type="text" placeholder="Search staff..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md text-sm" /></div>
+          <div className="relative w-full sm:w-64"><div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div><input type="text" placeholder="Search staff..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-teal-500 focus:border-teal-500 sm:text-sm transition" /></div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
@@ -203,7 +210,7 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
                   
                   <div className="flex items-center space-x-4 mb-4 pr-16">
                     <div className="h-14 w-14 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-2 border-teal-50 shadow-sm shrink-0 overflow-hidden">
-                      {renderAvatar(emp.photoUrl, emp.name, emp.role, "h-7 w-7")}
+                      <SafeAvatar url={emp.photoUrl} name={emp.name} role={emp.role} className="h-7 w-7" />
                     </div>
                     <div>
                       <h3 className="font-bold text-slate-800 text-lg leading-tight">{String(emp.name)}</h3>

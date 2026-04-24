@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, MessageSquare, Search, UserMinus, FileText, Wallet, Info, BookOpen, AlertCircle, Phone, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Send, Download, TrendingUp, Trophy, Medal, Award, Activity, Sun, CheckCircle, XCircle, Camera, Moon, TreePine, Sailboat, Cloud, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, MessageSquare, Search, UserMinus, FileText, Wallet, Info, BookOpen, AlertCircle, Phone, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Send, Download, TrendingUp, Trophy, Medal, Award, Activity, Sun, CheckCircle, XCircle, Camera, Moon, TreePine, Sailboat, Cloud, Zap, ShieldAlert } from 'lucide-react';
 
-// --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
@@ -24,35 +23,29 @@ import EmployeeDashboard from './components/EmployeePortal';
 
 // --- CUSTOM CAPTAIN HAT ICON ---
 const CaptainHatIcon = ({ className }) => (
-  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
     <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
     <circle cx="12" cy="10" r="1.5" />
   </svg>
 );
 
-// --- URL CLEANER & DYNAMIC AVATAR RENDERER ---
-const cleanPhotoUrl = (url) => {
-  if (!url) return '';
-  if (url.startsWith('[')) {
-    const match = url.match(/\]\((.*?)\)/);
-    if (match && match[1]) return match[1];
-  }
-  return url;
-};
-
-const renderAvatar = (url, name, role, className) => {
-  let cleanUrl = cleanPhotoUrl(url);
+// --- SAFE AVATAR COMPONENT (CATCHES BROKEN LINKS) ---
+const SafeAvatar = ({ url, name, role, className }) => {
+  const [imgError, setImgError] = React.useState(false);
   
-  // Intercept broken dicebear URLs and map them to basic built-in icons
-  if (cleanUrl.includes('dicebear.com')) {
-    const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
-    const iconIndex = name ? name.length % ICONS.length : 0;
-    cleanUrl = `icon-${ICONS[iconIndex]}`;
+  let cleanUrl = url || '';
+  if (cleanUrl.startsWith('[')) {
+    const match = cleanUrl.match(/\]\((.*?)\)/);
+    if (match && match[1]) cleanUrl = match[1];
   }
 
-  if (cleanUrl.startsWith('icon-')) {
-    const iconName = cleanUrl.replace('icon-', '');
+  const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
+  const iconIndex = name ? name.length % ICONS.length : 0;
+  const iconName = ICONS[iconIndex];
+
+  const renderIcon = () => {
+    if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
     if (iconName === 'Star') return <Star className={className} fill="currentColor" />;
     if (iconName === 'Sun') return <Sun className={className} />;
     if (iconName === 'Moon') return <Moon className={className} />;
@@ -60,16 +53,23 @@ const renderAvatar = (url, name, role, className) => {
     if (iconName === 'Sailboat') return <Sailboat className={className} />;
     if (iconName === 'Cloud') return <Cloud className={className} />;
     if (iconName === 'Zap') return <Zap className={className} fill="currentColor" />;
+    return <User className={className} />;
+  };
+
+  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
+    return renderIcon();
   }
 
-  if (cleanUrl && cleanUrl.startsWith('blob:')) {
-    return <img src={cleanUrl} alt={name} className="h-full w-full object-cover" />;
-  }
-
-  // Fallbacks
-  if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
-  return <User className={className} />;
+  return (
+    <img 
+      src={cleanUrl} 
+      alt={name || 'Avatar'} 
+      className="h-full w-full object-cover bg-white" 
+      onError={() => setImgError(true)} 
+    />
+  );
 };
+
 
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
@@ -200,7 +200,8 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
         <div className="p-6 space-y-6 overflow-y-auto">
           <div className="flex items-center space-x-4">
             <div className="h-16 w-16 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-2 border-teal-100 overflow-hidden shrink-0">
-              {renderAvatar(client.photoUrl, client.name, '', "h-8 w-8")}
+              {/* DYNAMIC AVATAR */}
+              <SafeAvatar url={client.photoUrl} name={client.name} role="" className="h-8 w-8" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-800">{client.name}</h2>
@@ -241,7 +242,7 @@ function ClientProfileModal({ client, remainingBalance, onClose }) {
             <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{client.notes || 'No special instructions provided.'}</p>
           </div>
           <div className="bg-red-50 p-4 rounded-lg border border-red-100">
-            <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center"><Phone className="h-4 w-4 mr-1.5" /> Emergency Contacts</h4>
+            <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center"><ShieldAlert className="h-4 w-4 mr-1.5" /> Emergency Contacts</h4>
             {client.emergencyContactName ? (
               <div className="mb-3 border-b border-red-100 pb-3">
                 <div className="text-sm font-semibold text-red-900">Primary: {client.emergencyContactName}</div>
@@ -418,14 +419,8 @@ export default function App() {
 
   const isAdmin = String(currentUser.role).includes('Admin');
   const showAdminView = isAdmin && viewMode === 'admin';
-
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
@@ -438,8 +433,9 @@ export default function App() {
             </button>
           )}
           <div className="flex items-center text-sm hidden sm:flex">
-            <div className="h-6 w-6 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-500 overflow-hidden mr-2 shrink-0">
-              {renderAvatar(currentUser.photoUrl, currentUser.name, currentUser.role, "h-4 w-4")}
+            <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-500 overflow-hidden mr-2 shrink-0">
+              {/* DYNAMIC AVATAR */}
+              <SafeAvatar url={currentUser.photoUrl} name={currentUser.name} role={currentUser.role} className="h-4 w-4" />
             </div>
             {String(currentUser.name)}
           </div>
@@ -505,15 +501,15 @@ export default function App() {
                     </div>
                   </div>
                   <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (<div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>))}
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                      <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
+                    ))}
                   </div>
                   <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
-                    {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[120px] opacity-50 p-2"></div>))}
-                    {daysArray.map(day => {
+                    {Array.from({ length: new Date(year, month, 1).getDay() }, (_, i) => i).map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[120px] opacity-50 p-2"></div>))}
+                    {Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
                       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                      const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
                       const holiday = getHoliday(dateStr);
-                      
                       const filteredShifts = shifts.filter(s => {
                         if (!scheduleSearch.trim()) return true;
                         const emp = employees.find(e => e.id === s.employeeId);
@@ -524,12 +520,12 @@ export default function App() {
                       const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
                       
                       return (
-                        <div key={day} onClick={() => handleDayClick(day)} className={`min-h-[120px] p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
+                        <div key={day} onClick={() => { setSelectedDateStr(dateStr); setIsModalOpen(true); }} className={`min-h-[120px] p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
                           <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
                             <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
                             <div className="flex flex-col items-end gap-1">
-                              {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
-                              {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
+                              {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {holiday.name.toUpperCase()}</span>)}
+                              {isBiweeklyPayday(dateStr, payPeriodStart) && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
                             </div>
                           </div>
                           <div className="space-y-1">
@@ -538,9 +534,9 @@ export default function App() {
                               const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
                               const client = clients.find(c => c.id === shift.clientId);
                               return (
-                                <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : emp?.name || 'Unknown'} with ${client?.name || 'Unknown'}: ${shift.startTime}-${shift.endTime}`}>
-                                  <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{isOpen ? '🚨 OPEN SHIFT' : emp?.name?.split(' ')[0] || 'Unknown'}</div>
-                                  <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{client?.name?.split(' ')[0] || 'Unknown Client'}</span></div>
+                                <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`}>
+                                  <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{isOpen ? '🚨 OPEN SHIFT' : String(emp?.name?.split(' ')[0] || 'Unknown')}</div>
+                                  <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{String(client?.name?.split(' ')[0] || 'Unknown Client')}</span></div>
                                   <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
                                   <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
                                     {!isOpen && (<button onClick={(e) => { e.stopPropagation(); runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
@@ -567,7 +563,8 @@ export default function App() {
             paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
             onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
             payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
-            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} setSelectedClient={setSelectedClient}
+            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
+            setSelectedClient={setSelectedClient}
             getClientRemainingBalance={getClientRemainingBalance}
             onUpdateProfile={(id, d) => {
               runMutation('gn_employees', id, 'update', d);

@@ -12,19 +12,22 @@ const CaptainHatIcon = ({ className }) => (
   </svg>
 );
 
-// --- DYNAMIC AVATAR RENDERER ---
-const renderAvatar = (url, name, role, className) => {
+// --- SAFE AVATAR COMPONENT (CATCHES BROKEN LINKS) ---
+const SafeAvatar = ({ url, name, role, className }) => {
+  const [imgError, setImgError] = React.useState(false);
+  
   let cleanUrl = url || '';
   if (cleanUrl.startsWith('[')) {
     const match = cleanUrl.match(/\]\((.*?)\)/);
     if (match && match[1]) cleanUrl = match[1];
   }
 
-  if (cleanUrl.includes('dicebear.com') || cleanUrl === '') {
+  const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
+  const iconIndex = name ? name.length % ICONS.length : 0;
+  const iconName = ICONS[iconIndex];
+
+  const renderIcon = () => {
     if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
-    const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
-    const iconIndex = name ? name.length % ICONS.length : 0;
-    const iconName = ICONS[iconIndex];
     if (iconName === 'Star') return <Star className={className} fill="currentColor" />;
     if (iconName === 'Sun') return <Sun className={className} />;
     if (iconName === 'Moon') return <Moon className={className} />;
@@ -32,14 +35,21 @@ const renderAvatar = (url, name, role, className) => {
     if (iconName === 'Sailboat') return <Sailboat className={className} />;
     if (iconName === 'Cloud') return <Cloud className={className} />;
     if (iconName === 'Zap') return <Zap className={className} fill="currentColor" />;
+    return <User className={className} />;
+  };
+
+  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
+    return renderIcon();
   }
 
-  if (cleanUrl.startsWith('blob:') || cleanUrl.startsWith('http')) {
-    return <img src={cleanUrl} alt={name} className="h-full w-full object-cover bg-white" />;
-  }
-
-  if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
-  return <User className={className} />;
+  return (
+    <img 
+      src={cleanUrl} 
+      alt={name || 'Avatar'} 
+      className="h-full w-full object-cover bg-white" 
+      onError={() => setImgError(true)} 
+    />
+  );
 };
 
 // ==========================================
@@ -69,7 +79,11 @@ const parseLocalSafe = (dateStr) => {
 const safeSortByDateDesc = (arr) => {
   if (!arr || !Array.isArray(arr)) return [];
   try {
-    return [...arr].filter(Boolean).sort((a, b) => parseLocalSafe(b.date).getTime() - parseLocalSafe(a.date).getTime());
+    return [...arr].filter(Boolean).sort((a, b) => {
+      const dA = parseLocalSafe(a.date).getTime();
+      const dB = parseLocalSafe(b.date).getTime();
+      return dB - dA;
+    });
   } catch (e) { return []; }
 };
 
@@ -182,10 +196,9 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
         <h2 className="text-2xl font-bold mb-2 relative z-10 flex items-center"><Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> {String(now.toLocaleString('default', { month: 'long' }))} Leaderboard</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
           {currentLeaderboard.map((winner, index) => (
-            <div key={winner.emp.id || Math.random().toString()} className={`${colors[index]} rounded-xl p-4 shadow-md border transform hover:-translate-y-1 transition duration-300 flex flex-col items-center text-center`}>
-              {badgeIcons[index]}<div className="font-bold text-lg leading-tight">{String(winner.emp.name || 'Unknown')}</div>
-              <div className="text-sm font-semibold opacity-90 mb-3">{index + 1}{index===0?'st':index===1?'nd':'rd'} Place</div>
-              <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm flex items-center">+${Number(safeBonusSettings.monthly[index] || 0).toFixed(0)} Bonus</div>
+            <div key={winner.emp.id || Math.random().toString()} className={`${colors[index]} rounded-xl p-4 shadow-md flex flex-col items-center text-center`}>
+              {badgeIcons[index]}<div className="font-bold text-lg">{String(winner.emp.name)}</div><div className="text-sm font-semibold opacity-90 mb-3">{index + 1} Place</div>
+              <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm">+${Number(safeBonusSettings.monthly[index] || 0).toFixed(0)} Bonus</div>
             </div>
           ))}
         </div>
@@ -237,15 +250,13 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden mb-6 mt-6">
-      <div className="absolute -right-4 -bottom-4 opacity-10"><TrendingUp size={150} /></div>
       <div className="relative z-10">
         <h3 className="text-slate-300 font-medium text-sm flex items-center mb-1"><Activity className="h-4 w-4 mr-1.5 text-emerald-400" /> Live Pay Tracker</h3>
         <div className="text-xs text-slate-400 mb-6">Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}</div>
         <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">${totalEarnings.toFixed(2)}</div>
         <div className="space-y-3">
-          <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span className="text-sm text-slate-300">Completed Shifts ({completedShifts.length})</span><span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span></div>
+          <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span className="text-sm text-slate-300">Completed Shifts</span><span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span></div>
           <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span className="text-sm text-slate-300">Approved Mileage</span><span className="font-semibold text-white">${kmEarnings.toFixed(2)}</span></div>
-          <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span className="text-sm text-slate-300">Approved Expenses</span><span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span></div>
         </div>
       </div>
     </div>
@@ -258,97 +269,40 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
   const handleSubmit = (e) => { e.preventDefault(); if (!date || !clientId || !kilometers) return; if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description }); setDate(''); setClientId(''); setKilometers(''); setDescription(''); };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-800 flex items-center"><Car className="h-5 w-5 mr-2 text-teal-600" /> Mileage Log</h2></div>
-      <div className="p-6 border-b border-slate-200 bg-slate-50/50">
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
-              <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
-                <option value="" disabled>Select Client</option>
-                {safeClients.map(c => (<option key={c.id} value={c.id}>{c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}</option>))}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label><input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. Park trip" /></div>
-          </div>
-          <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Log</button>
-        </form>
-      </div>
-      <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {safeExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logged yet.</div> :
-          safeSortByDateDesc(safeExpenses).map(exp => {
-            if(!exp) return null; const d = parseLocalSafe(exp.date); const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString(); const clientName = safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown Client';
-            return (
-              <div key={exp.id || `exp_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-                <div><div className="font-semibold text-sm text-slate-800">{dateStr}</div><div className="text-xs text-slate-500 mt-0.5">{String(exp.kilometers || 0)} km &bull; {clientName}</div></div>
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{String(exp.status || 'pending')}</span>
-              </div>
-            )
-          })
-        }
-      </div>
+    <div className="bg-white rounded-xl shadow-sm border p-6">
+      <h2 className="text-lg font-semibold mb-4 flex items-center"><Car className="h-5 w-5 mr-2 text-teal-600" /> Mileage Log</h2>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs mb-1">Date</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full border rounded p-1.5" required /></div>
+          <div><label className="block text-xs mb-1">Client</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full border rounded p-1.5 bg-white" required><option value="" disabled>Select Client</option>{safeClients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs mb-1">Kilometers</label><input type="number" min="0.1" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full border rounded p-1.5" required /></div>
+          <div><label className="block text-xs mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full border rounded p-1.5" /></div>
+        </div>
+        <button type="submit" className="w-full bg-teal-600 text-white py-1.5 rounded">Submit</button>
+      </form>
     </div>
   );
 }
 
 export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense, getClientRemainingBalance }) {
-  const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [amount, setAmount] = useState(''); const [description, setDescription] = useState(''); const [receiptFile, setReceiptFile] = useState(null);
-  const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : []; const safeClients = Array.isArray(clients) ? clients : [];
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!date || !amount || !clientId) return;
-    if(onAddClientExpense) { onAddClientExpense({ date, clientId, amount: Number(amount), description, receiptDetails: receiptFile ? receiptFile.name : '' }); }
-    setDate(''); setClientId(''); setAmount(''); setDescription(''); setReceiptFile(null);
-  };
-
+  const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [amount, setAmount] = useState(''); const [description, setDescription] = useState('');
+  const handleSubmit = (e) => { e.preventDefault(); if (!date || !amount || !clientId) return; if(onAddClientExpense) onAddClientExpense({ date, clientId, amount: Number(amount), description }); setDate(''); setClientId(''); setAmount(''); setDescription(''); };
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-800 flex items-center"><Receipt className="h-5 w-5 mr-2 text-teal-600" /> Client Expenses</h2></div>
-      <div className="p-6 border-b border-slate-200 bg-slate-50/50">
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
-              <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
-                <option value="" disabled>Select Client</option>
-                {safeClients.map(c => (<option key={c.id} value={c.id}>{c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}</option>))}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500" placeholder="e.g. Lunch" /></div>
-          </div>
-          <div className="mt-3">
-            <label className="block text-xs font-medium text-slate-700 mb-1">Upload Receipt</label>
-            <div className="mt-1 flex justify-center px-4 py-2 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('receipt-upload').click()}>
-              <div className="text-center flex items-center space-x-2"><ImageIcon className="h-4 w-4 text-slate-400" /><span className="text-xs font-medium text-teal-600 truncate max-w-[150px]">{receiptFile ? receiptFile.name : 'Click to attach receipt'}</span></div>
-              <input id="receipt-upload" type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => setReceiptFile(e.target.files[0])} />
-            </div>
-          </div>
-          <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Expense</button>
-        </form>
-      </div>
-      <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {safeClientExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged yet.</div> :
-          safeSortByDateDesc(safeClientExpenses).map(exp => {
-            if(!exp) return null; const d = parseLocalSafe(exp.date); const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString(); const clientName = safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown Client';
-            return (
-              <div key={exp.id || `ce_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-                <div><div className="font-semibold text-sm text-slate-800">{dateStr}</div><div className="text-xs text-slate-500 mt-0.5">${Number(exp.amount || 0).toFixed(2)} &bull; {clientName}</div></div>
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{String(exp.status || 'pending')}</span>
-              </div>
-            )
-          })
-        }
-      </div>
+    <div className="bg-white rounded-xl shadow-sm border p-6">
+      <h2 className="text-lg font-semibold mb-4 flex items-center"><Receipt className="h-5 w-5 mr-2 text-teal-600" /> Client Expenses</h2>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs mb-1">Date</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full border rounded p-1.5" required /></div>
+          <div><label className="block text-xs mb-1">Client</label><select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full border rounded p-1.5 bg-white" required><option value="" disabled>Select Client</option>{clients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}</select></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className="block text-xs mb-1">Amount</label><input type="number" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full border rounded p-1.5" required /></div>
+          <div><label className="block text-xs mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full border rounded p-1.5" /></div>
+        </div>
+        <button type="submit" className="w-full bg-teal-600 text-white py-1.5 rounded">Submit</button>
+      </form>
     </div>
   );
 }
@@ -356,25 +310,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
 export function EmployeePaystubs({ myPaystubs = [] }) {
   const safePaystubs = Array.isArray(myPaystubs) ? myPaystubs : [];
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center"><FileText className="h-5 w-5 mr-2 text-teal-600" /><h2 className="text-lg font-semibold text-slate-800">My Paystubs</h2></div>
-      <div className="p-6">
-        {safePaystubs.length === 0 ? <div className="text-center text-slate-500 py-4">No paystubs available.</div> :
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {safeSortByDateDesc(safePaystubs).map(ps => {
-              if(!ps) return null; const d = parseLocalSafe(ps.date); const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-              return (
-                <div key={ps.id || Math.random()} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
-                  <FileText className="h-8 w-8 text-teal-600 mr-3 opacity-70 group-hover:opacity-100 transition" />
-                  <div><div className="font-semibold text-slate-800 text-sm">{dateStr}</div><div className="text-xs text-slate-500 truncate w-32" title={ps.fileName}>{String(ps.fileName || 'Unnamed File')}</div></div>
-                  <Download className="h-4 w-4 text-slate-400 ml-auto group-hover:text-teal-600 transition" />
-                </div>
-              );
-            })}
-          </div>
-        }
-      </div>
-    </div>
+    <div className="bg-white rounded-xl shadow-sm border overflow-hidden"><div className="px-6 py-4 border-b bg-slate-50"><h2 className="text-lg font-semibold">My Paystubs</h2></div><div className="p-6"><div className="grid grid-cols-1 md:grid-cols-3 gap-4">{safePaystubs.map(ps => (<div key={ps.id} className="border p-4 rounded-lg flex items-center bg-slate-50"><FileText className="mr-3 text-teal-600"/><div><div className="font-semibold">{ps.date}</div></div></div>))}</div></div></div>
   );
 }
 
@@ -398,13 +334,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
@@ -414,195 +343,76 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
     }
   };
 
-  const renderSchedule = () => {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{monthNames[month]} {year}</h2>
-          <div className="flex space-x-2">
-            <button onClick={prevMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
-            <button onClick={nextMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
+  return (
+    <div className="flex flex-col md:flex-row gap-6">
+      <div className="md:w-1/3 space-y-6">
+        <div className="bg-white rounded-xl shadow-sm border p-6 flex flex-col items-center text-center">
+          <div className="relative mb-4 group">
+            <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden">
+              <SafeAvatar url={currentUser.photoUrl} name={currentUser.name} role={currentUser.role} className="h-10 w-10" />
+            </div>
+            <label htmlFor="profile-upload" className="absolute bottom-0 right-0 bg-teal-600 p-1.5 rounded-full text-white cursor-pointer shadow-md hover:bg-teal-700 transition opacity-80 group-hover:opacity-100">
+              <Camera className="h-4 w-4" />
+              <input id="profile-upload" type="file" accept="image/*" className="sr-only" onChange={handlePhotoUpload} />
+            </label>
           </div>
+          <h2 className="text-xl font-bold text-slate-800">{String(currentUser.name)}</h2>
+          <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100 mt-2">{String(currentUser.role)}</span>
         </div>
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
-          {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[100px] opacity-50 p-2"></div>))}
-          {daysArray.map(day => {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
-            const holiday = getHoliday(dateStr);
-            const dayShifts = myShifts.filter(s => s && s.date === dateStr);
-            
-            return (
-              <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : ''}`}>
-                <div className="font-medium text-sm text-slate-600 mb-1">{day}</div>
-                <div className="space-y-1">
-                  {dayShifts.map(shift => {
-                    const client = clients.find(c => c && c.id === shift.clientId);
-                    return (
-                      <div key={shift.id} onClick={() => setSelectedClient(client)} className="text-xs p-1.5 rounded bg-teal-100 text-teal-800 border border-teal-200 cursor-pointer hover:bg-teal-200 transition shadow-sm">
-                        <div className="font-semibold truncate flex items-center"><Heart className="h-2.5 w-2.5 mr-1 shrink-0 text-teal-600" />{client?.name?.split(' ')[0] || 'Unknown'}</div>
-                        <div className="text-[10px] mt-0.5 opacity-90 flex items-center"><Clock className="h-2.5 w-2.5 mr-1 shrink-0" />{shift.startTime}-{shift.endTime}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+
+        <EmployeePayTracker currentUser={currentUser} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} employees={employees} bonusSettings={bonusSettings} />
+
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="px-6 py-4 border-b bg-slate-50"><h2 className="text-lg font-semibold flex items-center"><Clock className="h-5 w-5 mr-2 text-teal-600" /> Next Shift</h2></div>
+          <div className="p-6">
+            {nextShift ? (
+              <div className="space-y-4">
+                <div className="font-medium flex items-center"><CalendarDays className="h-4 w-4 mr-2 text-slate-400"/>{parseLocalSafe(nextShift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+                <div className="flex items-center"><Clock className="h-4 w-4 mr-2 text-slate-400"/>{nextShift.startTime} - {nextShift.endTime}</div>
+                <div className="flex items-center"><Heart className="h-4 w-4 mr-2 text-slate-400"/>{safeClients.find(c => c.id === nextShift.clientId)?.name || 'Unknown'}</div>
+                <button onClick={() => setSelectedClient(safeClients.find(c => c.id === nextShift.clientId))} className="w-full bg-slate-100 text-slate-700 font-semibold py-2 rounded text-sm flex justify-center items-center"><Info className="h-4 w-4 mr-2"/>View Care Plan</button>
               </div>
-            );
-          })}
+            ) : <div className="text-center text-slate-500">No upcoming shifts.</div>}
+          </div>
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="md:w-1/3 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
-            <div className="relative mb-4 group">
-              <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden">
-                {/* DYNAMIC AVATAR */}
-                {renderAvatar(currentUser.photoUrl, currentUser.name, currentUser.role, "h-12 w-12")}
-              </div>
-              <label htmlFor="profile-upload" className="absolute bottom-0 right-0 bg-teal-600 p-1.5 rounded-full text-white cursor-pointer shadow-md hover:bg-teal-700 transition opacity-80 group-hover:opacity-100">
-                <Camera className="h-4 w-4" />
-                <input id="profile-upload" type="file" accept="image/*" className="sr-only" onChange={handlePhotoUpload} />
-              </label>
-            </div>
-            <h2 className="text-xl font-bold text-slate-800">{String(currentUser.name)}</h2>
-            <div className="flex flex-col mt-2 gap-1 items-center">
-              <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">{String(currentUser.role)}</span>
-              <span className="text-xs font-semibold text-slate-500">
-                {currentUser.payType === 'hourly' ? `$${currentUser.hourlyWage || 22.50}/hr` : `$${currentUser.perVisitRate || 45}/visit`}
-              </span>
-            </div>
+      <div className="md:w-2/3 space-y-6">
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="flex border-b overflow-x-auto">
+            <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'schedule' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>My Schedule</button>
+            <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'expenses' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Logs & Expenses</button>
+            {isBonusActive && <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'awards' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Awards</button>}
+            <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'documents' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Documents</button>
+            <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'paystubs' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Paystubs</button>
+            <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'announcements' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Team Feed</button>
           </div>
-
-          <EmployeePayTracker 
-            currentUser={currentUser} 
-            shifts={shifts} 
-            expenses={expenses} 
-            clientExpenses={clientExpenses} 
-            payPeriodStart={payPeriodStart} 
-            isBonusActive={isBonusActive}
-            employees={employees}
-            bonusSettings={bonusSettings}
-          />
-
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
-              <Clock className="h-5 w-5 mr-2 text-teal-600" />
-              <h2 className="text-lg font-semibold text-slate-800">Next Shift</h2>
-            </div>
-            <div className="p-6">
-              {nextShift ? (
-                <div className="space-y-4">
-                  <div className="flex items-center text-slate-700">
-                    <CalendarDays className="h-5 w-5 mr-3 text-slate-400" />
-                    <span className="font-medium">{parseLocalSafe(nextShift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-                  </div>
-                  <div className="flex items-center text-slate-700">
-                    <Clock className="h-5 w-5 mr-3 text-slate-400" />
-                    <span className="font-medium">{nextShift.startTime} - {nextShift.endTime}</span>
-                  </div>
-                  <div className="flex items-center text-slate-700">
-                    <Heart className="h-5 w-5 mr-3 text-slate-400" />
-                    <span className="font-medium">{safeClients.find(c => c && c.id === nextShift.clientId)?.name || 'Unknown Client'}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center text-slate-500 py-4">No upcoming shifts scheduled.</div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="md:w-2/3 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
-              <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>My Schedule</button>
-              <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Logs & Expenses</button>
-              {isBonusActive && (
-                <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Awards</button>
-              )}
-              <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'documents' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Documents</button>
-              <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
-              <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Team Feed</button>
-            </div>
-
-            <div className="p-0">
-              {activeTab === 'schedule' && (
-                <div className="flex flex-col">
-                  <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-end">
-                    <div className="flex bg-slate-200 p-1 rounded-lg w-fit">
-                      <button onClick={() => setScheduleView('list')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'list' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>List View</button>
-                      <button onClick={() => setScheduleView('calendar')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'calendar' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Calendar</button>
-                    </div>
-                  </div>
-                  
-                  {scheduleView === 'list' ? (
-                    <div className="divide-y divide-slate-100">
-                      {upcomingShifts.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500">You have no upcoming shifts.</div>
-                      ) : (
-                        upcomingShifts.map(shift => {
-                          if(!shift) return null;
-                          const client = safeClients.find(c => c && c.id === shift.clientId);
-                          const d = parseLocalSafe(shift.date);
-                          const isInvalid = isNaN(d.getTime());
-                          return (
-                            <div key={shift.id || Math.random()} className="p-4 hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                              <div className="flex items-start space-x-4">
-                                <div className="bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px]">
-                                  <div className="text-xs font-bold text-teal-600 uppercase">{!isInvalid ? d.toLocaleDateString('en-US', { month: 'short' }) : ''}</div>
-                                  <div className="text-xl font-extrabold text-teal-800">{!isInvalid ? d.getDate() : ''}</div>
-                                </div>
-                                <div>
-                                  <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
-                                  <div className="text-sm text-slate-600 flex items-center mt-1">
-                                    <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
-                                  </div>
-                                </div>
-                              </div>
-                              <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
-                                Care Plan
-                              </button>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  ) : (
-                    renderSchedule()
+          <div className="p-0">
+            {activeTab === 'schedule' && (
+              <div className="p-6">
+                <div className="divide-y divide-slate-100 border rounded-xl overflow-hidden">
+                  {upcomingShifts.length === 0 ? (<div className="p-8 text-center text-slate-500">You have no upcoming shifts.</div>) : (
+                    upcomingShifts.map(shift => {
+                      const client = safeClients.find(c => c.id === shift.clientId);
+                      const d = parseLocalSafe(shift.date);
+                      return (
+                        <div key={shift.id} className="p-4 hover:bg-slate-50 flex justify-between items-center gap-4">
+                          <div className="flex items-start space-x-4">
+                            <div className="bg-teal-50 rounded-lg p-2 text-center min-w-[70px]"><div className="text-xs font-bold text-teal-600 uppercase">{d.toLocaleDateString('en-US', { month: 'short' })}</div><div className="text-xl font-extrabold text-teal-800">{d.getDate()}</div></div>
+                            <div><h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4><div className="text-sm text-slate-600 flex items-center mt-1"><Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}</div></div>
+                          </div>
+                          <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 border border-teal-200 px-3 py-1.5 rounded bg-white hover:bg-teal-50">Care Plan</button>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
-              )}
-
-              {activeTab === 'expenses' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-                  <EmployeeMileageLog 
-                    myExpenses={myExpenses} 
-                    clients={safeClients} 
-                    onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
-                    getClientRemainingBalance={getClientRemainingBalance}
-                  />
-                  <EmployeeClientExpenseLog 
-                    myClientExpenses={myClientExpenses} 
-                    clients={safeClients} 
-                    onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} 
-                    getClientRemainingBalance={getClientRemainingBalance}
-                  />
-                </div>
-              )}
-              {activeTab === 'documents' && <div className="p-6"><DocumentManager documents={documents} isAdmin={false} /></div>}
-              {activeTab === 'paystubs' && <div className="p-6"><EmployeePaystubs myPaystubs={myPaystubs} /></div>}
-              {activeTab === 'announcements' && <div className="p-6"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>}
-            </div>
+              </div>
+            )}
+            {activeTab === 'expenses' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6"><EmployeeMileageLog myExpenses={myExpenses} clients={safeClients} onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} getClientRemainingBalance={getClientRemainingBalance} /><EmployeeClientExpenseLog myClientExpenses={myClientExpenses} clients={safeClients} onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} getClientRemainingBalance={getClientRemainingBalance} /></div>}
+            {activeTab === 'awards' && isBonusActive && <div className="p-6"><AwardsLeaderboard employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} isBonusActive={isBonusActive} bonusSettings={bonusSettings} /></div>}
+            {activeTab === 'documents' && <div className="p-6"><DocumentManager documents={documents} isAdmin={false} /></div>}
+            {activeTab === 'paystubs' && <div className="p-6"><EmployeePaystubs myPaystubs={myPaystubs} /></div>}
+            {activeTab === 'announcements' && <div className="p-6"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>}
           </div>
         </div>
       </div>

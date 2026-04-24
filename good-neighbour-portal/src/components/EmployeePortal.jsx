@@ -139,7 +139,6 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
       <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-slate-200">
         <Award className="h-12 w-12 text-slate-300 mx-auto mb-3" />
         <h3 className="text-lg font-semibold text-slate-600">Bonus System Inactive</h3>
-        <p className="text-sm text-slate-500 mt-1">The Performance Bonus System is currently disabled.</p>
       </div>
     );
   }
@@ -368,9 +367,9 @@ export function EmployeePaystubs({ myPaystubs = [] }) {
             {safeSortByDateDesc(safePaystubs).map(ps => {
               if(!ps) return null; const d = parseLocalSafe(ps.date); const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
               return (
-                <div key={ps.id || `ps_${Math.random()}`} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
+                <div key={ps.id || Math.random()} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
                   <FileText className="h-8 w-8 text-teal-600 mr-3 opacity-70 group-hover:opacity-100 transition" />
-                  <div><div className="font-semibold text-slate-800 text-sm">{dateStr}</div><div className="text-xs text-slate-500 truncate w-32" title={String(ps.fileName || '')}>{String(ps.fileName || 'Unnamed File')}</div></div>
+                  <div><div className="font-semibold text-slate-800 text-sm">{dateStr}</div><div className="text-xs text-slate-500 truncate w-32" title={ps.fileName}>{String(ps.fileName || 'Unnamed File')}</div></div>
                   <Download className="h-4 w-4 text-slate-400 ml-auto group-hover:text-teal-600 transition" />
                 </div>
               );
@@ -479,6 +478,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-6">
         <div className="md:w-1/3 space-y-6">
+          
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
             <div className="relative mb-4 group">
               <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden">
@@ -683,207 +683,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [isDbReady, setIsDbReady] = useState(false);
-  const [viewMode, setViewMode] = useState('employee');
-  const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
-
-  // App State
-  const [shifts, setShifts] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [clientExpenses, setClientExpenses] = useState([]);
-  const [paystubs, setPaystubs] = useState([]);
-  const [timeOffLogs, setTimeOffLogs] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [documents, setDocuments] = useState([]);
-  const [bonusSettings, setBonusSettings] = useState({ monthly: [100, 50, 20], annual: [3000, 2000, 1000] });
-
-  // Setup Firebase Auth
-  useEffect(() => {
-    if (!auth) return;
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) { console.error('Firebase Auth Error:', error); }
-    };
-    initAuth();
-
-    const unsubscribe = onAuthStateChanged(auth, user => { setFirebaseUser(user); });
-    return () => unsubscribe();
-  }, []);
-
-  // Setup Firestore Listeners
-  useEffect(() => {
-    if (!firebaseUser || !db) return;
-
-    const getCol = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
-    const unsubs = [];
-    const handleError = (err) => console.error("Firestore Error:", err);
-
-    unsubs.push(onSnapshot(getCol('gn_employees'), snap => { setEmployees(snap.docs.map(d => ({ ...d.data(), id: d.id }))); setIsDbReady(true); }, handleError));
-    unsubs.push(onSnapshot(getCol('gn_shifts'), snap => setShifts(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_clients'), snap => setClients(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_expenses'), snap => setExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_clientExpenses'), snap => setClientExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_paystubs'), snap => setPaystubs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_timeOffLogs'), snap => setTimeOffLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_documents'), snap => setDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    
-    unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.payPeriodStart) setPayPeriodStart(data.payPeriodStart);
-        if (data.isBonusActive !== undefined) setIsBonusActive(data.isBonusActive);
-        if (data.bonusAmounts) setBonusSettings(data.bonusAmounts);
-      }
-    }, handleError));
-
-    return () => unsubs.forEach(unsub => unsub());
-  }, [firebaseUser]);
-
-  const handleLogin = (username, password) => {
-    const safeEmployees = Array.isArray(employees) ? employees : [];
-    const foundEmp = safeEmployees.find(e => e && e.username && String(e.username).toLowerCase() === String(username).toLowerCase() && e.password === password);
-    if (foundEmp) {
-      setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl });
-      setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
-    } else { alert("Invalid credentials. Please check your username and password."); }
-  };
-
-  const handleLogout = () => { setCurrentUser(null); setViewMode('employee'); };
-
-  const getDocRef = (cName, dId) => doc(db, 'artifacts', appId, 'public', 'data', cName, String(dId));
-  
-  const runMutation = async (cName, dId, action, data) => {
-    if(!firebaseUser) return;
-    const ref = getDocRef(cName, dId);
-    if(action === 'set') await setDoc(ref, data);
-    if(action === 'update') await updateDoc(ref, data);
-    if(action === 'delete') await deleteDoc(ref);
-  };
-
-  const handleSaveSettings = async (field, value) => {
-    if (!firebaseUser) return;
-    if (field === 'payPeriodStart') setPayPeriodStart(value);
-    if (field === 'isBonusActive') setIsBonusActive(value);
-    if (field === 'bonusAmounts') setBonusSettings(value);
-    await setDoc(getDocRef('gn_settings', 'global'), { payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, isBonusActive: field === 'isBonusActive' ? value : isBonusActive, bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings }, { merge: true });
-  };
-
-  const getClientRemainingBalance = (clientId) => {
-    const safeClients = Array.isArray(clients) ? clients : [];
-    const client = safeClients.find(c => c && c.id === clientId);
-    if (!client) return 0;
-    
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
-    const spentThisMonth = safeCE
-      .filter(e => e && e.clientId === clientId && e.status === 'approved')
-      .filter(e => {
-        const d = parseLocalSafe(e.date);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-      })
-      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
-      
-    const safeExp = Array.isArray(expenses) ? expenses : [];
-    const mileageThisMonth = safeExp
-      .filter(e => e && e.clientId === clientId && e.status === 'approved')
-      .filter(e => {
-        const d = parseLocalSafe(e.date);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-      })
-      .reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
-      
-    return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
-  };
-
-  // Helper for DB Resets
-  const handleSeedData = async () => {
-    if (!firebaseUser || !db) return;
-    try {
-      for (const e of MOCK_EMPLOYEES) await setDoc(getDocRef('gn_employees', e.id), e);
-      for (const c of MOCK_CLIENTS) await setDoc(getDocRef('gn_clients', c.id), c);
-      for (const s of INITIAL_SHIFTS) await setDoc(getDocRef('gn_shifts', s.id.toString()), { ...s, id: s.id.toString() });
-      for (const ex of INITIAL_EXPENSES) await setDoc(getDocRef('gn_expenses', ex.id.toString()), { ...ex, id: ex.id.toString() });
-      for (const ce of INITIAL_CLIENT_EXPENSES) await setDoc(getDocRef('gn_clientExpenses', ce.id.toString()), { ...ce, id: ce.id.toString() });
-      for (const p of INITIAL_PAYSTUBS) await setDoc(getDocRef('gn_paystubs', p.id.toString()), { ...p, id: p.id.toString() });
-      for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
-      for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
-      alert("Demo database initialized successfully!");
-    } catch (err) {
-      console.error("Error seeding data:", err);
-      alert("Error seeding data. Check console logs.");
-    }
-  };
-
-  if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={Boolean(isDbReady)} hasData={Boolean(Array.isArray(employees) && employees.length > 0)} onSeedData={handleSeedData} />;
-
-  const isAdmin = String(currentUser.role).includes('Admin');
-  const showAdminView = isAdmin && viewMode === 'admin';
-
-  const finalCurrentUserPhotoUrl = getValidPhoto(currentUser.photoUrl);
-
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
-      <nav className="bg-teal-700 text-white shadow-md px-6 py-4 flex justify-between items-center">
-        <div className="font-bold text-xl flex items-center"><Briefcase className="mr-2 h-6 w-6 text-teal-200"/> Good Neighbour</div>
-        <div className="flex items-center space-x-4">
-          {isAdmin && (
-            <button onClick={() => { setViewMode(viewMode === 'admin' ? 'employee' : 'admin'); }} className="text-xs bg-teal-800 hover:bg-teal-900 px-3 py-1.5 rounded font-bold transition shadow-sm">
-              {viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}
-            </button>
-          )}
-          <div className="flex items-center text-sm hidden sm:flex">
-            <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-500 overflow-hidden mr-2 shrink-0">
-              {finalCurrentUserPhotoUrl ? <img src={finalCurrentUserPhotoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" /> : <User className="h-4 w-4" />}
-            </div>
-            {String(currentUser.name)}
-          </div>
-          <button onClick={handleLogout} className="p-2 rounded-full hover:bg-teal-600 transition" title="Logout"><LogOut className="h-5 w-5"/></button>
-        </div>
-      </nav>
-
-      <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-        {showAdminView ? (
-          <AdminDashboard 
-            shifts={shifts} employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} expenses={expenses} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} clientExpenses={clientExpenses} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} paystubs={paystubs} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} timeOffLogs={timeOffLogs} onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} isBonusActive={isBonusActive} setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} bonusSettings={bonusSettings} setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} onAddShift={(d) => runMutation('gn_shifts', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveShift={(id) => runMutation('gn_shifts', id, 'delete')} onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
-          />
-        ) : (
-          <EmployeeDashboard 
-            shifts={shifts} employees={employees} currentUser={currentUser} clients={clients} expenses={expenses} 
-            onAddExpense={(d) => runMutation('gn_expenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
-            clientExpenses={clientExpenses} 
-            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
-            paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
-            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
-            payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
-            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
-            setSelectedClient={setSelectedClient}
-            getClientRemainingBalance={getClientRemainingBalance}
-            onUpdateProfile={(id, d) => {
-              runMutation('gn_employees', id, 'update', d);
-              setCurrentUser(prev => ({ ...prev, ...d })); 
-            }}
-          />
-        )}
-      </main>
-
-      {selectedClient && <ClientProfileModal client={selectedClient} remainingBalance={getClientRemainingBalance(selectedClient.id)} onClose={() => setSelectedClient(null)} />}
     </div>
   );
 }

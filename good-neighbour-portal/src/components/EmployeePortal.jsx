@@ -331,7 +331,7 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
                 <option value="" disabled>Select client</option>
                 {safeClients.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}
+                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} Left)` : ''}
                   </option>
                 ))}
               </select>
@@ -392,7 +392,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
                 <option value="" disabled>Select client</option>
                 {safeClients.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}
+                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} Left)` : ''}
                   </option>
                 ))}
               </select>

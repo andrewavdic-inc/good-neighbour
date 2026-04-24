@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CheckCircle, Star, Sun, Moon, TreePine, Sailboat, Cloud, Zap } from 'lucide-react';
 
-// --- CUSTOM CAPTAIN HAT ICON ---
 const CaptainHatIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
@@ -10,7 +9,6 @@ const CaptainHatIcon = ({ className }) => (
   </svg>
 );
 
-// --- SAFE AVATAR COMPONENT (CATCHES BROKEN LINKS) ---
 const SafeAvatar = ({ url, name, role, className }) => {
   const [imgError, setImgError] = React.useState(false);
   
@@ -36,18 +34,8 @@ const SafeAvatar = ({ url, name, role, className }) => {
     return <User className={className} />;
   };
 
-  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
-    return renderIcon();
-  }
-
-  return (
-    <img 
-      src={cleanUrl} 
-      alt={name || 'Avatar'} 
-      className="h-full w-full object-cover bg-white" 
-      onError={() => setImgError(true)} 
-    />
-  );
+  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) return renderIcon();
+  return <img src={cleanUrl} alt={name || 'Avatar'} className={`h-full w-full object-cover bg-white ${className}`} onError={() => setImgError(true)} />;
 };
 
 const ONTARIO_REQUIREMENTS = [
@@ -60,13 +48,7 @@ const ONTARIO_REQUIREMENTS = [
 
 function EditEmployeeModal({ employee, onClose, onSave }) {
   const [formData, setFormData] = useState({
-    name: employee?.name || '', username: employee?.username || '', password: employee?.password || '',
-    role: employee?.role || 'Neighbour', phone: employee?.phone || '', email: employee?.email || '',
-    address: employee?.address || '', payType: employee?.payType || 'per_visit',
-    hourlyWage: employee?.hourlyWage || 22.50, perVisitRate: employee?.perVisitRate || 45,
-    emergencyContactName: employee?.emergencyContactName || '', emergencyContactPhone: employee?.emergencyContactPhone || '',
-    requirements: employee?.requirements || {}, timeOffBalances: employee?.timeOffBalances || { sick: 5, vacation: 10 },
-    availability: employee?.availability || []
+    name: employee?.name || '', username: employee?.username || '', password: employee?.password || '', role: employee?.role || 'Neighbour', phone: employee?.phone || '', email: employee?.email || '', address: employee?.address || '', payType: employee?.payType || 'per_visit', hourlyWage: employee?.hourlyWage || 22.50, perVisitRate: employee?.perVisitRate || 45, emergencyContactName: employee?.emergencyContactName || '', emergencyContactPhone: employee?.emergencyContactPhone || '', requirements: employee?.requirements || {}, timeOffBalances: employee?.timeOffBalances || { sick: 5, vacation: 10 }, availability: employee?.availability || []
   });
   
   const [photoFile, setPhotoFile] = useState(null); 
@@ -127,7 +109,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                 {ONTARIO_REQUIREMENTS.map(req => {
                   const currentData = formData.requirements[req.key] || { status: 'missing', expiryDate: '', fileUrl: null };
                   return (
-                    <div key={req.key} className="bg-white border rounded-lg shadow-sm p-3">
+                    <div key={req.key} className="bg-white border p-3 rounded-lg shadow-sm">
                       <div className="flex justify-between items-center mb-2"><label className="text-sm font-semibold text-slate-800">{req.label}</label><select value={currentData.status} onChange={(e) => handleReqChange(req.key, 'status', e.target.value)} className="text-xs font-bold rounded border px-2 py-1 outline-none"><option value="missing">Missing</option><option value="valid">Valid</option><option value="expired">Expired</option><option value="not_applicable">N/A</option></select></div>
                       <div className="flex items-center justify-between"><span className="text-xs font-medium text-slate-500">Expiry Date:</span><input type="date" value={currentData.expiryDate || ''} onChange={(e) => handleReqChange(req.key, 'expiryDate', e.target.value)} disabled={currentData.status === 'not_applicable'} className="w-32 px-2 py-1 border rounded text-xs"/></div>
                     </div>
@@ -137,10 +119,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
             </div>
           </form>
         </div>
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Cancel</button>
-          <button type="submit" form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700"><CheckCircle className="h-4 w-4 mr-2 inline" /> Save Profile</button>
-        </div>
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0"><button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Cancel</button><button type="submit" form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700"><CheckCircle className="h-4 w-4 mr-2 inline" /> Save Profile</button></div>
       </div>
     </div>
   );
@@ -194,46 +173,53 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {filteredEmployees.map(emp => {
-              const issuesCount = getComplianceIssues(emp); 
-              const isProtected = emp.id === 'admin1' && currentUser?.id !== 'admin1';
-              
-              return (
-                <div key={emp.id} className="border border-slate-200 rounded-xl p-5 flex flex-col bg-white hover:border-teal-300 hover:shadow-md transition duration-200 relative group">
-                  {!isProtected && (
-                    <div className="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-md p-1">
-                      <button onClick={() => setEditingEmployee(emp)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"><Edit className="h-4 w-4" /></button>
-                      {emp.id !== 'admin1' && (<button onClick={() => onRemoveEmployee && onRemoveEmployee(emp.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"><Trash2 className="h-4 w-4" /></button>)}
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center space-x-4 mb-4 pr-16">
-                    <div className="h-14 w-14 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-2 border-teal-50 shadow-sm shrink-0 overflow-hidden">
-                      <SafeAvatar url={emp.photoUrl} name={emp.name} role={emp.role} className="h-7 w-7" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-slate-800 text-lg leading-tight">{String(emp.name)}</h3>
-                      <span className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-0.5 rounded inline-block mt-1 uppercase">{String(emp.role)}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2.5 mb-4 text-sm text-slate-600 flex-1">
-                    {emp.phone && <div className="flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> {emp.phone}</div>}
-                    {emp.email && <div className="flex items-center"><Mail className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> <span className="truncate">{emp.email}</span></div>}
-                  </div>
-
-                  <div className="mt-auto border-t border-slate-100 pt-4">
-                    {issuesCount > 0 ? (
-                      <div className="flex items-center justify-center text-xs font-bold bg-red-50 text-red-700 py-2 px-3 rounded-lg border border-red-100"><AlertCircle className="h-4 w-4 mr-2 shrink-0" /> {issuesCount} Compliance Issue(s)</div>
-                    ) : (
-                      <div className="flex items-center justify-center text-xs font-bold bg-emerald-50 text-emerald-700 py-2 px-3 rounded-lg border border-emerald-100"><ShieldCheck className="h-4 w-4 mr-2 shrink-0" /> Fully Compliant</div>
+          {filteredEmployees.length === 0 ? (
+            <div className="text-center py-12 text-slate-500 flex flex-col items-center">
+              <Users className="h-12 w-12 text-slate-300 mb-3" />
+              <p>No staff members found matching your search.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {filteredEmployees.map(emp => {
+                const issuesCount = getComplianceIssues(emp); 
+                const isProtected = emp.id === 'admin1' && currentUser?.id !== 'admin1';
+                
+                return (
+                  <div key={emp.id} className="border border-slate-200 rounded-xl p-5 flex flex-col bg-white hover:border-teal-300 hover:shadow-md transition duration-200 relative group">
+                    {!isProtected && (
+                      <div className="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-md p-1">
+                        <button onClick={() => setEditingEmployee(emp)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition" title="Edit Profile"><Edit className="h-4 w-4" /></button>
+                        {emp.id !== 'admin1' && (<button onClick={() => onRemoveEmployee && onRemoveEmployee(emp.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete Profile"><Trash2 className="h-4 w-4" /></button>)}
+                      </div>
                     )}
+                    
+                    <div className="flex items-center space-x-4 mb-4 pr-16">
+                      <div className="h-14 w-14 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-2 border-teal-50 shadow-sm shrink-0 overflow-hidden">
+                        <SafeAvatar url={emp.photoUrl} name={emp.name} role={emp.role} className="h-7 w-7" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-800 text-lg leading-tight">{String(emp.name)}</h3>
+                        <span className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-0.5 rounded inline-block mt-1 tracking-wide uppercase">{String(emp.role)}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5 mb-4 text-sm text-slate-600 flex-1">
+                      {emp.phone && <div className="flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> {emp.phone}</div>}
+                      {emp.email && <div className="flex items-center"><Mail className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> <span className="truncate" title={emp.email}>{emp.email}</span></div>}
+                    </div>
+
+                    <div className="mt-auto border-t border-slate-100 pt-4">
+                      {issuesCount > 0 ? (
+                        <div className="flex items-center justify-center text-xs font-bold bg-red-50 text-red-700 py-2 px-3 rounded-lg border border-red-100"><AlertCircle className="h-4 w-4 mr-2 shrink-0" /> {issuesCount} Compliance Issue(s)</div>
+                      ) : (
+                        <div className="flex items-center justify-center text-xs font-bold bg-emerald-50 text-emerald-700 py-2 px-3 rounded-lg border border-emerald-100"><ShieldCheck className="h-4 w-4 mr-2 shrink-0" /> Fully Compliant</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 

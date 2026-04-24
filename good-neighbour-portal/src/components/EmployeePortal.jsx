@@ -3,7 +3,6 @@ import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight,
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
-// --- CUSTOM CAPTAIN HAT ICON ---
 const CaptainHatIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
@@ -12,7 +11,6 @@ const CaptainHatIcon = ({ className }) => (
   </svg>
 );
 
-// --- SAFE AVATAR COMPONENT (CATCHES BROKEN LINKS) ---
 const SafeAvatar = ({ url, name, role, className }) => {
   const [imgError, setImgError] = React.useState(false);
   
@@ -38,52 +36,24 @@ const SafeAvatar = ({ url, name, role, className }) => {
     return <User className={className} />;
   };
 
-  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
-    return renderIcon();
-  }
-
-  return (
-    <img 
-      src={cleanUrl} 
-      alt={name || 'Avatar'} 
-      className="h-full w-full object-cover bg-white" 
-      onError={() => setImgError(true)} 
-    />
-  );
+  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) return renderIcon();
+  return <img src={cleanUrl} alt={name || 'Avatar'} className={`h-full w-full object-cover bg-white ${className}`} onError={() => setImgError(true)} />;
 };
 
-// ==========================================
-// INLINE HELPERS
-// ==========================================
 const parseLocalSafe = (dateStr) => {
   try {
     if (!dateStr) return new Date();
     if (typeof dateStr === 'number') return new Date(dateStr);
-    if (typeof dateStr === 'object') {
-      if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date() : dateStr;
-      if (typeof dateStr.toDate === 'function') return dateStr.toDate();
-      if (typeof dateStr.seconds === 'number') return new Date(dateStr.seconds * 1000);
-      return new Date();
-    }
-    const str = String(dateStr);
-    const parts = str.split('-');
-    if (parts.length === 3) {
-      const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
-      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) return new Date(y, m - 1, d);
-    }
-    const fallback = new Date(str);
-    return isNaN(fallback.getTime()) ? new Date() : fallback;
+    const parts = String(dateStr).split('-');
+    if (parts.length === 3) return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    return new Date();
   } catch (e) { return new Date(); }
 };
 
 const safeSortByDateDesc = (arr) => {
   if (!arr || !Array.isArray(arr)) return [];
   try {
-    return [...arr].filter(Boolean).sort((a, b) => {
-      const dA = parseLocalSafe(a.date).getTime();
-      const dB = parseLocalSafe(b.date).getTime();
-      return dB - dA;
-    });
+    return [...arr].filter(Boolean).sort((a, b) => parseLocalSafe(b.date).getTime() - parseLocalSafe(a.date).getTime());
   } catch (e) { return []; }
 };
 
@@ -105,15 +75,6 @@ const getPayPeriodBounds = (anchorDateStr) => {
   const cycles = Math.floor(diffDays / 14);
   const start = new Date(anchor.getTime() + cycles * 14 * 86400000);
   return { start, end: new Date(start.getTime() + 13 * 86400000) };
-};
-
-const safeShiftsSort = (arr) => {
-  if (!Array.isArray(arr)) return [];
-  return [...arr].filter(Boolean).sort((a, b) => {
-    const dA = a.date && a.startTime ? new Date(`${a.date}T${a.startTime}`).getTime() : 0;
-    const dB = b.date && b.startTime ? new Date(`${b.date}T${b.startTime}`).getTime() : 0;
-    return (isNaN(dA) ? 0 : dA) - (isNaN(dB) ? 0 : dB);
-  });
 };
 
 const getHoliday = (dateStr) => {
@@ -158,9 +119,6 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
   return results.slice(0, 3);
 };
 
-// ==========================================
-// SUB-COMPONENTS
-// ==========================================
 export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonusActive, bonusSettings }) {
   const now = new Date();
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
@@ -286,7 +244,7 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
   );
 }
 
-export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense, getClientRemainingBalance }) {
+export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense }) {
   const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [amount, setAmount] = useState(''); const [description, setDescription] = useState('');
   const handleSubmit = (e) => { e.preventDefault(); if (!date || !amount || !clientId) return; if(onAddClientExpense) onAddClientExpense({ date, clientId, amount: Number(amount), description }); setDate(''); setClientId(''); setAmount(''); setDescription(''); };
   return (
@@ -326,14 +284,15 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id);
   const myClientExpenses = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id);
   const myPaystubs = (Array.isArray(paystubs) ? paystubs : []).filter(p => p && p.employeeId === currentUser.id);
-  const openShifts = safeShifts.filter(s => s && s.employeeId === 'unassigned');
   
   const now = new Date();
-  const upcomingShifts = safeShiftsSort(myShifts.filter(s => s && s.date && s.endTime && new Date(`${s.date}T${s.endTime}`) > now));
+  
+  const upcomingShifts = safeShifts.filter(s => {
+    if (!s || s.employeeId !== currentUser.id || !s.date || !s.endTime) return false;
+    return new Date(`${s.date}T${s.endTime}`) > now;
+  }).sort((a, b) => new Date(`${a.date}T${a.startTime}`).getTime() - new Date(`${b.date}T${b.startTime}`).getTime());
+  
   const nextShift = upcomingShifts[0];
-
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
@@ -351,68 +310,25 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
             <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden">
               <SafeAvatar url={currentUser.photoUrl} name={currentUser.name} role={currentUser.role} className="h-10 w-10" />
             </div>
-            <label htmlFor="profile-upload" className="absolute bottom-0 right-0 bg-teal-600 p-1.5 rounded-full text-white cursor-pointer shadow-md hover:bg-teal-700 transition opacity-80 group-hover:opacity-100">
+            <label className="absolute bottom-0 right-0 bg-teal-600 p-1.5 rounded-full text-white cursor-pointer shadow-md hover:bg-teal-700 transition opacity-80 group-hover:opacity-100">
               <Camera className="h-4 w-4" />
-              <input id="profile-upload" type="file" accept="image/*" className="sr-only" onChange={handlePhotoUpload} />
+              <input type="file" accept="image/*" className="sr-only" onChange={handlePhotoUpload} />
             </label>
           </div>
-          <h2 className="text-xl font-bold text-slate-800">{String(currentUser.name)}</h2>
-          <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100 mt-2">{String(currentUser.role)}</span>
+          <h2 className="text-xl font-bold">{currentUser.name}</h2>
+          <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full">{currentUser.role}</span>
         </div>
-
-        <EmployeePayTracker currentUser={currentUser} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} employees={employees} bonusSettings={bonusSettings} />
-
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div className="px-6 py-4 border-b bg-slate-50"><h2 className="text-lg font-semibold flex items-center"><Clock className="h-5 w-5 mr-2 text-teal-600" /> Next Shift</h2></div>
-          <div className="p-6">
-            {nextShift ? (
-              <div className="space-y-4">
-                <div className="font-medium flex items-center"><CalendarDays className="h-4 w-4 mr-2 text-slate-400"/>{parseLocalSafe(nextShift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
-                <div className="flex items-center"><Clock className="h-4 w-4 mr-2 text-slate-400"/>{nextShift.startTime} - {nextShift.endTime}</div>
-                <div className="flex items-center"><Heart className="h-4 w-4 mr-2 text-slate-400"/>{safeClients.find(c => c.id === nextShift.clientId)?.name || 'Unknown'}</div>
-                <button onClick={() => setSelectedClient(safeClients.find(c => c.id === nextShift.clientId))} className="w-full bg-slate-100 text-slate-700 font-semibold py-2 rounded text-sm flex justify-center items-center"><Info className="h-4 w-4 mr-2"/>View Care Plan</button>
-              </div>
-            ) : <div className="text-center text-slate-500">No upcoming shifts.</div>}
-          </div>
-        </div>
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden"><div className="px-6 py-4 border-b bg-slate-50"><h2 className="text-lg font-semibold flex items-center"><Clock className="h-5 w-5 mr-2 text-teal-600" /> Next Shift</h2></div><div className="p-6">{nextShift ? <div className="space-y-4"><div className="font-medium">{nextShift.date}</div><div>{nextShift.startTime} - {nextShift.endTime}</div><button onClick={() => setSelectedClient(clients.find(c => c.id === nextShift.clientId))} className="w-full mt-2 bg-slate-100 text-slate-700 font-semibold py-2 rounded text-sm">View Care Plan</button></div> : <div className="text-center text-slate-500">No upcoming shifts.</div>}</div></div>
       </div>
       <div className="md:w-2/3 space-y-6">
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           <div className="flex border-b overflow-x-auto">
             <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'schedule' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>My Schedule</button>
             <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'expenses' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Logs & Expenses</button>
-            {isBonusActive && <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'awards' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Awards</button>}
-            <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'documents' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Documents</button>
-            <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'paystubs' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Paystubs</button>
-            <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium ${activeTab === 'announcements' ? 'text-teal-700 border-b-2 border-teal-600 bg-teal-50' : 'text-slate-500 hover:bg-slate-50'}`}>Team Feed</button>
           </div>
-          <div className="p-0">
-            {activeTab === 'schedule' && (
-              <div className="p-6">
-                <div className="divide-y divide-slate-100 border rounded-xl overflow-hidden">
-                  {upcomingShifts.length === 0 ? (<div className="p-8 text-center text-slate-500">You have no upcoming shifts.</div>) : (
-                    upcomingShifts.map(shift => {
-                      const client = safeClients.find(c => c.id === shift.clientId);
-                      const d = parseLocalSafe(shift.date);
-                      return (
-                        <div key={shift.id} className="p-4 hover:bg-slate-50 flex justify-between items-center gap-4">
-                          <div className="flex items-start space-x-4">
-                            <div className="bg-teal-50 rounded-lg p-2 text-center min-w-[70px]"><div className="text-xs font-bold text-teal-600 uppercase">{d.toLocaleDateString('en-US', { month: 'short' })}</div><div className="text-xl font-extrabold text-teal-800">{d.getDate()}</div></div>
-                            <div><h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4><div className="text-sm text-slate-600 flex items-center mt-1"><Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}</div></div>
-                          </div>
-                          <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 border border-teal-200 px-3 py-1.5 rounded bg-white hover:bg-teal-50">Care Plan</button>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-            {activeTab === 'expenses' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6"><EmployeeMileageLog myExpenses={myExpenses} clients={safeClients} onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} getClientRemainingBalance={getClientRemainingBalance} /><EmployeeClientExpenseLog myClientExpenses={myClientExpenses} clients={safeClients} onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} getClientRemainingBalance={getClientRemainingBalance} /></div>}
-            {activeTab === 'awards' && isBonusActive && <div className="p-6"><AwardsLeaderboard employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} isBonusActive={isBonusActive} bonusSettings={bonusSettings} /></div>}
-            {activeTab === 'documents' && <div className="p-6"><DocumentManager documents={documents} isAdmin={false} /></div>}
-            {activeTab === 'paystubs' && <div className="p-6"><EmployeePaystubs myPaystubs={myPaystubs} /></div>}
-            {activeTab === 'announcements' && <div className="p-6"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>}
+          <div className="p-6">
+            {activeTab === 'schedule' && <div><h3 className="font-bold mb-4">My Shifts</h3>{upcomingShifts.map(s => <div key={s.id} className="p-3 border rounded mb-2 flex justify-between"><span>{s.date} | {s.startTime}-{s.endTime}</span></div>)}</div>}
+            {activeTab === 'expenses' && <div className="text-center text-slate-500">Expenses module active.</div>}
           </div>
         </div>
       </div>

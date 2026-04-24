@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, Moon, TreePine, Sailboat, Cloud, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, MessageSquare, Search, UserMinus, FileText, Wallet, Info, BookOpen } from 'lucide-react';
 
-// --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 // --- UTILS & COMPONENTS ---
-import { MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES, parseLocal, isBiweeklyPayday, getHoliday, getPayPeriodBounds } from './utils';
+import { parseLocal, isBiweeklyPayday, getHoliday, MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES } from './utils';
 
 import LoginPage from './components/LoginPage';
 import Announcements from './components/Announcements';
@@ -23,59 +22,16 @@ import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal';
 
-// --- CUSTOM CAPTAIN HAT ICON ---
-const CaptainHatIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
-    <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
-    <circle cx="12" cy="10" r="1.5" />
-  </svg>
-);
-
-// --- SAFE AVATAR COMPONENT (CATCHES BROKEN LINKS) ---
-const SafeAvatar = ({ url, name, role, className }) => {
-  const [imgError, setImgError] = React.useState(false);
-  
-  let cleanUrl = url || '';
-  if (cleanUrl.startsWith('[')) {
-    const match = cleanUrl.match(/\]\((.*?)\)/);
-    if (match && match[1]) cleanUrl = match[1];
-  }
-
-  const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
-  const iconIndex = name ? name.length % ICONS.length : 0;
-  const iconName = ICONS[iconIndex];
-
-  const renderIcon = () => {
-    if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
-    if (iconName === 'Star') return <Star className={className} fill="currentColor" />;
-    if (iconName === 'Sun') return <Sun className={className} />;
-    if (iconName === 'Moon') return <Moon className={className} />;
-    if (iconName === 'TreePine') return <TreePine className={className} />;
-    if (iconName === 'Sailboat') return <Sailboat className={className} />;
-    if (iconName === 'Cloud') return <Cloud className={className} />;
-    if (iconName === 'Zap') return <Zap className={className} fill="currentColor" />;
-    return <User className={className} />;
-  };
-
-  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
-    return renderIcon();
-  }
-
-  return (
-    <img 
-      src={cleanUrl} 
-      alt={name || 'Avatar'} 
-      className={`h-full w-full object-cover bg-white ${className}`} 
-      onError={() => setImgError(true)} 
-    />
-  );
+// --- PHOTO CLEANER (Ignores broken dicebear links) ---
+const getValidPhoto = (url) => {
+  if (!url || typeof url !== 'string' || url.includes('dicebear.com')) return null;
+  return url.startsWith('[') ? (url.match(/\]\((.*?)\)/)?.[1] || null) : url;
 };
 
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
 try {
-  const firebaseConfig = {
+  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
     apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
     authDomain: "good-neighbour-portal.firebaseapp.com",
     projectId: "good-neighbour-portal",
@@ -86,27 +42,14 @@ try {
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  appId = 'good-neighbour-portal';
+  const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'good-neighbour-portal';
+  appId = rawAppId.replace(/\//g, '-');
 } catch (e) {
   console.error("Firebase init error:", e);
 }
 
 // ==========================================
-// HELPERS FOR INLINE COMPONENTS
-// ==========================================
-const parseLocalSafe = (dateStr) => {
-  if (!dateStr) return new Date();
-  try {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
-    return new Date(y, m - 1, d);
-  } catch (e) {
-    return new Date();
-  }
-};
-
-// ==========================================
-// INLINE COMPONENTS
+// SHARED MODALS 
 // ==========================================
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], onSave }) {
   const safeEmps = Array.isArray(employees) ? employees : [];
@@ -123,7 +66,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const handleSubmit = (e) => {
     e.preventDefault();
     const newShifts = [];
-    const baseDate = parseLocalSafe(selectedDate);
+    const baseDate = parseLocal(selectedDate);
 
     if (isRecurring) {
       for (let i = 0; i < recurrenceWeeks; i++) {
@@ -190,7 +133,17 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   );
 }
 
-function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, documents = [], onAddDocument, onRemoveDocument, messages = [], onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient }) {
+// ==========================================
+// ADMIN DASHBOARD ORCHESTRATOR
+// ==========================================
+function AdminDashboard({ 
+  shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, 
+  expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], 
+  onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, 
+  documents = [], onAddDocument, onRemoveDocument, messages = [], onSendMessage, currentUser, 
+  payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
+  onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient 
+}) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -200,12 +153,13 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  const isMasterAdmin = currentUser?.id === 'admin1';
+  const isMasterAdmin = String(currentUser?.role).includes('Admin');
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = new Date(year, month, 1).getDay(); 
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
@@ -218,56 +172,22 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Admin Dashboard</h1>
-          <p className="text-slate-500">Manage schedule and personnel.</p>
-        </div>
-        {activeAdminTab === 'schedule' && (
-          <button 
-            onClick={() => handleDayClick(new Date().getDate() || 1)}
-            className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition"
-          >
-            <Plus className="h-5 w-5" />
-            <span>Add Shift</span>
-          </button>
-        )}
-      </div>
+  const safeShifts = Array.isArray(shifts) ? shifts : [];
 
-      <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide pb-2">
-        {[ 
-          {id: 'schedule', icon: CalendarIcon, label: 'Schedule'}, 
-          {id: 'employees', icon: Users, label: 'Employees'}, 
-          {id: 'clients', icon: Heart, label: 'Clients'}, 
-          {id: 'client-funds', icon: Wallet, label: 'Client Funds'}, 
-          {id: 'expenses', icon: Receipt, label: 'Reimbursements'}, 
-          {id: 'earnings', icon: Coins, label: 'Earnings'}, 
-          {id: 'timeoff', icon: CalendarDays, label: 'Time Off'}, 
-          {id: 'paystubs', icon: FileText, label: 'Paystubs'}, 
-          {id: 'documents', icon: BookOpen, label: 'Documents'}, 
-          {id: 'announcements', icon: MessageSquare, label: 'Announcements'}, 
-          {id: 'settings', icon: Settings, label: 'Settings'}
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
-            <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {activeAdminTab === 'employees' && <EmployeeManager employees={employees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />}
-      {activeAdminTab === 'clients' && <ClientManager clients={clients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} />}
-      {activeAdminTab === 'client-funds' && <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />}
-      {activeAdminTab === 'expenses' && <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={employees} clients={clients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />}
-      {activeAdminTab === 'earnings' && isMasterAdmin && <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />}
-      {activeAdminTab === 'timeoff' && <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />}
-      {activeAdminTab === 'paystubs' && <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />}
-      {activeAdminTab === 'documents' && <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />}
-      {activeAdminTab === 'announcements' && <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>}
-      {activeAdminTab === 'settings' && isMasterAdmin && <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} />}
-      
-      {activeAdminTab === 'schedule' && (
+  const renderAdminTab = () => {
+    switch (activeAdminTab) {
+      case 'employees': return <EmployeeManager employees={employees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
+      case 'clients': return <ClientManager clients={clients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} />;
+      case 'client-funds': return <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />;
+      case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={employees} clients={clients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
+      case 'earnings': return <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
+      case 'timeoff': return <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />;
+      case 'paystubs': return <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
+      case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />;
+      case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>;
+      case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} />;
+      case 'schedule':
+      default: return (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
             <div className="flex items-center space-x-3 w-full sm:w-auto">
@@ -302,7 +222,6 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
                 const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
                 const holiday = getHoliday(dateStr);
                 
-                const safeShifts = Array.isArray(shifts) ? shifts : [];
                 const filteredShifts = safeShifts.filter(s => {
                   if (!s || !scheduleSearch.trim()) return true;
                   const emp = employees.find(e => e.id === s.employeeId);
@@ -317,7 +236,7 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
                     <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
                       <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
                       <div className="flex flex-col items-end gap-1">
-                        {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {holiday.name.toUpperCase()}</span>)}
+                        {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
                         {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
                       </div>
                     </div>
@@ -345,13 +264,58 @@ function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmplo
             </div>
           </div>
         </div>
-      )}
+      );
+    }
+  };
 
-      {isModalOpen && <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={employees} clients={clients} onSave={onAddShift} />}
+  const adminTabs = [
+    { id: 'schedule', icon: CalendarIcon, label: 'Schedule' },
+    { id: 'employees', icon: Users, label: 'Employees' },
+    { id: 'clients', icon: Heart, label: 'Clients' },
+    { id: 'client-funds', icon: Wallet, label: 'Client Funds' },
+    { id: 'expenses', icon: Receipt, label: 'Reimbursements' },
+    { id: 'earnings', icon: Coins, label: 'Earnings' },
+    { id: 'timeoff', icon: CalendarDays, label: 'Time Off' },
+    { id: 'paystubs', icon: FileText, label: 'Paystubs' },
+    { id: 'documents', icon: BookOpen, label: 'Documents' },
+    { id: 'announcements', icon: MessageSquare, label: 'Announcements' },
+    { id: 'settings', icon: Settings, label: 'Settings' }
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Admin Dashboard</h1>
+          <p className="text-slate-500">Manage schedule and personnel.</p>
+        </div>
+        {activeAdminTab === 'schedule' && (
+          <button onClick={() => handleDayClick(new Date().getDate() || 1)} className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition">
+            <Plus className="h-5 w-5" /><span>Add Shift</span>
+          </button>
+        )}
+      </div>
+
+      <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide pb-2">
+        {adminTabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+            <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
+          </button>
+        ))}
+      </div>
+      
+      {renderAdminTab()}
+
+      {isModalOpen && (
+        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={employees} clients={clients} onSave={onAddShift} />
+      )}
     </div>
   );
 }
 
+// ==========================================
+// MAIN APP ENTRY POINT
+// ==========================================
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [firebaseUser, setFirebaseUser] = useState(null);
@@ -426,7 +390,7 @@ export default function App() {
   const handleSeedData = async () => {
     if (!firebaseUser || !db) return;
     try {
-      const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, docId.toString());
+      const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, String(docId));
 
       for (const e of MOCK_EMPLOYEES) await setDoc(getDocRef('gn_employees', e.id), e);
       for (const c of MOCK_CLIENTS) await setDoc(getDocRef('gn_clients', c.id), c);
@@ -437,7 +401,7 @@ export default function App() {
       for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
       for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
       
-      alert("Demo database initialized successfully!");
+      alert("Demo database initialized successfully! You can now log in.");
     } catch (err) {
       console.error("Error seeding data:", err);
       alert("Error seeding data. Check console logs.");
@@ -507,6 +471,8 @@ export default function App() {
   const isAdmin = String(currentUser.role).includes('Admin');
   const showAdminView = isAdmin && viewMode === 'admin';
 
+  const finalPhotoUrl = getValidPhoto(currentUser.photoUrl);
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
       <nav className="bg-teal-700 text-white shadow-md px-6 py-4 flex justify-between items-center">
@@ -519,7 +485,7 @@ export default function App() {
           )}
           <div className="flex items-center text-sm hidden sm:flex">
             <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-500 overflow-hidden mr-2 shrink-0">
-              <SafeAvatar url={currentUser.photoUrl} name={currentUser.name} role={currentUser.role} className="h-4 w-4" />
+              {finalPhotoUrl ? <img src={finalPhotoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" /> : <User className="h-4 w-4" />}
             </div>
             {String(currentUser.name)}
           </div>
@@ -534,7 +500,20 @@ export default function App() {
           />
         ) : (
           <EmployeeDashboard 
-            shifts={shifts} employees={employees} currentUser={currentUser} clients={clients} expenses={expenses} onAddExpense={(d) => runMutation('gn_expenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} clientExpenses={clientExpenses} onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} getClientRemainingBalance={getClientRemainingBalance} paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} payPeriodStart={payPeriodStart} onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} isBonusActive={isBonusActive} bonusSettings={bonusSettings} setSelectedClient={setSelectedClient} onUpdateProfile={(id, d) => { runMutation('gn_employees', id, 'update', d); setCurrentUser(prev => ({ ...prev, ...d })); }}
+            shifts={shifts} employees={employees} currentUser={currentUser} clients={clients} expenses={expenses} 
+            onAddExpense={(d) => runMutation('gn_expenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
+            clientExpenses={clientExpenses} 
+            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
+            paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
+            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
+            payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
+            onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
+            setSelectedClient={setSelectedClient}
+            getClientRemainingBalance={getClientRemainingBalance}
+            onUpdateProfile={(id, d) => {
+              runMutation('gn_employees', id, 'update', d);
+              setCurrentUser(prev => ({ ...prev, ...d })); 
+            }}
           />
         )}
       </main>

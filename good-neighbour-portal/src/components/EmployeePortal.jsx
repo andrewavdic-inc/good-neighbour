@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
-import ClientProfileModal from './ClientProfileModal'; 
 
 // --- CUSTOM CAPTAIN HAT ICON ---
 const CaptainHatIcon = ({ className }) => (
@@ -13,7 +12,7 @@ const CaptainHatIcon = ({ className }) => (
   </svg>
 );
 
-// --- URL CLEANER (Fixes broken markdown URLs from database) ---
+// --- URL CLEANER ---
 const cleanPhotoUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('[')) {
@@ -24,7 +23,7 @@ const cleanPhotoUrl = (url) => {
 };
 
 // ==========================================
-// INLINE HELPERS (Prevents Import Crashes)
+// INLINE HELPERS
 // ==========================================
 const parseLocalSafe = (dateStr) => {
   try {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, MessageSquare, Search, UserMinus, FileText, Wallet, Info, BookOpen, AlertCircle, Phone, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Send, Download, TrendingUp, Trophy, Medal, Award, Activity, Sun, CheckCircle, XCircle, Camera, Moon, TreePine, Sailboat, Cloud, Zap, ShieldAlert } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, MessageSquare, Search, UserMinus, FileText, Wallet, Info, BookOpen } from 'lucide-react';
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
@@ -22,55 +22,11 @@ import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal'; 
 
-// --- CUSTOM CAPTAIN HAT ICON ---
-const CaptainHatIcon = ({ className }) => (
-  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
-    <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
-    <circle cx="12" cy="10" r="1.5" />
-  </svg>
-);
-
-// --- SAFE AVATAR COMPONENT ---
-const SafeAvatar = ({ url, name, role, className }) => {
-  const [imgError, setImgError] = React.useState(false);
-  
-  let cleanUrl = url || '';
-  if (cleanUrl.startsWith('[')) {
-    const match = cleanUrl.match(/\]\((.*?)\)/);
-    if (match && match[1]) cleanUrl = match[1];
-  }
-
-  const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
-  const iconIndex = name ? name.length % ICONS.length : 0;
-  const iconName = ICONS[iconIndex];
-
-  const renderIcon = () => {
-    if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
-    if (iconName === 'Star') return <Star className={className} fill="currentColor" />;
-    if (iconName === 'Sun') return <Sun className={className} />;
-    if (iconName === 'Moon') return <Moon className={className} />;
-    if (iconName === 'TreePine') return <TreePine className={className} />;
-    if (iconName === 'Sailboat') return <Sailboat className={className} />;
-    if (iconName === 'Cloud') return <Cloud className={className} />;
-    if (iconName === 'Zap') return <Zap className={className} fill="currentColor" />;
-    return <User className={className} />;
-  };
-
-  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
-    return renderIcon();
-  }
-
-  return (
-    <img 
-      src={cleanUrl} 
-      alt={name || 'Avatar'} 
-      className={`h-full w-full object-cover bg-white ${className}`} 
-      onError={() => setImgError(true)} 
-    />
-  );
+// --- PHOTO CLEANER (Ignores broken dicebear links from mock data) ---
+const getValidPhoto = (url) => {
+  if (!url || typeof url !== 'string' || url.includes('dicebear.com')) return null;
+  return url.startsWith('[') ? (url.match(/\]\((.*?)\)/)?.[1] || null) : url;
 };
-
 
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
@@ -193,13 +149,12 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
 // ADMIN DASHBOARD
 // ==========================================
 function AdminDashboard({ 
-  shifts = [], employees = [], clients = [], expenses = [], clientExpenses = [], paystubs = [], 
-  timeOffLogs = [], messages = [], documents = [], currentUser, payPeriodStart, setPayPeriodStart, 
-  isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
-  onAddEmployee, onRemoveEmployee, updateEmployee, onAddClient, onRemoveClient, updateClient, 
-  onUpdateExpense, onUpdateClientExpense, onAddPaystub, onRemovePaystub, onAddTimeOffLog, 
-  onRemoveTimeOffLog, onAddDocument, onRemoveDocument, onSendMessage, onAddShift, 
-  onRemoveShift, onMarkShiftOpen 
+  shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, 
+  expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], 
+  onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, 
+  documents = [], onAddDocument, onRemoveDocument, messages = [], onSendMessage, currentUser, 
+  payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
+  onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient 
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -526,6 +481,8 @@ export default function App() {
   const isAdmin = String(currentUser.role).includes('Admin');
   const showAdminView = isAdmin && viewMode === 'admin';
 
+  const finalCurrentUserPhotoUrl = getValidPhoto(currentUser.photoUrl);
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
       <nav className="bg-teal-700 text-white shadow-md px-6 py-4 flex justify-between items-center">
@@ -538,7 +495,7 @@ export default function App() {
           )}
           <div className="flex items-center text-sm hidden sm:flex">
             <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-500 overflow-hidden mr-2 shrink-0">
-              <SafeAvatar url={currentUser.photoUrl} name={currentUser.name} role={currentUser.role} className="h-4 w-4" />
+              {finalCurrentUserPhotoUrl ? <img src={finalCurrentUserPhotoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" /> : <User className="h-4 w-4" />}
             </div>
             {String(currentUser.name)}
           </div>

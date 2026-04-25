@@ -22,7 +22,7 @@ import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal'; 
 
-// --- PHOTO CLEANER (Ignores broken dicebear links from mock data) ---
+// --- PHOTO CLEANER ---
 const getValidPhoto = (url) => {
   if (!url || typeof url !== 'string' || url.includes('dicebear.com')) return null;
   return url.startsWith('[') ? (url.match(/\]\((.*?)\)/)?.[1] || null) : url;
@@ -48,9 +48,6 @@ try {
   console.error("Firebase init error:", e);
 }
 
-// ==========================================
-// HELPERS
-// ==========================================
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
   try {
@@ -92,6 +89,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
     } else {
       newShifts.push({ employeeId, clientId, date: selectedDate, startTime, endTime });
     }
+    
     if (onSave) onSave(newShifts);
     onClose();
   };
@@ -108,7 +106,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
             <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
-              {safeEmps.map(emp => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
+              {safeEmps.map(emp => <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -145,17 +143,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   );
 }
 
-// ==========================================
-// ADMIN DASHBOARD
-// ==========================================
-function AdminDashboard({ 
-  shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, 
-  expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], 
-  onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, 
-  documents = [], onAddDocument, onRemoveDocument, messages = [], onSendMessage, currentUser, 
-  payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
-  onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient 
-}) {
+function AdminDashboard({ shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, documents = [], onAddDocument, onRemoveDocument, messages = [], onSendMessage, currentUser, payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -169,9 +157,8 @@ function AdminDashboard({
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = new Date(year, month, 1).getDay(); 
-  
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
+  
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
@@ -183,7 +170,6 @@ function AdminDashboard({
 
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
-
   const safeShifts = Array.isArray(shifts) ? shifts : [];
 
   const renderAdminTab = () => {
@@ -506,7 +492,47 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {showAdminView ? (
           <AdminDashboard 
-            shifts={shifts} employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} expenses={expenses} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} clientExpenses={clientExpenses} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} paystubs={paystubs} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} timeOffLogs={timeOffLogs} onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} isBonusActive={isBonusActive} setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} bonusSettings={bonusSettings} setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} onAddShift={(d) => runMutation('gn_shifts', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveShift={(id) => runMutation('gn_shifts', id, 'delete')} onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
+            shifts={shifts} 
+            employees={employees} 
+            onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} 
+            onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} 
+            updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} 
+            clients={clients} 
+            onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
+            onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
+            updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} 
+            expenses={expenses} 
+            onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} 
+            clientExpenses={clientExpenses} 
+            onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} 
+            paystubs={paystubs} 
+            onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} 
+            onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} 
+            timeOffLogs={timeOffLogs} 
+            onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} 
+            onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} 
+            documents={documents} 
+            onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} 
+            onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} 
+            messages={messages} 
+            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
+            currentUser={currentUser} 
+            payPeriodStart={payPeriodStart} 
+            setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} 
+            isBonusActive={isBonusActive} 
+            setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} 
+            bonusSettings={bonusSettings} 
+            setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
+            onAddShift={async (newShifts) => {
+              if (!firebaseUser) return;
+              const arr = Array.isArray(newShifts) ? newShifts : [newShifts];
+              for (const s of arr) {
+                const id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+                await setDoc(getDocRef('gn_shifts', id), { ...s, id });
+              }
+            }} 
+            onRemoveShift={(id) => runMutation('gn_shifts', id, 'delete')} 
+            onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
           />
         ) : (
           <EmployeeDashboard 

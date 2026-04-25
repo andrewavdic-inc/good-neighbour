@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CheckCircle, Star, Sun, Moon, TreePine, Sailboat, Cloud, Zap } from 'lucide-react';
 
 const CaptainHatIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+  <svg xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
     <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
     <circle cx="12" cy="10" r="1.5" />
@@ -88,6 +88,11 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                     <div><label className="block text-sm font-medium text-slate-700 mb-1">Password *</label><input type="text" value={formData.password} onChange={(e) => handleChange('password', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500" required /></div>
                   </div>
                   <div><label className="block text-sm font-medium text-slate-700 mb-1">System Role</label><select value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white"><option value="Neighbour">Neighbour</option><option value="Block Captain">Block Captain</option><option value="Administrator">Administrator</option></select></div>
+                  <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-white">
+                    <div className="col-span-3"><label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label><select value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-teal-50"><option value="per_visit">Per Visit Rate</option><option value="hourly">Hourly Rate</option></select></div>
+                    <div className="col-span-3 sm:col-span-1.5"><label className="block text-xs font-medium text-slate-700 mb-1">Per Visit ($)</label><input type="number" min="0" step="1" value={formData.perVisitRate} onChange={(e) => handleChange('perVisitRate', e.target.value)} className={`w-full px-3 py-2 border border-slate-300 rounded-md text-sm ${formData.payType==='per_visit'?'bg-white':'bg-slate-100 text-slate-400'}`} required /></div>
+                    <div className="col-span-3 sm:col-span-1.5"><label className="block text-xs font-medium text-slate-700 mb-1">Hourly ($)</label><input type="number" min="0" step="0.50" value={formData.hourlyWage} onChange={(e) => handleChange('hourlyWage', e.target.value)} className={`w-full px-3 py-2 border border-slate-300 rounded-md text-sm ${formData.payType==='hourly'?'bg-white':'bg-slate-100 text-slate-400'}`} required /></div>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Update Profile Photo</label>
                     <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('edit-emp-photo-upload').click()}>
@@ -119,7 +124,10 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
             </div>
           </form>
         </div>
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0"><button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Cancel</button><button type="submit" form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700"><CheckCircle className="h-4 w-4 mr-2 inline" /> Save Profile</button></div>
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Cancel</button>
+          <button type="submit" form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700"><CheckCircle className="h-4 w-4 mr-2 inline" /> Save Profile</button>
+        </div>
       </div>
     </div>
   );
@@ -129,6 +137,8 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
   const [newName, setNewName] = useState(''); const [newUsername, setNewUsername] = useState(''); const [newPassword, setNewPassword] = useState(''); 
   const [newRole, setNewRole] = useState('Neighbour'); const [newPayType, setNewPayType] = useState('per_visit'); 
   const [newHourlyWage, setNewHourlyWage] = useState('22.50'); const [newPerVisitRate, setNewPerVisitRate] = useState('45'); 
+  const [newPhone, setNewPhone] = useState(''); const [newEmail, setNewEmail] = useState('');
+  const [newAvailability, setNewAvailability] = useState([]);
   const [newPhotoFile, setNewPhotoFile] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingEmployee, setEditingEmployee] = useState(null);
@@ -142,12 +152,17 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
     const newEmp = { 
       id: `emp_${Date.now()}`, name: newName, username: newUsername.trim(), password: newPassword, role: newRole, 
       payType: newPayType, hourlyWage: Number(newHourlyWage) || 22.50, perVisitRate: Number(newPerVisitRate) || 45, 
-      requirements: {}, timeOffBalances: { sick: 5, vacation: 10 }, availability: [] 
+      phone: newPhone, email: newEmail,
+      requirements: {}, timeOffBalances: { sick: 5, vacation: 10 }, availability: newAvailability 
     }; 
     
     if (newPhotoFile) newEmp.photoUrl = URL.createObjectURL(newPhotoFile);
     if (onAddEmployee) onAddEmployee(newEmp); 
-    setNewName(''); setNewUsername(''); setNewPassword(''); setNewPhotoFile(null);
+    setNewName(''); setNewUsername(''); setNewPassword(''); setNewPhone(''); setNewEmail(''); setNewAvailability([]); setNewPhotoFile(null);
+  };
+
+  const toggleNewAvailability = (dayPart) => {
+    setNewAvailability(prev => prev.includes(dayPart) ? prev.filter(d => d !== dayPart) : [...prev, dayPart]);
   };
 
   const getComplianceIssues = (emp) => { 
@@ -200,12 +215,18 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
                       <div>
                         <h3 className="font-bold text-slate-800 text-lg leading-tight">{String(emp.name)}</h3>
                         <span className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-0.5 rounded inline-block mt-1 tracking-wide uppercase">{String(emp.role)}</span>
+                        <span className="text-xs font-semibold text-slate-500 block mt-1">{emp.payType === 'hourly' ? `$${emp.hourlyWage || 22.50}/hr` : `$${emp.perVisitRate || 45}/visit`}</span>
                       </div>
                     </div>
 
                     <div className="space-y-2.5 mb-4 text-sm text-slate-600 flex-1">
                       {emp.phone && <div className="flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> {emp.phone}</div>}
                       {emp.email && <div className="flex items-center"><Mail className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> <span className="truncate" title={emp.email}>{emp.email}</span></div>}
+                      {(emp.availability && emp.availability.length > 0) && (
+                        <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-slate-100">
+                          {emp.availability.map(avail => (<span key={avail} className="text-[10px] font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">{avail}</span>))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-auto border-t border-slate-100 pt-4">
@@ -225,13 +246,33 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-fit">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50"><h2 className="text-lg font-semibold text-slate-800">Add New Employee</h2></div>
-        <form onSubmit={handleAddEmployee} className="p-6 space-y-4">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label><input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" required /></div>
+        <form onSubmit={handleAddEmployee} className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label><input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Username *</label><input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" required /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Password *</label><input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Username *</label><input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Password *</label><input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500" required /></div>
           </div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Role</label><select value={newRole} onChange={(e) => setNewRole(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white"><option value="Neighbour">Neighbour</option><option value="Block Captain">Block Captain</option><option value="Administrator">Administrator</option></select></div>
+          <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-slate-50/50">
+            <div className="col-span-3"><label className="block text-sm font-medium text-slate-700 mb-1">Role</label><select value={newRole} onChange={(e) => setNewRole(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500 bg-white"><option value="Neighbour">Neighbour</option><option value="Block Captain">Block Captain</option><option value="Administrator">Administrator</option></select></div>
+            <div className="col-span-3"><label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label><select value={newPayType} onChange={(e) => setNewPayType(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 bg-white"><option value="per_visit">Per Visit Rate</option><option value="hourly">Hourly Rate</option></select></div>
+            <div className="col-span-3 sm:col-span-1.5"><label className="block text-xs font-medium text-slate-700 mb-1">Per Visit ($)</label><input type="number" min="0" step="1" value={newPerVisitRate} onChange={(e) => setNewPerVisitRate(e.target.value)} className={`w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 ${newPayType==='per_visit'?'bg-white':'bg-slate-100'}`} required/></div>
+            <div className="col-span-3 sm:col-span-1.5"><label className="block text-xs font-medium text-slate-700 mb-1">Hourly ($)</label><input type="number" min="0" step="0.50" value={newHourlyWage} onChange={(e) => setNewHourlyWage(e.target.value)} className={`w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500 ${newPayType==='hourly'?'bg-white':'bg-slate-100'}`} required/></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Phone</label><input type="text" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500" /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Email</label><input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-teal-500" /></div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
+            <div className="flex flex-wrap gap-2">
+              {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
+                <label key={part} className="flex items-center space-x-1.5 text-xs bg-white border border-slate-300 px-2 py-1 rounded cursor-pointer hover:bg-slate-50 transition">
+                  <input type="checkbox" checked={newAvailability.includes(part)} onChange={() => toggleNewAvailability(part)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4"/>
+                  <span>{part}</span>
+                </label>
+              ))}
+            </div>
+          </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Profile Photo</label>
             <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('emp-photo-upload').click()}>
@@ -239,7 +280,7 @@ export default function EmployeeManager({ employees = [], onAddEmployee, onRemov
               <input id="emp-photo-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => setNewPhotoFile(e.target.files[0])}/>
             </div>
           </div>
-          <button type="submit" className="w-full flex items-center justify-center space-x-2 py-2 px-4 border rounded-md text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 transition"><Plus className="h-4 w-4" /><span>Add Employee Profile</span></button>
+          <button type="submit" className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none transition"><Plus className="h-4 w-4" /><span>Add Employee Profile</span></button>
         </form>
       </div>
 

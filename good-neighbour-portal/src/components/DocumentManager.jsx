@@ -10,13 +10,15 @@ export default function DocumentManager({ documents = [], onAddDocument, onRemov
     e.preventDefault();
     if (!title || !file) return;
     
-    // In a real app, you would upload the file to Firebase Storage here and save the download URL.
-    // For this demo, we save the filename to simulate the record.
+    // Using an object URL as a temporary mock download link until Firebase Storage is connected
+    const fileUrl = URL.createObjectURL(file);
+    
     if (onAddDocument) {
       onAddDocument({
         title,
         description,
         fileName: file.name,
+        fileUrl: fileUrl, 
         uploadDate: new Date().toISOString()
       });
     }
@@ -26,7 +28,6 @@ export default function DocumentManager({ documents = [], onAddDocument, onRemov
     setFile(null);
   };
 
-  // Sort newest first safely
   const sortedDocs = [...documents].sort((a, b) => {
     const dateA = a.uploadDate ? new Date(a.uploadDate).getTime() : 0;
     const dateB = b.uploadDate ? new Date(b.uploadDate).getTime() : 0;
@@ -113,9 +114,15 @@ export default function DocumentManager({ documents = [], onAddDocument, onRemov
                     </div>
                   </div>
                   <div className="flex items-center space-x-1 shrink-0">
-                    <button className="text-teal-600 hover:bg-teal-50 p-2 rounded transition" title="Download">
+                    <a 
+                      href={doc.fileUrl || '#'} 
+                      download={doc.fileName}
+                      onClick={(e) => { if(!doc.fileUrl) { e.preventDefault(); alert("File data unavailable. Please re-upload the document."); } }}
+                      className="text-teal-600 hover:bg-teal-50 p-2 rounded transition inline-flex" 
+                      title="Download"
+                    >
                       <Download className="h-5 w-5" />
-                    </button>
+                    </a>
                     {isAdmin && (
                       <button onClick={() => onRemoveDocument(doc.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded transition ml-1" title="Delete">
                         <Trash2 className="h-5 w-5" />

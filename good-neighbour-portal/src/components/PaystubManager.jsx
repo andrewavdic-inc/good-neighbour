@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { FileText, Plus, Trash2 } from 'lucide-react';
 
-// Safe date parser to prevent crashes from missing dates
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
   try {
@@ -18,7 +17,6 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
   const [date, setDate] = useState('');
   const [paystubFile, setPaystubFile] = useState(null);
 
-  // 100% guarantee these are arrays so .map() and .sort() can NEVER crash
   const safePaystubs = Array.isArray(paystubs) ? paystubs : [];
   const safeEmployees = Array.isArray(employees) ? employees : [];
 
@@ -26,8 +24,16 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
     e.preventDefault();
     if (!employeeId || !date || !paystubFile) return;
     
+    // Create a secure Object URL so the employee can download the file
+    const fileUrl = URL.createObjectURL(paystubFile);
+
     if (onAddPaystub) {
-      onAddPaystub({ employeeId, date, fileName: paystubFile.name });
+      onAddPaystub({ 
+        employeeId, 
+        date, 
+        fileName: paystubFile.name,
+        fileUrl: fileUrl 
+      });
     }
     
     setEmployeeId(''); 
@@ -108,7 +114,6 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
             <p className="text-sm text-slate-500 text-center py-8">No paystubs have been recorded yet.</p>
           ) : (
             [...safePaystubs].sort((a, b) => {
-               // Safe sorting that won't crash if dates are missing
                const dateA = a?.date ? new Date(a.date).getTime() : 0;
                const dateB = b?.date ? new Date(b.date).getTime() : 0;
                return dateB - dateA;

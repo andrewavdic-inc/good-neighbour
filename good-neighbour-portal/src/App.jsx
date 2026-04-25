@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -23,10 +23,16 @@ import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal';
 
+// --- PHOTO CLEANER (Ignores broken dicebear links from mock data) ---
+const getValidPhoto = (url) => {
+  if (!url || typeof url !== 'string' || url.includes('dicebear.com')) return null;
+  return url.startsWith('[') ? (url.match(/\]\((.*?)\)/)?.[1] || null) : url;
+};
+
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
 try {
-  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  const firebaseConfig = {
     apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
     authDomain: "good-neighbour-portal.firebaseapp.com",
     projectId: "good-neighbour-portal",
@@ -37,8 +43,7 @@ try {
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'good-neighbour-portal';
-  appId = rawAppId.replace(/\//g, '-');
+  appId = 'good-neighbour-portal';
 } catch (e) {
   console.error("Firebase init error:", e);
 }
@@ -58,7 +63,7 @@ const parseLocalSafe = (dateStr) => {
 };
 
 // ==========================================
-// INLINE MODALS & DASHBOARD
+// INLINE MODALS
 // ==========================================
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], onSave }) {
   const safeEmps = Array.isArray(employees) ? employees : [];
@@ -143,6 +148,9 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   );
 }
 
+// ==========================================
+// ADMIN DASHBOARD
+// ==========================================
 function AdminDashboard({ 
   shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, 
   expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], 
@@ -160,6 +168,7 @@ function AdminDashboard({
 
   const isMasterAdmin = String(currentUser?.role).includes('Admin');
 
+  // Intelligent Navigation based on current view
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
     if (calendarView === 'month') newDate.setMonth(newDate.getMonth() - 1);

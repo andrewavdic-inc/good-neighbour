@@ -62,6 +62,16 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
+// Safe sort to prevent crashes if shifts are missing start times from older corrupt data
+const safeShiftsSort = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  return [...arr].sort((a, b) => {
+    const dA = a?.date && a?.startTime ? new Date(`${a.date}T${a.startTime}`).getTime() : 0;
+    const dB = b?.date && b?.startTime ? new Date(`${b.date}T${b.startTime}`).getTime() : 0;
+    return dA - dB;
+  });
+};
+
 // ==========================================
 // INLINE MODALS
 // ==========================================
@@ -149,7 +159,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
 }
 
 // ==========================================
-// ADMIN DASHBOARD
+// ADMIN DASHBOARD ORCHESTRATOR
 // ==========================================
 function AdminDashboard({ 
   shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, 
@@ -199,24 +209,26 @@ function AdminDashboard({
     setIsModalOpen(true);
   };
 
+  // Calendar Math
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = new Date(year, month, 1).getDay(); 
   
   const startOfWeek = new Date(currentDate);
-  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay()); // Anchor to Sunday
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
   
+  // Headers
   const formatMonthYear = (date) => date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const formatFullDate = (date) => date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  
   let displayHeader = '';
   if (calendarView === 'month') displayHeader = formatMonthYear(currentDate);
   if (calendarView === 'week') displayHeader = `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   if (calendarView === 'day') displayHeader = formatFullDate(currentDate);
 
+  // Arrays
   const monthDaysArray = Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1));
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
   const weekDaysArray = Array.from({ length: 7 }, (_, i) => {
@@ -234,6 +246,7 @@ function AdminDashboard({
     return ((emp && emp.name && String(emp.name).toLowerCase().includes(searchLower)) || (client && client.name && String(client.name).toLowerCase().includes(searchLower)));
   });
 
+  // Reusable Calendar Cell UI
   const renderCalendarCell = (d, minHeight = "min-h-[120px]") => {
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
@@ -250,7 +263,7 @@ function AdminDashboard({
           </div>
         </div>
         <div className="space-y-1">
-          {dayShifts.sort((a,b) => a.startTime.localeCompare(b.startTime)).map(shift => {
+          {safeShiftsSort(dayShifts).map(shift => {
             const isOpen = shift.employeeId === 'unassigned';
             const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
             const client = clients.find(c => c.id === shift.clientId);
@@ -358,7 +371,7 @@ function AdminDashboard({
             {/* DAY VIEW */}
             {calendarView === 'day' && (() => {
               const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
-              const dayShifts = filteredShifts.filter(s => s && s.date === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
+              const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
               
               return (
                 <div className="p-6 bg-slate-50 min-h-[400px]">
@@ -370,7 +383,7 @@ function AdminDashboard({
                     </div>
                   ) : (
                     <div className="space-y-4 max-w-4xl mx-auto">
-                      {dayShifts.map(shift => {
+                      {safeShiftsSort(dayShifts).map(shift => {
                         const isOpen = shift.employeeId === 'unassigned';
                         const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
                         const client = clients.find(c => c.id === shift.clientId);
@@ -641,7 +654,37 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {showAdminView ? (
           <AdminDashboard 
-            shifts={shifts} employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} expenses={expenses} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} clientExpenses={clientExpenses} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} paystubs={paystubs} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} timeOffLogs={timeOffLogs} onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} isBonusActive={isBonusActive} setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} bonusSettings={bonusSettings} setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
+            shifts={shifts} 
+            employees={employees} 
+            onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} 
+            onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} 
+            updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} 
+            clients={clients} 
+            onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
+            onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
+            updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} 
+            expenses={expenses} 
+            onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} 
+            clientExpenses={clientExpenses} 
+            onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} 
+            paystubs={paystubs} 
+            onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} 
+            onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} 
+            timeOffLogs={timeOffLogs} 
+            onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} 
+            onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} 
+            documents={documents} 
+            onAddDocument={(d) => runMutation('gn_documents', d.id || Date.now().toString(), 'set', d)} 
+            onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} 
+            messages={messages} 
+            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
+            currentUser={currentUser} 
+            payPeriodStart={payPeriodStart} 
+            setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} 
+            isBonusActive={isBonusActive} 
+            setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} 
+            bonusSettings={bonusSettings} 
+            setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
             onAddShift={async (newShifts) => {
               if (!firebaseUser) return;
               const arr = Array.isArray(newShifts) ? newShifts : [newShifts];
@@ -655,13 +698,22 @@ export default function App() {
           />
         ) : (
           <EmployeeDashboard 
-            shifts={shifts} employees={employees} currentUser={currentUser} clients={clients} expenses={expenses} 
-            onAddExpense={(d) => runMutation('gn_expenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
+            shifts={shifts} 
+            employees={employees} 
+            currentUser={currentUser} 
+            clients={clients} 
+            expenses={expenses} 
+            onAddExpense={(d) => runMutation('gn_expenses', Date.now(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
             clientExpenses={clientExpenses} 
-            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
-            paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
-            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
-            payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
+            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
+            paystubs={paystubs} 
+            timeOffLogs={timeOffLogs} 
+            messages={messages} 
+            documents={documents} 
+            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
+            payPeriodStart={payPeriodStart} 
+            isBonusActive={isBonusActive} 
+            bonusSettings={bonusSettings} 
             onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
             setSelectedClient={setSelectedClient}
             getClientRemainingBalance={getClientRemainingBalance}

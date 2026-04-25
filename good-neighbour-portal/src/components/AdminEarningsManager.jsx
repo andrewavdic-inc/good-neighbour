@@ -1,55 +1,15 @@
 import React, { useState, useMemo } from 'react';
-import { Coins, Award } from 'lucide-react';
+import { Coins, Award, Trophy, Medal } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
-// Helper to determine who won the bonus for a specific month
-const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees) => {
-  const start = new Date(year, month, 1);
-  const end = new Date(year, month + 1, 0, 23, 59, 59);
-  
-  let results = employees.map(emp => {
-    const empShifts = shifts.filter(s => {
-      if (s.employeeId !== emp.id || !s.date || !s.endTime) return false;
-      const shiftDate = new Date(`${s.date}T${s.endTime}`);
-      return shiftDate >= start && shiftDate <= end && shiftDate <= new Date();
-    });
-    
-    let shiftEarnings = 0;
-    if (emp.payType === 'hourly') {
-      let hrs = 0;
-      empShifts.forEach(s => {
-        const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
-        const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
-        let h = (eH + eM/60) - (sH + sM/60);
-        if (h < 0) h += 24;
-        hrs += h;
-      });
-      shiftEarnings = hrs * (Number(emp.hourlyWage) || 22.5);
-    } else {
-      shiftEarnings = empShifts.length * (Number(emp.perVisitRate) || 45);
-    }
-    
-    const myExp = expenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= start && parseLocal(e.date) <= end);
-    const kmEarnings = myExp.reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
-    
-    const myCE = clientExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= start && parseLocal(e.date) <= end);
-    const oopEarnings = myCE.reduce((sum, e) => sum + Number(e.amount), 0);
-    
-    return { emp, shiftCount: empShifts.length, total: shiftEarnings + kmEarnings + oopEarnings };
-  });
-  
-  results = results.filter(r => r.shiftCount >= 10);
-  results.sort((a, b) => b.total - a.total);
-  return results.slice(0, 3);
-};
-
-export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], payPeriodStart, isBonusActive }) {
+export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], payPeriodStart, isBonusActive, bonusSettings }) {
   const kmRate = 0.68;
   
   const safeEmps = Array.isArray(employees) ? employees : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeExp = Array.isArray(expenses) ? expenses : [];
   const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
+  const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   
   const allPeriods = useMemo(() => getPastPayPeriods(payPeriodStart || '2026-04-01', 104), [payPeriodStart]);
   
@@ -76,10 +36,47 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const currentPeriodStart = activePeriod.start;
   const currentPeriodEnd = activePeriod.end;
   
+  // Calculate Monthly Leaderboard
+  const getMonthlyLeaderboard = () => {
+    const year = currentPeriodEnd.getFullYear();
+    const month = currentPeriodEnd.getMonth();
+    const mStart = new Date(year, month, 1);
+    const mEnd = new Date(year, month + 1, 0, 23, 59, 59);
+    
+    let results = safeEmps.map(emp => {
+      const empShifts = safeShifts.filter(s => {
+        if (s.employeeId !== emp.id || !s.date || !s.endTime) return false;
+        const shiftDate = new Date(`${s.date}T${s.endTime}`);
+        return shiftDate >= mStart && shiftDate <= mEnd;
+      });
+      
+      let sEarn = 0;
+      if (emp.payType === 'hourly') {
+        let hrs = 0;
+        empShifts.forEach(s => {
+          const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
+          const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
+          let h = (eH + eM/60) - (sH + sM/60);
+          if (h < 0) h += 24;
+          hrs += h;
+        });
+        sEarn = hrs * (Number(emp.hourlyWage) || 22.5);
+      } else {
+        sEarn = empShifts.length * (Number(emp.perVisitRate) || 45);
+      }
+      
+      const kmE = safeExp.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= mStart && parseLocal(e.date) <= mEnd).reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
+      const oopE = safeCE.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= mStart && parseLocal(e.date) <= mEnd).reduce((sum, e) => sum + Number(e.amount), 0);
+      
+      return { emp, shiftCount: empShifts.length, total: sEarn + kmE + oopE };
+    });
+    
+    return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total).slice(0, 3);
+  };
+
   const employeeEarnings = useMemo(() => {
     const now = new Date();
-    // Get the leaderboard for the month that this pay period ends in
-    const monthlyWinners = getMonthlyLeaderboard(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), safeShifts, safeExp, safeCE, safeEmps);
+    const monthlyWinners = getMonthlyLeaderboard();
 
     return safeEmps.map(emp => {
       if(!emp) return null;
@@ -112,7 +109,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       } else {
         const visitRate = Number(emp.perVisitRate) || 45;
         shiftEarnings = empShifts.length * visitRate;
-        displayRate = `${empShifts.length} shifts @ $${visitRate}/visit`;
+        displayRate = `${empShifts.length} shifts @ $${visitRate.toFixed(2)}/visit`;
       }
 
       const empMileage = safeExp.filter(e => {
@@ -134,12 +131,11 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       });
       const clientExpenseEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
-      // Determine Bonus
       let bonusEarnings = 0;
       if (isBonusActive) {
-        if (monthlyWinners[0]?.emp.id === emp.id) bonusEarnings = 100;
-        else if (monthlyWinners[1]?.emp.id === emp.id) bonusEarnings = 50;
-        else if (monthlyWinners[2]?.emp.id === emp.id) bonusEarnings = 20;
+        if (monthlyWinners[0]?.emp.id === emp.id) { bonusEarnings = Number(safeBonusSettings.monthly[0] || 0); }
+        else if (monthlyWinners[1]?.emp.id === emp.id) { bonusEarnings = Number(safeBonusSettings.monthly[1] || 0); }
+        else if (monthlyWinners[2]?.emp.id === emp.id) { bonusEarnings = Number(safeBonusSettings.monthly[2] || 0); }
       }
 
       const totalEarnings = shiftEarnings + kmEarnings + clientExpenseEarnings + bonusEarnings;
@@ -158,7 +154,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         totalEarnings
       };
     }).filter(Boolean).sort((a, b) => b.totalEarnings - a.totalEarnings);
-  }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd, isBonusActive]);
+  }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd, isBonusActive, safeBonusSettings]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">

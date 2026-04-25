@@ -62,16 +62,6 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-// Safe sort to prevent crashes if shifts are missing start times from older corrupt data
-const safeShiftsSort = (arr) => {
-  if (!Array.isArray(arr)) return [];
-  return [...arr].sort((a, b) => {
-    const dA = a?.date && a?.startTime ? new Date(`${a.date}T${a.startTime}`).getTime() : 0;
-    const dB = b?.date && b?.startTime ? new Date(`${b.date}T${b.startTime}`).getTime() : 0;
-    return dA - dB;
-  });
-};
-
 // ==========================================
 // INLINE MODALS
 // ==========================================
@@ -251,7 +241,9 @@ function AdminDashboard({
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
-    const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
+    
+    // Sort shifts safely to avoid crash if startTime is missing
+    const dayShifts = filteredShifts.filter(s => s && s.date === dateStr).sort((a,b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
     
     return (
       <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
@@ -263,7 +255,7 @@ function AdminDashboard({
           </div>
         </div>
         <div className="space-y-1">
-          {safeShiftsSort(dayShifts).map(shift => {
+          {dayShifts.map(shift => {
             const isOpen = shift.employeeId === 'unassigned';
             const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
             const client = clients.find(c => c.id === shift.clientId);
@@ -371,7 +363,7 @@ function AdminDashboard({
             {/* DAY VIEW */}
             {calendarView === 'day' && (() => {
               const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
-              const dayShifts = filteredShifts.filter(s => s && s.date === dateStr);
+              const dayShifts = filteredShifts.filter(s => s && s.date === dateStr).sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
               
               return (
                 <div className="p-6 bg-slate-50 min-h-[400px]">
@@ -383,7 +375,7 @@ function AdminDashboard({
                     </div>
                   ) : (
                     <div className="space-y-4 max-w-4xl mx-auto">
-                      {safeShiftsSort(dayShifts).map(shift => {
+                      {dayShifts.map(shift => {
                         const isOpen = shift.employeeId === 'unassigned';
                         const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
                         const client = clients.find(c => c.id === shift.clientId);
@@ -472,7 +464,7 @@ function AdminDashboard({
 }
 
 // ==========================================
-// MAIN APP COMPONENT
+// MAIN APP ENTRY POINT
 // ==========================================
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -654,37 +646,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {showAdminView ? (
           <AdminDashboard 
-            shifts={shifts} 
-            employees={employees} 
-            onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} 
-            onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} 
-            updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} 
-            clients={clients} 
-            onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
-            onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
-            updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} 
-            expenses={expenses} 
-            onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} 
-            clientExpenses={clientExpenses} 
-            onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} 
-            paystubs={paystubs} 
-            onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} 
-            onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} 
-            timeOffLogs={timeOffLogs} 
-            onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} 
-            onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} 
-            documents={documents} 
-            onAddDocument={(d) => runMutation('gn_documents', d.id || Date.now().toString(), 'set', d)} 
-            onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} 
-            messages={messages} 
-            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
-            currentUser={currentUser} 
-            payPeriodStart={payPeriodStart} 
-            setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} 
-            isBonusActive={isBonusActive} 
-            setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} 
-            bonusSettings={bonusSettings} 
-            setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
+            shifts={shifts} employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} expenses={expenses} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} clientExpenses={clientExpenses} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} paystubs={paystubs} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} timeOffLogs={timeOffLogs} onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} isBonusActive={isBonusActive} setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} bonusSettings={bonusSettings} setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
             onAddShift={async (newShifts) => {
               if (!firebaseUser) return;
               const arr = Array.isArray(newShifts) ? newShifts : [newShifts];
@@ -698,22 +660,13 @@ export default function App() {
           />
         ) : (
           <EmployeeDashboard 
-            shifts={shifts} 
-            employees={employees} 
-            currentUser={currentUser} 
-            clients={clients} 
-            expenses={expenses} 
-            onAddExpense={(d) => runMutation('gn_expenses', Date.now(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
+            shifts={shifts} employees={employees} currentUser={currentUser} clients={clients} expenses={expenses} 
+            onAddExpense={(d) => runMutation('gn_expenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
             clientExpenses={clientExpenses} 
-            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
-            paystubs={paystubs} 
-            timeOffLogs={timeOffLogs} 
-            messages={messages} 
-            documents={documents} 
-            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
-            payPeriodStart={payPeriodStart} 
-            isBonusActive={isBonusActive} 
-            bonusSettings={bonusSettings} 
+            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
+            paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
+            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
+            payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
             onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
             setSelectedClient={setSelectedClient}
             getClientRemainingBalance={getClientRemainingBalance}

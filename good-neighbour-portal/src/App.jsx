@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -52,24 +52,17 @@ const parseLocalSafe = (dateStr) => {
     const [y, m, d] = dateStr.split('-').map(Number);
     if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
     return new Date(y, m - 1, d);
-  } catch (e) { return new Date(); }
-};
-
-const safeShiftsSort = (arr) => {
-  if (!Array.isArray(arr)) return [];
-  return [...arr].sort((a, b) => {
-    const dA = a?.date && a?.startTime ? new Date(`${a.date}T${a.startTime}`).getTime() : 0;
-    const dB = b?.date && b?.startTime ? new Date(`${b.date}T${b.startTime}`).getTime() : 0;
-    return dA - dB;
-  });
+  } catch (e) {
+    return new Date();
+  }
 };
 
 // ==========================================
 // INLINE MODALS
 // ==========================================
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], onSave }) {
-  const safeEmps = Array.isArray(employees) ? employees : [];
-  const safeClients = Array.isArray(clients) ? clients : [];
+  const safeEmps = Array.isArray(employees) ? employees.filter(Boolean) : [];
+  const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
   const [employeeId, setEmployeeId] = useState(safeEmps[0]?.id || '');
   const [clientId, setClientId] = useState(safeClients[0]?.id || '');
   const [startTime, setStartTime] = useState('09:00');
@@ -170,6 +163,11 @@ function AdminDashboard({
 
   const isMasterAdmin = String(currentUser?.role).includes('Admin');
 
+  // Bulletproof array mapping to prevent crash on corrupt DB items
+  const safeEmployees = Array.isArray(employees) ? employees.filter(Boolean) : [];
+  const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
+  const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
+
   // Intelligent Navigation based on current view
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
@@ -204,13 +202,13 @@ function AdminDashboard({
   // Calendar Math
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
+  const daysInMonth = new Date(year, month + 1, 0).getDate() || 30; // Fallback
+  const firstDayOfMonth = new Date(year, month, 1).getDay() || 0; 
   
   const startOfWeek = new Date(currentDate);
-  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay()); // Anchor to Sunday
+  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
   
   // Headers
   const formatMonthYear = (date) => date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -229,13 +227,18 @@ function AdminDashboard({
     return d;
   });
 
-  const safeShifts = Array.isArray(shifts) ? shifts : [];
+  // Crash-proof schedule filter
   const filteredShifts = safeShifts.filter(s => {
-    if (!s || !scheduleSearch.trim()) return true;
-    const emp = employees.find(e => e.id === s.employeeId);
-    const client = clients.find(c => c.id === s.clientId);
+    if (!scheduleSearch.trim()) return true;
+    
+    const emp = safeEmployees.find(e => e.id === s.employeeId);
+    const client = safeClients.find(c => c.id === s.clientId);
     const searchLower = scheduleSearch.toLowerCase();
-    return ((emp && emp.name && String(emp.name).toLowerCase().includes(searchLower)) || (client && client.name && String(client.name).toLowerCase().includes(searchLower)));
+    
+    const empMatch = emp?.name ? String(emp.name).toLowerCase().includes(searchLower) : false;
+    const clientMatch = client?.name ? String(client.name).toLowerCase().includes(searchLower) : false;
+    
+    return empMatch || clientMatch;
   });
 
   // Reusable Calendar Cell UI
@@ -244,8 +247,10 @@ function AdminDashboard({
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
     
-    // Sort shifts safely to avoid crash if startTime is missing
-    const dayShifts = filteredShifts.filter(s => s && s.date === dateStr).sort((a,b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
+    // Sort shifts safely
+    const dayShifts = filteredShifts
+      .filter(s => s.date === dateStr)
+      .sort((a,b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
     
     return (
       <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
@@ -259,12 +264,16 @@ function AdminDashboard({
         <div className="space-y-1">
           {dayShifts.map(shift => {
             const isOpen = shift.employeeId === 'unassigned';
-            const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
-            const client = clients.find(c => c.id === shift.clientId);
+            const emp = isOpen ? null : safeEmployees.find(e => e.id === shift.employeeId);
+            const client = safeClients.find(c => c.id === shift.clientId);
+            
+            const empNameDisplay = isOpen ? '🚨 OPEN SHIFT' : String(emp?.name || 'Unknown').split(' ')[0];
+            const clientNameDisplay = String(client?.name || 'Unknown Client').split(' ')[0];
+            
             return (
               <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${String(client?.name || 'Unknown')}: ${shift.startTime}-${shift.endTime}`}>
-                <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{isOpen ? '🚨 OPEN SHIFT' : String(emp?.name?.split(' ')[0] || 'Unknown')}</div>
-                <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{String(client?.name?.split(' ')[0] || 'Unknown Client')}</span></div>
+                <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{empNameDisplay}</div>
+                <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{clientNameDisplay}</span></div>
                 <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
                 
                 <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
@@ -281,15 +290,15 @@ function AdminDashboard({
 
   const renderAdminTab = () => {
     switch (activeAdminTab) {
-      case 'employees': return <EmployeeManager employees={employees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
-      case 'clients': return <ClientManager clients={clients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} />;
-      case 'client-funds': return <AdminClientFundsManager clients={clients} expenses={expenses} clientExpenses={clientExpenses} employees={employees} />;
-      case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={employees} clients={clients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
-      case 'earnings': return <AdminEarningsManager employees={employees} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
-      case 'timeoff': return <TimeOffManager employees={employees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />;
-      case 'paystubs': return <PaystubManager paystubs={paystubs} employees={employees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
+      case 'employees': return <EmployeeManager employees={safeEmployees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
+      case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} />;
+      case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} />;
+      case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
+      case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
+      case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />;
+      case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />;
-      case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} /></div>;
+      case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} /></div>;
       case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} />;
       case 'schedule':
       default: return (
@@ -365,7 +374,9 @@ function AdminDashboard({
             {/* DAY VIEW */}
             {calendarView === 'day' && (() => {
               const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
-              const dayShifts = filteredShifts.filter(s => s && s.date === dateStr).sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
+              const dayShifts = filteredShifts
+                .filter(s => s.date === dateStr)
+                .sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
               
               return (
                 <div className="p-6 bg-slate-50 min-h-[400px]">
@@ -379,11 +390,11 @@ function AdminDashboard({
                     <div className="space-y-4 max-w-4xl mx-auto">
                       {dayShifts.map(shift => {
                         const isOpen = shift.employeeId === 'unassigned';
-                        const emp = isOpen ? null : employees.find(e => e.id === shift.employeeId);
-                        const client = clients.find(c => c.id === shift.clientId);
+                        const emp = isOpen ? null : safeEmployees.find(e => e.id === shift.employeeId);
+                        const client = safeClients.find(c => c.id === shift.clientId);
                         
                         return (
-                          <div key={shift.id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:border-teal-300 hover:shadow-md transition gap-4">
+                          <div key={shift.id || Math.random()} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:border-teal-300 hover:shadow-md transition gap-4">
                             <div className="flex items-center gap-5 w-full sm:w-auto">
                               <div className={`px-4 py-3 rounded-lg text-center font-bold text-sm shrink-0 border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-teal-50 text-teal-800 border-teal-100'}`}>
                                 {shift.startTime} <br/><span className="text-[10px] font-normal opacity-80 uppercase tracking-widest">to</span><br/> {shift.endTime}
@@ -459,7 +470,7 @@ function AdminDashboard({
       {renderAdminTab()}
 
       {isModalOpen && (
-        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={employees} clients={clients} onSave={onAddShift} />
+        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={safeEmployees} clients={safeClients} onSave={onAddShift} />
       )}
     </div>
   );
@@ -646,16 +657,26 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {showAdminView ? (
           <AdminDashboard 
-            shifts={shifts} employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} expenses={expenses} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} clientExpenses={clientExpenses} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} paystubs={paystubs} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} timeOffLogs={timeOffLogs} onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} isBonusActive={isBonusActive} setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} bonusSettings={bonusSettings} setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} onAddShift={(d) => runMutation('gn_shifts', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveShift={(id) => runMutation('gn_shifts', id, 'delete')} onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
+            shifts={shifts} employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} expenses={expenses} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} clientExpenses={clientExpenses} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} paystubs={paystubs} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} timeOffLogs={timeOffLogs} onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now().toString(), 'set', d)} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} isBonusActive={isBonusActive} setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} bonusSettings={bonusSettings} setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
+            onAddShift={async (newShifts) => {
+              if (!firebaseUser) return;
+              const arr = Array.isArray(newShifts) ? newShifts : [newShifts];
+              for (const s of arr) {
+                const id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+                await setDoc(getDocRef('gn_shifts', id), { ...s, id });
+              }
+            }} 
+            onRemoveShift={(id) => runMutation('gn_shifts', id, 'delete')} 
+            onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
           />
         ) : (
           <EmployeeDashboard 
             shifts={shifts} employees={employees} currentUser={currentUser} clients={clients} expenses={expenses} 
-            onAddExpense={(d) => runMutation('gn_expenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
+            onAddExpense={(d) => runMutation('gn_expenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
             clientExpenses={clientExpenses} 
-            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now(), 'set', { ...d, id: Date.now(), status: 'pending' })} 
+            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
             paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
-            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now(), 'set', { id: Date.now(), text, senderId, date: new Date().toISOString() })} 
+            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
             payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
             onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
             setSelectedClient={setSelectedClient}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File, BookOpen } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -22,6 +22,12 @@ import SettingsManager from './components/SettingsManager';
 import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal';
+
+// --- PHOTO CLEANER (Ignores broken dicebear links from mock data) ---
+const getValidPhoto = (url) => {
+  if (!url || typeof url !== 'string' || url.includes('dicebear.com')) return null;
+  return url.startsWith('[') ? (url.match(/\]\((.*?)\)/)?.[1] || null) : url;
+};
 
 // --- FIREBASE INITIALIZATION ---
 let firebaseApp, auth, db, appId;
@@ -55,6 +61,15 @@ const parseLocalSafe = (dateStr) => {
   } catch (e) {
     return new Date();
   }
+};
+
+const safeShiftsSort = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  return [...arr].sort((a, b) => {
+    const dA = a?.date && a?.startTime ? new Date(`${a.date}T${a.startTime}`).getTime() : 0;
+    const dB = b?.date && b?.startTime ? new Date(`${b.date}T${b.startTime}`).getTime() : 0;
+    return dA - dB;
+  });
 };
 
 // ==========================================
@@ -161,13 +176,6 @@ function AdminDashboard({
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [calendarView, setCalendarView] = useState('month'); 
 
-  const isMasterAdmin = String(currentUser?.role).includes('Admin');
-
-  // Bulletproof array mapping to prevent crash on corrupt DB items
-  const safeEmployees = Array.isArray(employees) ? employees.filter(Boolean) : [];
-  const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
-  const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
-
   // Intelligent Navigation based on current view
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
@@ -202,7 +210,7 @@ function AdminDashboard({
   // Calendar Math
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate() || 30; // Fallback
+  const daysInMonth = new Date(year, month + 1, 0).getDate() || 30;
   const firstDayOfMonth = new Date(year, month, 1).getDay() || 0; 
   
   const startOfWeek = new Date(currentDate);
@@ -227,19 +235,34 @@ function AdminDashboard({
     return d;
   });
 
-  // Crash-proof schedule filter
+  // Bulletproof array mapping to prevent crash on corrupt DB items
+  const safeEmployees = Array.isArray(employees) ? employees.filter(Boolean) : [];
+  const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
+  const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
+  
+  // SECURE NULL-SAFE FILTER
   const filteredShifts = safeShifts.filter(s => {
+    if (!s) return false;
     if (!scheduleSearch.trim()) return true;
     
-    const emp = safeEmployees.find(e => e.id === s.employeeId);
-    const client = safeClients.find(c => c.id === s.clientId);
+    const emp = safeEmployees.find(e => e && e.id === s.employeeId);
+    const client = safeClients.find(c => c && c.id === s.clientId);
     const searchLower = scheduleSearch.toLowerCase();
     
-    const empMatch = emp?.name ? String(emp.name).toLowerCase().includes(searchLower) : false;
-    const clientMatch = client?.name ? String(client.name).toLowerCase().includes(searchLower) : false;
+    const empMatch = emp && emp.name && String(emp.name).toLowerCase().includes(searchLower);
+    const clientMatch = client && client.name && String(client.name).toLowerCase().includes(searchLower);
     
     return empMatch || clientMatch;
   });
+
+  // Calculate dayViewShifts cleanly outside the JSX
+  let dayViewShifts = [];
+  if (calendarView === 'day') {
+    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+    dayViewShifts = filteredShifts
+      .filter(s => s && s.date === dateStr)
+      .sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
+  }
 
   // Reusable Calendar Cell UI
   const renderCalendarCell = (d, minHeight = "min-h-[120px]") => {
@@ -247,9 +270,8 @@ function AdminDashboard({
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
     
-    // Sort shifts safely
     const dayShifts = filteredShifts
-      .filter(s => s.date === dateStr)
+      .filter(s => s && s.date === dateStr)
       .sort((a,b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
     
     return (
@@ -264,8 +286,8 @@ function AdminDashboard({
         <div className="space-y-1">
           {dayShifts.map(shift => {
             const isOpen = shift.employeeId === 'unassigned';
-            const emp = isOpen ? null : safeEmployees.find(e => e.id === shift.employeeId);
-            const client = safeClients.find(c => c.id === shift.clientId);
+            const emp = isOpen ? null : safeEmployees.find(e => e && e.id === shift.employeeId);
+            const client = safeClients.find(c => c && c.id === shift.clientId);
             
             const empNameDisplay = isOpen ? '🚨 OPEN SHIFT' : String(emp?.name || 'Unknown').split(' ')[0];
             const clientNameDisplay = String(client?.name || 'Unknown Client').split(' ')[0];
@@ -372,61 +394,54 @@ function AdminDashboard({
             )}
 
             {/* DAY VIEW */}
-            {calendarView === 'day' && (() => {
-              const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
-              const dayShifts = filteredShifts
-                .filter(s => s.date === dateStr)
-                .sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
-              
-              return (
-                <div className="p-6 bg-slate-50 min-h-[400px]">
-                  {dayShifts.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-                      <CalendarIcon className="h-16 w-16 text-slate-300 mb-4" />
-                      <p className="text-lg font-medium">No shifts scheduled for this day.</p>
-                      <button onClick={() => handleDayClick(currentDate.getDate() || 1)} className="mt-4 text-teal-600 hover:text-teal-800 font-medium">Add a shift</button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4 max-w-4xl mx-auto">
-                      {dayShifts.map(shift => {
-                        const isOpen = shift.employeeId === 'unassigned';
-                        const emp = isOpen ? null : safeEmployees.find(e => e.id === shift.employeeId);
-                        const client = safeClients.find(c => c.id === shift.clientId);
-                        
-                        return (
-                          <div key={shift.id || Math.random()} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:border-teal-300 hover:shadow-md transition gap-4">
-                            <div className="flex items-center gap-5 w-full sm:w-auto">
-                              <div className={`px-4 py-3 rounded-lg text-center font-bold text-sm shrink-0 border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-teal-50 text-teal-800 border-teal-100'}`}>
-                                {shift.startTime} <br/><span className="text-[10px] font-normal opacity-80 uppercase tracking-widest">to</span><br/> {shift.endTime}
-                              </div>
-                              <div className="overflow-hidden">
-                                <h4 className="text-lg font-bold text-slate-800 flex items-center truncate">
-                                  {isOpen ? <><AlertCircle className="w-5 h-5 mr-1.5 text-amber-500" /> OPEN SHIFT</> : String(emp?.name || 'Unknown')}
-                                </h4>
-                                <div className="text-sm text-slate-600 flex items-center mt-1.5 font-medium truncate">
-                                  <Heart className="h-4 w-4 mr-1.5 text-teal-500 shrink-0" />
-                                  Client: {String(client?.name || 'Unknown')}
-                                </div>
-                              </div>
+            {calendarView === 'day' && (
+              <div className="p-6 bg-slate-50 min-h-[400px]">
+                {dayViewShifts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+                    <CalendarIcon className="h-16 w-16 text-slate-300 mb-4" />
+                    <p className="text-lg font-medium">No shifts scheduled for this day.</p>
+                    <button onClick={() => handleDayClick(currentDate.getDate() || 1)} className="mt-4 text-teal-600 hover:text-teal-800 font-medium">Add a shift</button>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-w-4xl mx-auto">
+                    {dayViewShifts.map(shift => {
+                      const isOpen = shift.employeeId === 'unassigned';
+                      const emp = isOpen ? null : safeEmployees.find(e => e && e.id === shift.employeeId);
+                      const client = safeClients.find(c => c && c.id === shift.clientId);
+                      
+                      return (
+                        <div key={shift.id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:border-teal-300 hover:shadow-md transition gap-4">
+                          <div className="flex items-center gap-5 w-full sm:w-auto">
+                            <div className={`px-4 py-3 rounded-lg text-center font-bold text-sm shrink-0 border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-teal-50 text-teal-800 border-teal-100'}`}>
+                              {shift.startTime} <br/><span className="text-[10px] font-normal opacity-80 uppercase tracking-widest">to</span><br/> {shift.endTime}
                             </div>
-                            <div className="flex flex-row sm:flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                              {!isOpen && (
-                                <button onClick={() => onMarkShiftOpen(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-md hover:bg-amber-100 transition font-medium flex items-center justify-center">
-                                  <UserMinus className="h-4 w-4 mr-1.5 shrink-0" /> Mark Open
-                                </button>
-                              )}
-                              <button onClick={() => onRemoveShift(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-100 transition font-medium flex items-center justify-center">
-                                <Trash2 className="h-4 w-4 mr-1.5 shrink-0"/> Delete Shift
-                              </button>
+                            <div className="overflow-hidden">
+                              <h4 className="text-lg font-bold text-slate-800 flex items-center truncate">
+                                {isOpen ? <><AlertCircle className="w-5 h-5 mr-1.5 text-amber-500" /> OPEN SHIFT</> : String(emp?.name || 'Unknown')}
+                              </h4>
+                              <div className="text-sm text-slate-600 flex items-center mt-1.5 font-medium truncate">
+                                <Heart className="h-4 w-4 mr-1.5 text-teal-500 shrink-0" />
+                                Client: {String(client?.name || 'Unknown')}
+                              </div>
                             </div>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                          <div className="flex flex-row sm:flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                            {!isOpen && (
+                              <button onClick={() => onMarkShiftOpen(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-md hover:bg-amber-100 transition font-medium flex items-center justify-center">
+                                <UserMinus className="h-4 w-4 mr-1.5 shrink-0" /> Mark Open
+                              </button>
+                            )}
+                            <button onClick={() => onRemoveShift(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-100 transition font-medium flex items-center justify-center">
+                              <Trash2 className="h-4 w-4 mr-1.5 shrink-0"/> Delete Shift
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -470,7 +485,7 @@ function AdminDashboard({
       {renderAdminTab()}
 
       {isModalOpen && (
-        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={safeEmployees} clients={safeClients} onSave={onAddShift} />
+        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={employees} clients={clients} onSave={onAddShift} />
       )}
     </div>
   );
@@ -634,6 +649,8 @@ export default function App() {
   const isAdmin = String(currentUser.role).includes('Admin');
   const showAdminView = isAdmin && viewMode === 'admin';
 
+  const finalPhotoUrl = getValidPhoto(currentUser.photoUrl);
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 flex flex-col">
       <nav className="bg-teal-700 text-white shadow-md px-6 py-4 flex justify-between items-center">
@@ -646,7 +663,7 @@ export default function App() {
           )}
           <div className="flex items-center text-sm hidden sm:flex">
             <div className="h-7 w-7 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border border-teal-500 overflow-hidden mr-2 shrink-0">
-              <User className="h-4 w-4" />
+              {finalPhotoUrl ? <img src={finalPhotoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" /> : <User className="h-4 w-4" />}
             </div>
             {String(currentUser.name)}
           </div>

@@ -1,31 +1,32 @@
 import React, { useState } from 'react';
-import { BookOpen, Plus, Trash2, Download, FileText, File } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Download, FileText, File, Loader2 } from 'lucide-react';
 
 export default function DocumentManager({ documents = [], onAddDocument, onRemoveDocument, isAdmin }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [file, setFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title || !file) return;
     
-    // Using an object URL as a temporary mock download link until Firebase Storage is connected
-    const fileUrl = URL.createObjectURL(file);
+    setIsUploading(true);
     
     if (onAddDocument) {
-      onAddDocument({
+      // Step 6: Pass the raw file as the second argument!
+      await onAddDocument({
         title,
         description,
         fileName: file.name,
-        fileUrl: fileUrl, 
         uploadDate: new Date().toISOString()
-      });
+      }, file);
     }
     
     setTitle('');
     setDescription('');
     setFile(null);
+    setIsUploading(false);
   };
 
   const sortedDocs = [...documents].sort((a, b) => {
@@ -53,6 +54,7 @@ export default function DocumentManager({ documents = [], onAddDocument, onRemov
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 focus:border-teal-500 text-sm" 
                   required 
                   placeholder="e.g. 2026 WHMIS Guide" 
+                  disabled={isUploading}
                 />
               </div>
               <div>
@@ -63,26 +65,27 @@ export default function DocumentManager({ documents = [], onAddDocument, onRemov
                   onChange={e => setDescription(e.target.value)} 
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 focus:border-teal-500 text-sm" 
                   placeholder="Optional details..." 
+                  disabled={isUploading}
                 />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">File *</label>
-              <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('company-doc-upload').click()}>
+              <div className={`mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('company-doc-upload').click()}>
                 <div className="space-y-1 text-center">
                   <File className="mx-auto h-6 w-6 text-slate-400" />
                   <div className="flex text-sm text-slate-600 justify-center">
-                    <span className="relative cursor-pointer bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500">
+                    <span className="relative bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500">
                       {file ? file.name : <span>Click to select PDF or Document</span>}
                     </span>
                   </div>
                 </div>
-                <input id="company-doc-upload" type="file" accept=".pdf,image/*,.doc,.docx" className="sr-only" onChange={(e) => setFile(e.target.files[0])} />
+                <input id="company-doc-upload" type="file" accept=".pdf,image/*,.doc,.docx" className="sr-only" onChange={(e) => setFile(e.target.files[0])} disabled={isUploading} />
               </div>
             </div>
             <div className="flex justify-end pt-2">
-              <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2 rounded-md font-medium flex items-center transition shadow-sm text-sm">
-                <Plus className="h-4 w-4 mr-2"/> Upload Document
+              <button type="submit" disabled={isUploading || !file || !title} className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white px-5 py-2 rounded-md font-medium flex items-center transition shadow-sm text-sm">
+                {isUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : <><Plus className="h-4 w-4 mr-2"/> Upload Document</>}
               </button>
             </div>
           </form>
@@ -114,12 +117,13 @@ export default function DocumentManager({ documents = [], onAddDocument, onRemov
                     </div>
                   </div>
                   <div className="flex items-center space-x-1 shrink-0">
+                    {/* Real Download Link injected here */}
                     <a 
                       href={doc.fileUrl || '#'} 
-                      download={doc.fileName}
-                      onClick={(e) => { if(!doc.fileUrl) { e.preventDefault(); alert("File data unavailable. Please re-upload the document."); } }}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-teal-600 hover:bg-teal-50 p-2 rounded transition inline-flex" 
-                      title="Download"
+                      title="Download/View"
                     >
                       <Download className="h-5 w-5" />
                     </a>

@@ -298,14 +298,39 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
 }
 
 export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense, getClientRemainingBalance }) {
-  const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [amount, setAmount] = useState(''); const [description, setDescription] = useState(''); const [receiptFile, setReceiptFile] = useState(null);
-  const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : []; const safeClients = Array.isArray(clients) ? clients : [];
+  const [date, setDate] = useState(''); 
+  const [clientId, setClientId] = useState(''); 
+  const [amount, setAmount] = useState(''); 
+  const [description, setDescription] = useState(''); 
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : []; 
+  const safeClients = Array.isArray(clients) ? clients : [];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!date || !amount || !clientId) return;
-    if(onAddClientExpense) { onAddClientExpense({ date, clientId, amount: Number(amount), description, receiptDetails: receiptFile ? receiptFile.name : '' }); }
-    setDate(''); setClientId(''); setAmount(''); setDescription(''); setReceiptFile(null);
+    
+    setIsUploading(true);
+
+    if(onAddClientExpense) { 
+      // Step 6: Pass the raw file as the second argument!
+      await onAddClientExpense({ 
+        date, 
+        clientId, 
+        amount: Number(amount), 
+        description, 
+        receiptDetails: receiptFile ? receiptFile.name : '' 
+      }, receiptFile); 
+    }
+    
+    setDate(''); 
+    setClientId(''); 
+    setAmount(''); 
+    setDescription(''); 
+    setReceiptFile(null);
+    setIsUploading(false);
   };
 
   return (
@@ -314,27 +339,29 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
       <div className="p-6 border-b border-slate-200 bg-slate-50/50">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required disabled={isUploading} /></div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
-              <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
+              <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required disabled={isUploading}>
                 <option value="" disabled>Select Client</option>
                 {safeClients.map(c => (<option key={c.id} value={c.id}>{c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}</option>))}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" placeholder="e.g. Lunch" /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required disabled={isUploading} /></div>
+            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" placeholder="e.g. Lunch" disabled={isUploading} /></div>
           </div>
           <div className="mt-3">
             <label className="block text-xs font-medium text-slate-700 mb-1">Upload Receipt</label>
-            <div className="mt-1 flex justify-center px-4 py-2 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('receipt-upload').click()}>
+            <div className={`mt-1 flex justify-center px-4 py-2 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('receipt-upload').click()}>
               <div className="text-center flex items-center space-x-2"><ImageIcon className="h-4 w-4 text-slate-400" /><span className="text-xs font-medium text-teal-600 truncate max-w-[150px]">{receiptFile ? receiptFile.name : 'Click to attach receipt'}</span></div>
-              <input id="receipt-upload" type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => setReceiptFile(e.target.files[0])} />
+              <input id="receipt-upload" type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => setReceiptFile(e.target.files[0])} disabled={isUploading} />
             </div>
           </div>
-          <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Expense</button>
+          <button type="submit" disabled={isUploading || !amount || !clientId || !date} className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 disabled:bg-slate-400 transition text-sm flex items-center justify-center">
+            {isUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : <><Plus className="h-4 w-4 mr-1"/> Submit Expense</>}
+          </button>
         </form>
       </div>
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
@@ -344,7 +371,14 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
             return (
               <div key={exp.id || `ce_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
                 <div><div className="font-semibold text-sm text-slate-800">{dateStr}</div><div className="text-xs text-slate-500 mt-0.5">${Number(exp.amount || 0).toFixed(2)} &bull; {clientName}</div></div>
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{String(exp.status || 'pending')}</span>
+                <div className="flex items-center space-x-2">
+                  {exp.receiptUrl && (
+                    <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:bg-teal-100 p-1 rounded" title="View Receipt">
+                      <FileText className="h-4 w-4" />
+                    </a>
+                  )}
+                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{String(exp.status || 'pending')}</span>
+                </div>
               </div>
             )
           })

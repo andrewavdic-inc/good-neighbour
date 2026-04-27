@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, Chevr
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- UTILS & COMPONENTS ---
 import { MOCK_EMPLOYEES, MOCK_CLIENTS, INITIAL_SHIFTS, INITIAL_EXPENSES, INITIAL_CLIENT_EXPENSES, INITIAL_PAYSTUBS, INITIAL_TIME_OFF, INITIAL_MESSAGES, parseLocal, isBiweeklyPayday, getHoliday, getPayPeriodBounds } from './utils';
@@ -30,9 +31,9 @@ const getValidPhoto = (url) => {
 };
 
 // --- FIREBASE INITIALIZATION ---
-let firebaseApp, auth, db, appId;
+let firebaseApp, auth, db, storage, appId;
 try {
-  const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  const firebaseConfig = {
     apiKey: "AIzaSyCMhO6iAPDuWJhZLdWZ_orO8-AyWDItnQo",
     authDomain: "good-neighbour-portal.firebaseapp.com",
     projectId: "good-neighbour-portal",
@@ -43,8 +44,8 @@ try {
   firebaseApp = initializeApp(firebaseConfig);
   auth = getAuth(firebaseApp);
   db = getFirestore(firebaseApp);
-  const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'good-neighbour-portal';
-  appId = rawAppId.replace(/\//g, '-');
+  storage = getStorage(firebaseApp);
+  appId = 'good-neighbour-portal';
 } catch (e) {
   console.error("Firebase init error:", e);
 }
@@ -214,9 +215,9 @@ function AdminDashboard({
   const firstDayOfMonth = new Date(year, month, 1).getDay() || 0; 
   
   const startOfWeek = new Date(currentDate);
-  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay()); // Anchor to Sunday
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
   
   // Headers
   const formatMonthYear = (date) => date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -270,6 +271,7 @@ function AdminDashboard({
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
     
+    // Sort shifts safely
     const dayShifts = filteredShifts
       .filter(s => s && s.date === dateStr)
       .sort((a,b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
@@ -286,6 +288,7 @@ function AdminDashboard({
         <div className="space-y-1">
           {dayShifts.map(shift => {
             const isOpen = shift.employeeId === 'unassigned';
+            // Null-safe finds
             const emp = isOpen ? null : safeEmployees.find(e => e && e.id === shift.employeeId);
             const client = safeClients.find(c => c && c.id === shift.clientId);
             
@@ -406,8 +409,8 @@ function AdminDashboard({
                   <div className="space-y-4 max-w-4xl mx-auto">
                     {dayViewShifts.map(shift => {
                       const isOpen = shift.employeeId === 'unassigned';
-                      const emp = isOpen ? null : safeEmployees.find(e => e && e.id === shift.employeeId);
-                      const client = safeClients.find(c => c && c.id === shift.clientId);
+                      const emp = isOpen ? null : safeEmployees.find(e => e.id === shift.employeeId);
+                      const client = safeClients.find(c => c.id === shift.clientId);
                       
                       return (
                         <div key={shift.id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:border-teal-300 hover:shadow-md transition gap-4">
@@ -485,7 +488,7 @@ function AdminDashboard({
       {renderAdminTab()}
 
       {isModalOpen && (
-        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={employees} clients={clients} onSave={onAddShift} />
+        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={safeEmployees} clients={safeClients} onSave={onAddShift} />
       )}
     </div>
   );
@@ -607,6 +610,20 @@ export default function App() {
     if(action === 'delete') await deleteDoc(ref);
   };
 
+  const handleFileUpload = async (file, folder) => {
+    if (!file || !firebaseUser || !storage) return null;
+    try {
+      const uniqueName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+      const fileRef = ref(storage, `${appId}/${folder}/${uniqueName}`);
+      await uploadBytes(fileRef, file);
+      return await getDownloadURL(fileRef);
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("File upload failed. Please try again.");
+      return null;
+    }
+  };
+
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
     if (field === 'payPeriodStart') setPayPeriodStart(value);
@@ -674,7 +691,45 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         {showAdminView ? (
           <AdminDashboard 
-            shifts={shifts} employees={employees} onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} clients={clients} onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} expenses={expenses} onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} clientExpenses={clientExpenses} onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} paystubs={paystubs} onAddPaystub={(d) => runMutation('gn_paystubs', Date.now(), 'set', { ...d, id: Date.now() })} onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')} timeOffLogs={timeOffLogs} onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now(), 'set', { ...d, id: Date.now() })} onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} documents={documents} onAddDocument={(d) => runMutation('gn_documents', Date.now().toString(), 'set', d)} onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')} messages={messages} onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} currentUser={currentUser} payPeriodStart={payPeriodStart} setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} isBonusActive={isBonusActive} setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} bonusSettings={bonusSettings} setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
+            shifts={shifts} 
+            employees={employees} 
+            onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} 
+            onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} 
+            updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} 
+            clients={clients} 
+            onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
+            onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
+            updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} 
+            expenses={expenses} 
+            onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} 
+            clientExpenses={clientExpenses} 
+            onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} 
+            paystubs={paystubs} 
+            timeOffLogs={timeOffLogs} 
+            onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })} 
+            onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} 
+            documents={documents} 
+            messages={messages} 
+            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
+            currentUser={currentUser} 
+            payPeriodStart={payPeriodStart} 
+            setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} 
+            isBonusActive={isBonusActive} 
+            setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} 
+            bonusSettings={bonusSettings} 
+            setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
+            onAddDocument={async (d, file) => {
+              let url = d.fileUrl || '';
+              if (file) url = await handleFileUpload(file, 'documents');
+              runMutation('gn_documents', d.id || Date.now().toString(), 'set', { ...d, id: d.id || Date.now().toString(), fileUrl: url });
+            }}
+            onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')}
+            onAddPaystub={async (d, file) => {
+              let url = d.fileUrl || '';
+              if (file) url = await handleFileUpload(file, 'paystubs');
+              runMutation('gn_paystubs', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
+            }}
+            onRemovePaystub={(id) => runMutation('gn_paystubs', id, 'delete')}
             onAddShift={async (newShifts) => {
               if (!firebaseUser) return;
               const arr = Array.isArray(newShifts) ? newShifts : [newShifts];
@@ -688,13 +743,26 @@ export default function App() {
           />
         ) : (
           <EmployeeDashboard 
-            shifts={shifts} employees={employees} currentUser={currentUser} clients={clients} expenses={expenses} 
+            shifts={shifts} 
+            employees={employees} 
+            currentUser={currentUser} 
+            clients={clients} 
+            expenses={expenses} 
             onAddExpense={(d) => runMutation('gn_expenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
             clientExpenses={clientExpenses} 
-            onAddClientExpense={(d) => runMutation('gn_clientExpenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
-            paystubs={paystubs} timeOffLogs={timeOffLogs} messages={messages} documents={documents} 
+            onAddClientExpense={async (d, file) => {
+              let url = d.receiptUrl || '';
+              if (file) url = await handleFileUpload(file, 'receipts');
+              runMutation('gn_clientExpenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: 'pending', receiptUrl: url });
+            }}
+            paystubs={paystubs} 
+            timeOffLogs={timeOffLogs} 
+            messages={messages} 
+            documents={documents} 
             onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
-            payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} 
+            payPeriodStart={payPeriodStart} 
+            isBonusActive={isBonusActive} 
+            bonusSettings={bonusSettings} 
             onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
             setSelectedClient={setSelectedClient}
             getClientRemainingBalance={getClientRemainingBalance}

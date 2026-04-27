@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Plus, Trash2 } from 'lucide-react';
+import { FileText, Plus, Trash2, Loader2 } from 'lucide-react';
 
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
@@ -16,29 +16,30 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
   const [employeeId, setEmployeeId] = useState('');
   const [date, setDate] = useState('');
   const [paystubFile, setPaystubFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const safePaystubs = Array.isArray(paystubs) ? paystubs : [];
   const safeEmployees = Array.isArray(employees) ? employees : [];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!employeeId || !date || !paystubFile) return;
     
-    // Create a secure Object URL so the employee can download the file
-    const fileUrl = URL.createObjectURL(paystubFile);
+    setIsUploading(true);
 
     if (onAddPaystub) {
-      onAddPaystub({ 
+      // Step 6: Pass the raw file as the second argument!
+      await onAddPaystub({ 
         employeeId, 
         date, 
-        fileName: paystubFile.name,
-        fileUrl: fileUrl 
-      });
+        fileName: paystubFile.name 
+      }, paystubFile);
     }
     
     setEmployeeId(''); 
     setDate(''); 
     setPaystubFile(null);
+    setIsUploading(false);
   };
 
   return (
@@ -56,6 +57,7 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
               onChange={(e) => setEmployeeId(e.target.value)} 
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" 
               required
+              disabled={isUploading}
             >
               <option value="" disabled>Select an employee...</option>
               {safeEmployees.map(emp => (
@@ -73,15 +75,16 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
               onChange={(e) => setDate(e.target.value)} 
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" 
               required 
+              disabled={isUploading}
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Upload File *</label>
-            <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('paystub-file-upload').click()}>
+            <div className={`mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('paystub-file-upload').click()}>
               <div className="space-y-1 text-center">
                 <FileText className="mx-auto h-6 w-6 text-slate-400" />
                 <div className="flex text-sm text-slate-600 justify-center">
-                  <span className="relative cursor-pointer bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500">
+                  <span className="relative bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500">
                     {paystubFile ? paystubFile.name : <span>Click to attach paystub document</span>}
                   </span>
                 </div>
@@ -92,15 +95,16 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
                 accept=".pdf,image/*" 
                 className="sr-only" 
                 onChange={(e) => setPaystubFile(e.target.files[0])}
+                disabled={isUploading}
               />
             </div>
           </div>
           <button 
             type="submit" 
-            className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 transition"
+            disabled={isUploading || !paystubFile || !employeeId || !date}
+            className="w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 transition"
           >
-            <Plus className="h-4 w-4" />
-            <span>Record Paystub</span>
+            {isUploading ? <><Loader2 className="h-4 w-4 animate-spin"/><span>Uploading...</span></> : <><Plus className="h-4 w-4" /><span>Record Paystub</span></>}
           </button>
         </form>
       </div>
@@ -136,13 +140,24 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
                       </div>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => onRemovePaystub && onRemovePaystub(ps.id)} 
-                    className="text-red-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition" 
-                    title="Delete Paystub Record"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex space-x-1">
+                     <a 
+                      href={ps.fileUrl || '#'} 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-teal-600 hover:bg-teal-50 p-1.5 rounded-md transition inline-flex" 
+                      title="Download/View"
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                    <button 
+                      onClick={() => onRemovePaystub && onRemovePaystub(ps.id)} 
+                      className="text-red-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition" 
+                      title="Delete Paystub Record"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               )
             })

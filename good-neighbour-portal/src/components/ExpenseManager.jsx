@@ -140,10 +140,14 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
                   
                   <div className="flex items-center justify-between md:justify-end space-x-6">
                     <div className="flex items-center space-x-4">
-                      {exp.receiptUrl && (
-                        <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="flex items-center px-2 py-1 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded text-xs font-semibold transition">
+                      {exp.receiptUrl ? (
+                        <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="flex items-center px-2 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200 rounded text-xs font-bold transition shadow-sm">
                           <FileText className="h-3.5 w-3.5 mr-1" /> View Receipt
                         </a>
+                      ) : (
+                        <span className="flex items-center px-2 py-1 bg-slate-50 text-slate-400 border border-slate-200 rounded text-xs font-medium cursor-not-allowed" title="No receipt was uploaded by the employee">
+                          <FileText className="h-3.5 w-3.5 mr-1 opacity-50" /> No Receipt
+                        </span>
                       )}
                       <div className="text-lg font-black text-slate-800 text-right w-20">${Number(exp.amount).toFixed(2)}</div>
                     </div>

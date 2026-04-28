@@ -315,7 +315,6 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
     setIsUploading(true);
 
     if(onAddClientExpense) { 
-      // Step 6: Pass the raw file as the second argument!
       await onAddClientExpense({ 
         date, 
         clientId, 
@@ -433,10 +432,14 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [isUploadingDoc, setIsUploadingDoc] = useState(false); // NEW STATE
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeClients = Array.isArray(clients) ? clients : [];
+  
+  // LIVE DATABASE LINK: Look at the live employees array instead of the static currentUser snapshot
+  const liveEmployee = employees.find(e => e && e.id === currentUser.id) || currentUser;
+  const myUploads = liveEmployee.uploadedFiles || [];
   
   const myShifts = safeShifts.filter(s => s && s.employeeId === currentUser.id);
   const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id);
@@ -541,8 +544,8 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
               <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden relative">
                 {isUploadingPhoto ? (
                   <Loader2 className="h-8 w-8 animate-spin" />
-                ) : currentUser.photoUrl && !currentUser.photoUrl.includes('dicebear') ? (
-                  <img src={currentUser.photoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" />
+                ) : liveEmployee.photoUrl && !liveEmployee.photoUrl.includes('dicebear') ? (
+                  <img src={liveEmployee.photoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" />
                 ) : (
                   <User className="h-10 w-10" />
                 )}
@@ -778,10 +781,10 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
 
                       {/* List their previous uploads */}
                       <div className="space-y-3">
-                        {(!currentUser.uploadedFiles || currentUser.uploadedFiles.length === 0) ? (
+                        {myUploads.length === 0 ? (
                           <div className="text-center py-4 text-sm text-slate-500">You haven't uploaded any personal files yet.</div>
                         ) : (
-                          currentUser.uploadedFiles.map((file, idx) => (
+                          myUploads.map((file, idx) => (
                             <div key={idx} className="flex items-center justify-between p-3 bg-white hover:bg-teal-50 transition border border-slate-200 rounded-md">
                               <div className="flex items-center overflow-hidden pr-4">
                                 <FileText className="h-6 w-6 mr-3 text-teal-600 shrink-0" />

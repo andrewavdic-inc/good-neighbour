@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2 } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
@@ -432,6 +432,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false); // NEW UPLOAD STATE
 
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeClients = Array.isArray(clients) ? clients : [];
@@ -456,11 +457,13 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
-  const handlePhotoUpload = (e) => {
+  // NEW SECURE FILE UPLOAD HANDLER
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
     if (file && onUpdateProfile) {
-      const photoUrl = URL.createObjectURL(file);
-      onUpdateProfile(currentUser.id, { photoUrl });
+      setIsUploadingPhoto(true);
+      await onUpdateProfile(currentUser.id, {}, file);
+      setIsUploadingPhoto(false);
     }
   };
 
@@ -524,15 +527,25 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
       <div className="flex flex-col md:flex-row gap-6">
         <div className="md:w-1/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
+            
+            {/* UPDATED SECURE AVATAR UPLOAD UI */}
             <div className="relative mb-4 group">
-              <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden">
-                {currentUser.photoUrl && !currentUser.photoUrl.includes('dicebear') ? <img src={currentUser.photoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" /> : <User className="h-10 w-10" />}
+              <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden relative">
+                {isUploadingPhoto ? (
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                ) : currentUser.photoUrl && !currentUser.photoUrl.includes('dicebear') ? (
+                  <img src={currentUser.photoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" />
+                ) : (
+                  <User className="h-10 w-10" />
+                )}
               </div>
-              <label htmlFor="profile-upload" className="absolute bottom-0 right-0 bg-teal-600 p-1.5 rounded-full text-white cursor-pointer shadow-md hover:bg-teal-700 transition opacity-80 group-hover:opacity-100">
+              <label htmlFor="profile-upload" className={`absolute bottom-0 right-0 bg-teal-600 p-1.5 rounded-full text-white shadow-md transition ${isUploadingPhoto ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-teal-700 opacity-80 group-hover:opacity-100'}`}>
                 <Camera className="h-4 w-4" />
-                <input id="profile-upload" type="file" accept="image/*" className="sr-only" onChange={handlePhotoUpload} />
+                <input disabled={isUploadingPhoto} id="profile-upload" type="file" accept="image/*" className="sr-only" onChange={handlePhotoUpload} />
               </label>
             </div>
+            {/* END AVATAR UI */}
+
             <h2 className="text-xl font-bold text-slate-800">{String(currentUser.name)}</h2>
             <div className="flex flex-col mt-2 gap-1 items-center">
               <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">{String(currentUser.role)}</span>

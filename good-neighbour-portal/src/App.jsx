@@ -781,7 +781,7 @@ updateEmployee={async (id, d, file, certFiles = {}) => {
             onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
           />
         ) : (
-          <EmployeeDashboard 
+<EmployeeDashboard 
             shifts={shifts} 
             employees={employees} 
             currentUser={currentUser} 
@@ -805,20 +805,36 @@ updateEmployee={async (id, d, file, certFiles = {}) => {
             onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
             setSelectedClient={setSelectedClient}
             getClientRemainingBalance={getClientRemainingBalance}
-onUpdateProfile={async (id, d, file) => {
-  // Protect the employee's existing photo from being wiped out
-  const existingEmp = employees.find(e => e.id === id);
-  let url = d.photoUrl || existingEmp?.photoUrl || '';
-  
-  if (file) {
-    const newUrl = await handleFileUpload(file, 'avatars');
-    if (newUrl) url = newUrl;
-  }
-  
-  const updatedData = { ...d, photoUrl: url };
-  runMutation('gn_employees', id, 'update', updatedData);
-  setCurrentUser(prev => ({ ...prev, ...updatedData })); 
-}}          />
+            onUpdateProfile={async (id, d, file) => {
+              const existingEmp = employees.find(e => e.id === id);
+              let url = d.photoUrl || existingEmp?.photoUrl || '';
+              if (file) {
+                const newUrl = await handleFileUpload(file, 'avatars');
+                if (newUrl) url = newUrl;
+              }
+              const updatedData = { ...d, photoUrl: url };
+              runMutation('gn_employees', id, 'update', updatedData);
+              setCurrentUser(prev => ({ ...prev, ...updatedData })); 
+            }}
+            onEmployeeFileUpload={async (employeeId, file) => {
+              if (!file) return;
+              const url = await handleFileUpload(file, 'documents');
+              if (!url) return;
+
+              const existingEmp = employees.find(e => e.id === employeeId);
+              const currentUploads = existingEmp?.uploadedFiles || [];
+              
+              const newFileRecord = {
+                name: file.name,
+                url: url,
+                date: new Date().toISOString()
+              };
+
+              const updatedUploads = [...currentUploads, newFileRecord];
+              runMutation('gn_employees', employeeId, 'update', { uploadedFiles: updatedUploads });
+              setCurrentUser(prev => ({ ...prev, uploadedFiles: updatedUploads }));
+            }}
+          />
         )}
       </main>
 

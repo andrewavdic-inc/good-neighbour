@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
@@ -428,11 +428,12 @@ export function EmployeePaystubs({ myPaystubs = [] }) {
   );
 }
 
-export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile }) {
+export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, onEmployeeFileUpload }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false); // NEW UPLOAD STATE
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false); // NEW STATE
 
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeClients = Array.isArray(clients) ? clients : [];
@@ -457,13 +458,21 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
-  // NEW SECURE FILE UPLOAD HANDLER
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
     if (file && onUpdateProfile) {
       setIsUploadingPhoto(true);
       await onUpdateProfile(currentUser.id, {}, file);
       setIsUploadingPhoto(false);
+    }
+  };
+
+  const handleDocumentUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file && onEmployeeFileUpload) {
+      setIsUploadingDoc(true);
+      await onEmployeeFileUpload(currentUser.id, file);
+      setIsUploadingDoc(false);
     }
   };
 
@@ -528,7 +537,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
         <div className="md:w-1/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
             
-            {/* UPDATED SECURE AVATAR UPLOAD UI */}
             <div className="relative mb-4 group">
               <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden relative">
                 {isUploadingPhoto ? (
@@ -544,7 +552,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 <input disabled={isUploadingPhoto} id="profile-upload" type="file" accept="image/*" className="sr-only" onChange={handlePhotoUpload} />
               </label>
             </div>
-            {/* END AVATAR UI */}
 
             <h2 className="text-xl font-bold text-slate-800">{String(currentUser.name)}</h2>
             <div className="flex flex-col mt-2 gap-1 items-center">
@@ -729,11 +736,74 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
               )}
 
               {activeTab === 'documents' && (
-                <div className="p-6">
+                <div className="p-6 space-y-6">
                   <DocumentManager 
                     documents={documents} 
                     isAdmin={false} 
                   />
+                  
+                  {/* NEW: PERSONAL UPLOADS MODULE */}
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                      <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+                        <FileText className="h-5 w-5 mr-2 text-teal-600" />
+                        My Personal Uploads
+                      </h2>
+                    </div>
+                    <div className="p-6">
+                      <div className="mb-6">
+                        <label className="block text-sm font-medium text-slate-700 mb-2">Securely send a document to the Administrator</label>
+                        <div className="flex items-center justify-center w-full">
+                          <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg bg-slate-50 transition ${isUploadingDoc ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                              {isUploadingDoc ? (
+                                <Loader2 className="w-8 h-8 mb-3 text-teal-600 animate-spin" />
+                              ) : (
+                                <Upload className="w-8 h-8 mb-3 text-slate-400" />
+                              )}
+                              <p className="mb-2 text-sm text-slate-500">
+                                {isUploadingDoc ? <span className="font-semibold text-teal-600">Uploading securely...</span> : <><span className="font-semibold text-teal-600">Click to upload</span> or drag and drop</>}
+                              </p>
+                              <p className="text-xs text-slate-500">PDF, JPG, or PNG</p>
+                            </div>
+                            <input 
+                              type="file" 
+                              className="hidden" 
+                              disabled={isUploadingDoc}
+                              onChange={handleDocumentUpload} 
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* List their previous uploads */}
+                      <div className="space-y-3">
+                        {(!currentUser.uploadedFiles || currentUser.uploadedFiles.length === 0) ? (
+                          <div className="text-center py-4 text-sm text-slate-500">You haven't uploaded any personal files yet.</div>
+                        ) : (
+                          currentUser.uploadedFiles.map((file, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-3 bg-white hover:bg-teal-50 transition border border-slate-200 rounded-md">
+                              <div className="flex items-center overflow-hidden pr-4">
+                                <FileText className="h-6 w-6 mr-3 text-teal-600 shrink-0" />
+                                <div className="truncate">
+                                  <div className="text-sm font-semibold text-slate-800 truncate" title={file.name}>{file.name}</div>
+                                  <div className="text-xs text-slate-500 mt-0.5">{new Date(file.date).toLocaleDateString()}</div>
+                                </div>
+                              </div>
+                              <a 
+                                href={file.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="bg-white border border-teal-200 text-teal-700 hover:bg-teal-600 hover:text-white px-3 py-1.5 rounded transition text-xs font-semibold shadow-sm shrink-0" 
+                              >
+                                View
+                              </a>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, ShieldAlert, Loader2, FileText } from 'lucide-react';
 
 const ONTARIO_REQUIREMENTS = [
   { key: 'cpr', label: 'CPR / First Aid' }, 
@@ -34,7 +34,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   });
   
   const [photoFile, setPhotoFile] = useState(null);
-  const [certFiles, setCertFiles] = useState({}); // NEW: Holds the actual certificate files
+  const [certFiles, setCertFiles] = useState({});
   const [activeTab, setActiveTab] = useState('profile'); 
   const [isUploading, setIsUploading] = useState(false);
 
@@ -88,7 +88,6 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     };
     
     if (onSave && employee?.id) {
-      // Step 6: Pass both the photoFile and the certFiles over to App.jsx!
       await onSave(employee.id, updatedData, photoFile, certFiles);
     }
     
@@ -108,25 +107,35 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
           <button onClick={onClose} disabled={isUploading} className="text-teal-200 hover:text-white transition text-2xl leading-none disabled:opacity-50">&times;</button>
         </div>
 
-        <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 space-x-6">
+        <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 space-x-6 overflow-x-auto scrollbar-hide">
           <button 
             type="button"
             onClick={() => setActiveTab('profile')}
-            className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'profile' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`whitespace-nowrap pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'profile' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             Personal & Contact Profile
           </button>
           <button 
             type="button"
             onClick={() => setActiveTab('compliance')}
-            className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'compliance' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            className={`whitespace-nowrap pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'compliance' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
             Certificates & Clearances
+          </button>
+          {/* NEW UPLOADS TAB BUTTON */}
+          <button 
+            type="button"
+            onClick={() => setActiveTab('uploads')}
+            className={`whitespace-nowrap pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'uploads' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Uploaded Documents
           </button>
         </div>
         
         <div className="overflow-y-auto p-6 flex-1 bg-slate-50/30">
           <form id="edit-employee-form" onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* EXISTING PROFILE TAB CONTENT */}
             <div className={activeTab === 'profile' ? 'block space-y-6' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
@@ -264,6 +273,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
               </div>
             </div>
 
+            {/* EXISTING COMPLIANCE TAB CONTENT */}
             <div className={activeTab === 'compliance' ? 'block' : 'hidden'}>
               <div className="bg-blue-50 border border-blue-100 text-blue-800 text-sm p-4 rounded-xl mb-6 flex items-start">
                 <Info className="h-5 w-5 mr-2 shrink-0 mt-0.5 text-blue-600"/>
@@ -355,7 +365,6 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                                 if(e.target.files[0]) {
                                   const file = e.target.files[0];
                                   setCertFiles(prev => ({ ...prev, [req.key]: file }));
-                                  // Temporary ghost link just for UI preview while editing
                                   handleReqChange(req.key, 'fileUrl', URL.createObjectURL(file)); 
                                   if (currentData.status === 'missing') handleReqChange(req.key, 'status', 'pending');
                                 }
@@ -367,6 +376,45 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                     </div>
                   )
                 })}
+              </div>
+            </div>
+
+            {/* NEW UPLOADS TAB CONTENT */}
+            <div className={activeTab === 'uploads' ? 'block' : 'hidden'}>
+              <div className="bg-white border border-slate-200 rounded-lg p-6">
+                <h4 className="text-sm font-semibold text-slate-800 mb-4 flex items-center">
+                  <FileText className="h-5 w-5 mr-2 text-teal-600"/> 
+                  Files Uploaded by {employee.name}
+                </h4>
+                
+                {(!employee.uploadedFiles || employee.uploadedFiles.length === 0) ? (
+                  <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-100">
+                    <FileText className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500 font-medium">No files have been uploaded yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {employee.uploadedFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 hover:bg-teal-50 transition border border-slate-200 rounded-md">
+                        <div className="flex items-center overflow-hidden pr-4">
+                          <FileText className="h-6 w-6 mr-3 text-teal-600 shrink-0" />
+                          <div className="truncate">
+                            <div className="text-sm font-semibold text-slate-800 truncate" title={file.name}>{file.name}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{new Date(file.date).toLocaleDateString()}</div>
+                          </div>
+                        </div>
+                        <a 
+                          href={file.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="bg-white border border-teal-200 text-teal-700 hover:bg-teal-600 hover:text-white px-3 py-1.5 rounded transition text-xs font-semibold shadow-sm shrink-0" 
+                        >
+                          View File
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { Briefcase, AlertCircle, Info } from 'lucide-react';
+import { Briefcase, AlertCircle, Loader2, Lock } from 'lucide-react';
 
 export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Strict boolean casting to prevent React "Object" crash errors
+  // Strict boolean casting to prevent React crash errors
   const dbReady = Boolean(isDbReady);
   const dataExists = Boolean(hasData);
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     if (!dbReady || (!dataExists && dbReady)) return;
-    onLogin(username, password);
+    
+    setIsLoggingIn(true);
+    await onLogin(email, password);
+    setIsLoggingIn(false); // Stop spinning if login fails
   };
 
   return (
@@ -23,14 +27,14 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center">
           <div className="bg-teal-600 p-4 rounded-full shadow-lg border-4 border-white">
-            <Briefcase className="h-10 w-10 text-white" />
+            <Lock className="h-10 w-10 text-white" />
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 tracking-tight">
           Good Neighbour Portal
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
-          Sign in to access your cloud-synced schedule
+          Sign in to your secure cloud workspace
         </p>
       </div>
 
@@ -38,16 +42,16 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
         <div className="bg-white py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10 border border-teal-100">
           <form className="space-y-6" onSubmit={onSubmit}>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Username</label>
+              <label className="block text-sm font-medium text-slate-700">Email Address</label>
               <div className="mt-1">
                 <input 
-                  type="text" 
+                  type="email" 
                   required 
                   className="appearance-none block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
-                  disabled={!dbReady}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@goodneighbour.ca"
+                  disabled={!dbReady || isLoggingIn}
                 />
               </div>
             </div>
@@ -61,8 +65,8 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
                   className="appearance-none block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
-                  disabled={!dbReady}
+                  placeholder="••••••••"
+                  disabled={!dbReady || isLoggingIn}
                 />
               </div>
             </div>
@@ -70,10 +74,10 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
             <div>
               <button 
                 type="submit" 
-                disabled={!dbReady || (!dataExists && dbReady)}
+                disabled={!dbReady || (!dataExists && dbReady) || isLoggingIn}
                 className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
               >
-                {dbReady ? 'Secure Sign In' : 'Connecting to Server...'}
+                {!dbReady ? 'Connecting to Server...' : isLoggingIn ? <><Loader2 className="h-5 w-5 mr-2 animate-spin"/> Authenticating...</> : 'Secure Sign In'}
               </button>
             </div>
           </form>
@@ -92,25 +96,6 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
                 >
                   Force Initialize Demo Database
                 </button>
-              </div>
-            </div>
-          )}
-
-          {dbReady && dataExists && (
-            <div className="mt-6 border-t border-slate-200 pt-6">
-              <div className="rounded-md bg-blue-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <Info className="h-5 w-5 text-blue-400" />
-                  </div>
-                  <div className="ml-3 flex-1 md:flex md:justify-between">
-                    <p className="text-sm text-blue-700">
-                      <strong>Demo Accounts (Ready):</strong><br/>
-                      Admin: <code>admin</code> / <code>admin</code><br/>
-                      Staff: <code>alice</code> / <code>password</code><br/>
-                    </p>
-                  </div>
-                </div>
               </div>
             </div>
           )}

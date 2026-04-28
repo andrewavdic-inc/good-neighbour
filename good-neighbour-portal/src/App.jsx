@@ -3,8 +3,7 @@ import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, Chevr
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- UTILS & COMPONENTS ---
@@ -589,15 +588,28 @@ export default function App() {
     }
   };
 
-  const handleLogin = (username, password) => {
-    const safeEmployees = Array.isArray(employees) ? employees : [];
-    const foundEmp = safeEmployees.find(e => e && e.username && String(e.username).toLowerCase() === String(username).toLowerCase() && e.password === password);
-    if (foundEmp) {
-      setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl });
-      setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
-    } else { alert("Invalid credentials. Please check your username and password."); }
-  };
+const handleLogin = async (email, password) => {
+    try {
+      // 1. Authenticate with Google's Secure Servers
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const secureEmail = userCredential.user.email;
 
+      // 2. Find the Employee Profile in your Database that matches this email
+      const safeEmployees = Array.isArray(employees) ? employees : [];
+      const foundEmp = safeEmployees.find(e => e && e.email && String(e.email).toLowerCase() === String(secureEmail).toLowerCase());
+      
+      if (foundEmp) {
+        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl });
+        setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
+      } else { 
+        alert("Login successful, but this email is not assigned to an employee profile in the directory. Please contact the administrator."); 
+      }
+    } catch (error) {
+      console.error("Auth Error:", error);
+      alert("Invalid email or password. Please try again.");
+    }
+  };
+  
   const handleLogout = () => { setCurrentUser(null); setViewMode('employee'); };
 
   const getDocRef = (cName, dId) => doc(db, 'artifacts', appId, 'public', 'data', cName, String(dId));
@@ -693,9 +705,17 @@ export default function App() {
           <AdminDashboard 
             shifts={shifts} 
             employees={employees} 
-            onAddEmployee={(d) => runMutation('gn_employees', d.id, 'set', d)} 
+            onAddEmployee={async (d, file) => {
+              let url = d.photoUrl || '';
+              if (file) url = await handleFileUpload(file, 'avatars');
+              runMutation('gn_employees', d.id, 'set', { ...d, photoUrl: url });
+              }} 
             onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} 
-            updateEmployee={(id, d) => runMutation('gn_employees', id, 'update', d)} 
+            updateEmployee={async (id, d, file) => {
+              let url = d.photoUrl || '';
+              if (file) url = await handleFileUpload(file, 'avatars');
+              runMutation('gn_employees', id, 'update', { ...d, photoUrl: url });
+}}
             clients={clients} 
             onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
             onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
@@ -766,10 +786,13 @@ export default function App() {
             onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
             setSelectedClient={setSelectedClient}
             getClientRemainingBalance={getClientRemainingBalance}
-            onUpdateProfile={(id, d) => {
-              runMutation('gn_employees', id, 'update', d);
-              setCurrentUser(prev => ({ ...prev, ...d })); 
-            }}
+            onUpdateProfile={async (id, d, file) => {
+              let url = d.photoUrl || '';
+              if (file) url = await handleFileUpload(file, 'avatars');
+              const updatedData = { ...d, photoUrl: url };
+              runMutation('gn_employees', id, 'update', updatedData);
+              setCurrentUser(prev => ({ ...prev, ...updatedData })); 
+              }}
           />
         )}
       </main>

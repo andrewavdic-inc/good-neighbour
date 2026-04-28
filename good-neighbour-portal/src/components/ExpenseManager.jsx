@@ -32,9 +32,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     timeOffBalances: employee?.timeOffBalances || { sick: 5, vacation: 10 },
     availability: employee?.availability || []
   });
-  
   const [photoFile, setPhotoFile] = useState(null);
-  const [certFiles, setCertFiles] = useState({}); // NEW: Holds the actual certificate files
   const [activeTab, setActiveTab] = useState('profile'); 
   const [isUploading, setIsUploading] = useState(false);
 
@@ -88,8 +86,8 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     };
     
     if (onSave && employee?.id) {
-      // Step 6: Pass both the photoFile and the certFiles over to App.jsx!
-      await onSave(employee.id, updatedData, photoFile, certFiles);
+      // Pass the raw photoFile as the 3rd argument for App.jsx to upload
+      await onSave(employee.id, updatedData, photoFile);
     }
     
     setIsUploading(false);
@@ -311,29 +309,14 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                         
                         {currentData.status !== 'not_applicable' && (
                           <div className="flex items-center justify-between">
-                            {currentData.fileUrl || certFiles[req.key] ? (
+                            {currentData.fileUrl ? (
                               <div className="flex items-center justify-between w-full bg-teal-50 px-2 py-1.5 rounded border border-teal-100">
                                 <span className="text-xs text-teal-700 font-medium flex items-center">
                                   <CheckCircle className="h-3 w-3 mr-1"/> Uploaded
                                 </span>
-                                <div className="flex items-center space-x-1">
-                                  {currentData.fileUrl && !certFiles[req.key] && (
-                                    <a href={currentData.fileUrl} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:text-teal-800 p-0.5" title="View Document">
-                                      <Info className="h-3 w-3" />
-                                    </a>
-                                  )}
-                                  <button 
-                                    type="button" 
-                                    disabled={isUploading} 
-                                    onClick={() => {
-                                      handleReqChange(req.key, 'fileUrl', null);
-                                      setCertFiles(prev => { const newFiles = {...prev}; delete newFiles[req.key]; return newFiles; });
-                                    }} 
-                                    className="text-red-500 hover:text-red-700 disabled:opacity-50 p-0.5 rounded transition"
-                                  >
-                                    <Trash2 className="h-3 w-3"/>
-                                  </button>
-                                </div>
+                                <button type="button" disabled={isUploading} onClick={() => handleReqChange(req.key, 'fileUrl', null)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-0.5 rounded transition">
+                                  <Trash2 className="h-3 w-3"/>
+                                </button>
                               </div>
                             ) : (
                               <button 
@@ -342,7 +325,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                                 onClick={() => document.getElementById(`req-upload-${req.key}`).click()} 
                                 className="text-xs bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:cursor-not-allowed text-slate-600 font-medium py-1.5 px-2 rounded border border-slate-300 flex items-center w-full justify-center transition"
                               >
-                                <ImageIcon className="h-3 w-3 mr-1.5 text-slate-400"/> Attach Certificate File
+                                <ImageIcon className="h-3 w-3 mr-1.5 text-slate-400"/> Attach Certificate Image
                               </button>
                             )}
                             <input 
@@ -353,10 +336,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                               disabled={isUploading}
                               onChange={(e) => { 
                                 if(e.target.files[0]) {
-                                  const file = e.target.files[0];
-                                  setCertFiles(prev => ({ ...prev, [req.key]: file }));
-                                  // Temporary ghost link just for UI preview while editing
-                                  handleReqChange(req.key, 'fileUrl', URL.createObjectURL(file)); 
+                                  handleReqChange(req.key, 'fileUrl', URL.createObjectURL(e.target.files[0]));
                                   if (currentData.status === 'missing') handleReqChange(req.key, 'status', 'pending');
                                 }
                               }} 
@@ -428,6 +408,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
     };
     
     if (onAddEmployee) {
+      // Pass the raw photo file as the second argument
       await onAddEmployee(newEmp, newPhotoFile);
     }
     
@@ -770,8 +751,8 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
         <EditEmployeeModal 
           employee={editingEmployee} 
           onClose={() => setEditingEmployee(null)} 
-          onSave={async (id, data, file, certFiles) => {
-            if (updateEmployee) await updateEmployee(id, data, file, certFiles);
+          onSave={async (id, data, file) => {
+            if (updateEmployee) await updateEmployee(id, data, file);
             setEditingEmployee(null);
           }} 
         />

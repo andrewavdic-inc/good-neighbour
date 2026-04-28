@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, DollarSign, CheckCircle, ShieldAlert } from 'lucide-react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
 
 const ONTARIO_REQUIREMENTS = [
   { key: 'cpr', label: 'CPR / First Aid' }, 
@@ -32,8 +32,11 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     timeOffBalances: employee?.timeOffBalances || { sick: 5, vacation: 10 },
     availability: employee?.availability || []
   });
+  
   const [photoFile, setPhotoFile] = useState(null);
+  const [certFiles, setCertFiles] = useState({}); // NEW: Holds the actual certificate files
   const [activeTab, setActiveTab] = useState('profile'); 
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
   
@@ -71,10 +74,12 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) return;
     
+    setIsUploading(true);
+
     const updatedData = { 
       ...formData, 
       payType: formData.payType || 'per_visit',
@@ -82,12 +87,12 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
       perVisitRate: Number(formData.perVisitRate) || 45
     };
     
-    if (photoFile) {
-      updatedData.photoUrl = URL.createObjectURL(photoFile);
-    }
     if (onSave && employee?.id) {
-      onSave(employee.id, updatedData);
+      // Step 6: Pass both the photoFile and the certFiles over to App.jsx!
+      await onSave(employee.id, updatedData, photoFile, certFiles);
     }
+    
+    setIsUploading(false);
   };
 
   if (!employee) return null;
@@ -100,7 +105,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
             <User className="h-5 w-5 mr-2 text-teal-200" />
             Edit Employee: {employee.name}
           </h3>
-          <button onClick={onClose} className="text-teal-200 hover:text-white transition text-2xl leading-none">&times;</button>
+          <button onClick={onClose} disabled={isUploading} className="text-teal-200 hover:text-white transition text-2xl leading-none disabled:opacity-50">&times;</button>
         </div>
 
         <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 space-x-6">
@@ -127,21 +132,21 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
-                    <input type="text" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+                    <input type="text" disabled={isUploading} value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Username *</label>
-                      <input type="text" value={formData.username} onChange={(e) => handleChange('username', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+                      <input type="text" disabled={isUploading} value={formData.username} onChange={(e) => handleChange('username', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Password *</label>
-                      <input type="text" value={formData.password} onChange={(e) => handleChange('password', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+                      <input type="text" disabled={isUploading} value={formData.password} onChange={(e) => handleChange('password', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                    <select value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                    <select disabled={isUploading} value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
                       <option value="Neighbour">Neighbour</option>
                       <option value="Block Captain">Block Captain</option>
                       <option value="Administrator">Administrator</option>
@@ -150,7 +155,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                   <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-white">
                     <div className="col-span-3">
                       <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
-                      <select value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-teal-50">
+                      <select disabled={isUploading} value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-teal-50">
                         <option value="per_visit">Per Visit Rate</option>
                         <option value="hourly">Hourly Rate</option>
                       </select>
@@ -161,6 +166,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                         type="number" 
                         min="0" 
                         step="1" 
+                        disabled={isUploading}
                         value={formData.perVisitRate} 
                         onChange={(e) => handleChange('perVisitRate', e.target.value)} 
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`}
@@ -173,6 +179,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                         type="number" 
                         min="0" 
                         step="0.50" 
+                        disabled={isUploading}
                         value={formData.hourlyWage} 
                         onChange={(e) => handleChange('hourlyWage', e.target.value)} 
                         className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`}
@@ -182,14 +189,14 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Update Photo (Optional)</label>
-                    <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('edit-emp-photo-upload').click()}>
+                    <div className={`mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('edit-emp-photo-upload').click()}>
                       <div className="space-y-1 text-center">
                         <ImageIcon className="mx-auto h-5 w-5 text-slate-400" />
                         <div className="flex text-xs text-slate-600 justify-center">
                           <span className="relative font-medium text-teal-600">{photoFile ? photoFile.name : <span>Upload a new photo</span>}</span>
                         </div>
                       </div>
-                      <input id="edit-emp-photo-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => setPhotoFile(e.target.files[0])} />
+                      <input disabled={isUploading} id="edit-emp-photo-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => setPhotoFile(e.target.files[0])} />
                     </div>
                   </div>
                 </div>
@@ -197,15 +204,15 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                    <input type="text" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                    <input disabled={isUploading} type="text" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                    <input type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                    <input disabled={isUploading} type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Home Address</label>
-                    <input type="text" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                    <input disabled={isUploading} type="text" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                   </div>
                 </div>
               </div>
@@ -214,9 +221,10 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                 <h4 className="text-sm font-semibold text-slate-800 mb-3 flex items-center"><CalendarDays className="h-4 w-4 mr-1.5 text-slate-500"/> Availability Tracker</h4>
                 <div className="flex flex-wrap gap-3">
                   {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
-                    <label key={part} className="flex items-center space-x-2 text-sm text-slate-700 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition">
+                    <label key={part} className={`flex items-center space-x-2 text-sm text-slate-700 bg-white border border-slate-200 px-3 py-1.5 rounded-lg transition ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}`}>
                       <input 
                         type="checkbox" 
+                        disabled={isUploading}
                         checked={(formData.availability || []).includes(part)}
                         onChange={() => toggleAvailability(part)}
                         className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
@@ -232,11 +240,11 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Allowed Sick Days / Yr</label>
-                    <input type="number" min="0" value={formData.timeOffBalances.sick} onChange={(e) => handleTimeOffChange('sick', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                    <input disabled={isUploading} type="number" min="0" value={formData.timeOffBalances.sick} onChange={(e) => handleTimeOffChange('sick', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Allowed Vacation Days / Yr</label>
-                    <input type="number" min="0" value={formData.timeOffBalances.vacation} onChange={(e) => handleTimeOffChange('vacation', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                    <input disabled={isUploading} type="number" min="0" value={formData.timeOffBalances.vacation} onChange={(e) => handleTimeOffChange('vacation', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                   </div>
                 </div>
               </div>
@@ -246,11 +254,11 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Name / Relation</label>
-                    <input type="text" value={formData.emergencyContactName} onChange={(e) => handleChange('emergencyContactName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. John Doe (Husband)" />
+                    <input disabled={isUploading} type="text" value={formData.emergencyContactName} onChange={(e) => handleChange('emergencyContactName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. John Doe (Husband)" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number</label>
-                    <input type="text" value={formData.emergencyContactPhone} onChange={(e) => handleChange('emergencyContactPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                    <input disabled={isUploading} type="text" value={formData.emergencyContactPhone} onChange={(e) => handleChange('emergencyContactPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                   </div>
                 </div>
               </div>
@@ -273,6 +281,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                         <select 
                           value={currentData.status} 
                           onChange={(e) => handleReqChange(req.key, 'status', e.target.value)}
+                          disabled={isUploading}
                           className={`mt-1 xl:mt-0 text-xs font-medium rounded border-slate-300 focus:ring-teal-500 px-2 py-1 ${
                             currentData.status === 'valid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
                             currentData.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
@@ -295,29 +304,45 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                             type="date" 
                             value={currentData.expiryDate || ''} 
                             onChange={(e) => handleReqChange(req.key, 'expiryDate', e.target.value)}
-                            disabled={currentData.status === 'not_applicable'}
+                            disabled={currentData.status === 'not_applicable' || isUploading}
                             className="w-32 px-2 py-1 border border-slate-200 rounded text-xs text-slate-600 focus:outline-none focus:border-teal-500 disabled:bg-slate-50 disabled:text-slate-400"
                           />
                         </div>
                         
                         {currentData.status !== 'not_applicable' && (
                           <div className="flex items-center justify-between">
-                            {currentData.fileUrl ? (
+                            {currentData.fileUrl || certFiles[req.key] ? (
                               <div className="flex items-center justify-between w-full bg-teal-50 px-2 py-1.5 rounded border border-teal-100">
                                 <span className="text-xs text-teal-700 font-medium flex items-center">
                                   <CheckCircle className="h-3 w-3 mr-1"/> Uploaded
                                 </span>
-                                <button type="button" onClick={() => handleReqChange(req.key, 'fileUrl', null)} className="text-red-500 hover:text-red-700 p-0.5 rounded transition">
-                                  <Trash2 className="h-3 w-3"/>
-                                </button>
+                                <div className="flex items-center space-x-1">
+                                  {currentData.fileUrl && !certFiles[req.key] && (
+                                    <a href={currentData.fileUrl} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:text-teal-800 p-0.5" title="View Document">
+                                      <Info className="h-3 w-3" />
+                                    </a>
+                                  )}
+                                  <button 
+                                    type="button" 
+                                    disabled={isUploading} 
+                                    onClick={() => {
+                                      handleReqChange(req.key, 'fileUrl', null);
+                                      setCertFiles(prev => { const newFiles = {...prev}; delete newFiles[req.key]; return newFiles; });
+                                    }} 
+                                    className="text-red-500 hover:text-red-700 disabled:opacity-50 p-0.5 rounded transition"
+                                  >
+                                    <Trash2 className="h-3 w-3"/>
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               <button 
                                 type="button" 
+                                disabled={isUploading}
                                 onClick={() => document.getElementById(`req-upload-${req.key}`).click()} 
-                                className="text-xs bg-white hover:bg-slate-50 text-slate-600 font-medium py-1.5 px-2 rounded border border-slate-300 flex items-center w-full justify-center transition"
+                                className="text-xs bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:cursor-not-allowed text-slate-600 font-medium py-1.5 px-2 rounded border border-slate-300 flex items-center w-full justify-center transition"
                               >
-                                <ImageIcon className="h-3 w-3 mr-1.5 text-slate-400"/> Attach Certificate Image
+                                <ImageIcon className="h-3 w-3 mr-1.5 text-slate-400"/> Attach Certificate File
                               </button>
                             )}
                             <input 
@@ -325,9 +350,13 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                               type="file" 
                               accept="image/*,.pdf" 
                               className="sr-only" 
+                              disabled={isUploading}
                               onChange={(e) => { 
                                 if(e.target.files[0]) {
-                                  handleReqChange(req.key, 'fileUrl', URL.createObjectURL(e.target.files[0]));
+                                  const file = e.target.files[0];
+                                  setCertFiles(prev => ({ ...prev, [req.key]: file }));
+                                  // Temporary ghost link just for UI preview while editing
+                                  handleReqChange(req.key, 'fileUrl', URL.createObjectURL(file)); 
                                   if (currentData.status === 'missing') handleReqChange(req.key, 'status', 'pending');
                                 }
                               }} 
@@ -345,11 +374,11 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
         </div>
 
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">
+          <button type="button" disabled={isUploading} onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 transition">
             Cancel
           </button>
-          <button type="submit" form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition">
-            Save Complete Profile
+          <button type="submit" disabled={isUploading} form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 disabled:bg-slate-400 transition flex items-center">
+            {isUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : 'Save Complete Profile'}
           </button>
         </div>
       </div>
@@ -371,13 +400,16 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
   const [newPhotoFile, setNewPhotoFile] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const safeEmployees = Array.isArray(employees) ? employees : [];
 
-  const handleAddEmployee = (e) => {
+  const handleAddEmployee = async (e) => {
     e.preventDefault();
     if (!newName.trim() || !newUsername.trim() || !newPassword.trim()) return;
     
+    setIsUploading(true);
+
     const newEmp = {
       id: `emp_${Date.now()}`,
       name: newName,
@@ -389,12 +421,16 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
       perVisitRate: Number(newPerVisitRate) || 45,
       phone: newPhone,
       email: newEmail,
-      photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
+      photoUrl: newPhotoFile ? '' : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
       requirements: {},
       timeOffBalances: { sick: 5, vacation: 10 },
       availability: newAvailability
     };
-    if (onAddEmployee) onAddEmployee(newEmp);
+    
+    if (onAddEmployee) {
+      await onAddEmployee(newEmp, newPhotoFile);
+    }
+    
     setNewName('');
     setNewUsername('');
     setNewPassword('');
@@ -405,6 +441,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
     setNewEmail('');
     setNewAvailability([]);
     setNewPhotoFile(null);
+    setIsUploading(false);
   };
 
   const toggleNewAvailability = (dayPart) => {
@@ -418,7 +455,6 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
     let issues = 0;
     ONTARIO_REQUIREMENTS.forEach(req => {
       const status = emp?.requirements?.[req.key]?.status || 'missing';
-      // Do not count 'not_applicable' as an issue
       if (status === 'missing' || status === 'expired') {
         issues++;
       }
@@ -486,7 +522,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                 
                 <div className="flex items-center space-x-3 mb-3 pr-16">
                   {emp.photoUrl ? (
-                    <img src={emp.photoUrl} alt={emp.name || 'Staff'} className="h-12 w-12 rounded-full border border-slate-200 object-cover" />
+                    <img src={emp.photoUrl} alt={emp.name || 'Staff'} className="h-12 w-12 rounded-full border border-slate-200 object-cover bg-white" />
                   ) : (
                     <div className="h-12 w-12 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
                       <User className="h-6 w-6" />
@@ -565,6 +601,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
             <input 
               type="text" 
+              disabled={isUploading}
               value={newName} 
               onChange={(e) => setNewName(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -578,6 +615,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
               <label className="block text-sm font-medium text-slate-700 mb-1">Username *</label>
               <input 
                 type="text" 
+                disabled={isUploading}
                 value={newUsername} 
                 onChange={(e) => setNewUsername(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
@@ -589,6 +627,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
               <label className="block text-sm font-medium text-slate-700 mb-1">Password *</label>
               <input 
                 type="text" 
+                disabled={isUploading}
                 value={newPassword} 
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
@@ -602,6 +641,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             <div className="col-span-3">
               <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
               <select 
+                disabled={isUploading}
                 value={newRole} 
                 onChange={(e) => setNewRole(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-white"
@@ -614,6 +654,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             <div className="col-span-3">
               <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
               <select 
+                disabled={isUploading}
                 value={newPayType} 
                 onChange={(e) => setNewPayType(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white"
@@ -628,6 +669,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                 type="number" 
                 min="0"
                 step="1"
+                disabled={isUploading}
                 value={newPerVisitRate} 
                 onChange={(e) => setNewPerVisitRate(e.target.value)}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`}
@@ -640,6 +682,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                 type="number" 
                 min="0"
                 step="0.50"
+                disabled={isUploading}
                 value={newHourlyWage} 
                 onChange={(e) => setNewHourlyWage(e.target.value)}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`}
@@ -653,6 +696,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
               <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
               <input 
                 type="text" 
+                disabled={isUploading}
                 value={newPhone} 
                 onChange={(e) => setNewPhone(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
@@ -663,6 +707,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
               <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <input 
                 type="email" 
+                disabled={isUploading}
                 value={newEmail} 
                 onChange={(e) => setNewEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
@@ -675,9 +720,10 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
             <div className="flex flex-wrap gap-2">
               {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
-                <label key={part} className="flex items-center space-x-1.5 text-xs text-slate-700 cursor-pointer bg-white border border-slate-200 px-2 py-1 rounded hover:bg-slate-50 transition">
+                <label key={part} className={`flex items-center space-x-1.5 text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded transition ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}`}>
                   <input 
                     type="checkbox" 
+                    disabled={isUploading}
                     checked={newAvailability.includes(part)}
                     onChange={() => toggleNewAvailability(part)}
                     className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
@@ -690,11 +736,11 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Photo (Optional)</label>
-            <div className="mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md hover:bg-slate-50 transition cursor-pointer bg-white" onClick={() => document.getElementById('emp-photo-upload').click()}>
+            <div className={`mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('emp-photo-upload').click()}>
               <div className="space-y-1 text-center">
                 <ImageIcon className="mx-auto h-6 w-6 text-slate-400" />
                 <div className="flex text-sm text-slate-600 justify-center">
-                  <span className="relative cursor-pointer bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-teal-500">
+                  <span className="relative bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500">
                     {newPhotoFile ? newPhotoFile.name : <span>Upload a photo</span>}
                   </span>
                 </div>
@@ -704,6 +750,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                 type="file" 
                 accept="image/*" 
                 className="sr-only" 
+                disabled={isUploading}
                 onChange={(e) => setNewPhotoFile(e.target.files[0])}
               />
             </div>
@@ -711,10 +758,10 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
 
           <button 
             type="submit"
-            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none transition"
+            disabled={isUploading}
+            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 transition"
           >
-            <Plus className="h-4 w-4" />
-            <span>Add Employee Profile</span>
+            {isUploading ? <><Loader2 className="h-4 w-4 animate-spin"/><span>Uploading...</span></> : <><Plus className="h-4 w-4" /><span>Add Employee Profile</span></>}
           </button>
         </form>
       </div>
@@ -723,8 +770,8 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
         <EditEmployeeModal 
           employee={editingEmployee} 
           onClose={() => setEditingEmployee(null)} 
-          onSave={(id, data) => {
-            if (updateEmployee) updateEmployee(id, data);
+          onSave={async (id, data, file, certFiles) => {
+            if (updateEmployee) await updateEmployee(id, data, file, certFiles);
             setEditingEmployee(null);
           }} 
         />

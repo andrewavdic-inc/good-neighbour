@@ -710,8 +710,8 @@ const handleLogin = async (email, password) => {
               if (file) url = await handleFileUpload(file, 'avatars');
               runMutation('gn_employees', d.id, 'set', { ...d, photoUrl: url });
               }} 
-updateEmployee={async (id, d, file) => {
-  // Check if the employee already has a photo so we don't overwrite it!
+updateEmployee={async (id, d, file, certFiles = {}) => {
+  // 1. Handle the Profile Picture
   const existingEmp = employees.find(e => e.id === id);
   let url = d.photoUrl || existingEmp?.photoUrl || '';
   
@@ -719,9 +719,23 @@ updateEmployee={async (id, d, file) => {
     const newUrl = await handleFileUpload(file, 'avatars');
     if (newUrl) url = newUrl;
   }
-  runMutation('gn_employees', id, 'update', { ...d, photoUrl: url });
-}}
-            clients={clients} 
+
+  // 2. Handle the Compliance Certificates
+  const updatedReqs = { ...(d.requirements || existingEmp?.requirements || {}) };
+  
+  // Loop through any new certificate files that were attached
+  for (const [reqKey, certFile] of Object.entries(certFiles)) {
+    if (certFile) {
+      const certUrl = await handleFileUpload(certFile, 'certificates');
+      if (certUrl) {
+        updatedReqs[reqKey] = { ...updatedReqs[reqKey], fileUrl: certUrl };
+      }
+    }
+  }
+
+  // 3. Save everything to the database
+  runMutation('gn_employees', id, 'update', { ...d, photoUrl: url, requirements: updatedReqs });
+}}            clients={clients} 
             onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
             onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
             updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} 

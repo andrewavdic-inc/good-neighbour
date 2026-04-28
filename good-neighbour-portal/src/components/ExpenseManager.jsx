@@ -1,248 +1,781 @@
 import React, { useState } from 'react';
-import { Coffee, FileText, CheckCircle, XCircle, Car } from 'lucide-react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, ShieldAlert, Loader2 } from 'lucide-react';
 
-export default function ExpenseManager({ expenses = [], clientExpenses = [], employees = [], clients = [], onUpdateExpense, onUpdateClientExpense }) {
+const ONTARIO_REQUIREMENTS = [
+  { key: 'cpr', label: 'CPR / First Aid' }, 
+  { key: 'whmis', label: 'WHMIS' }, 
+  { key: 'maskFit', label: 'Mask Fitting' },
+  { key: 'vsc', label: 'Vulnerable Sector Check' }, 
+  { key: 'prc', label: 'Police Record Check' }, 
+  { key: 'immunization', label: 'Immunization Records' },
+  { key: 'skills', label: 'Skills Verification' }, 
+  { key: 'driverLicense', label: "Driver's License" }, 
+  { key: 'autoInsurance', label: 'Auto Insurance' },
+  { key: 'references', label: 'Professional References' }
+];
+
+function EditEmployeeModal({ employee, onClose, onSave }) {
+  const [formData, setFormData] = useState({
+    name: employee?.name || '',
+    username: employee?.username || '',
+    password: employee?.password || '',
+    role: employee?.role || 'Neighbour',
+    phone: employee?.phone || '',
+    email: employee?.email || '',
+    address: employee?.address || '',
+    payType: employee?.payType || 'per_visit',
+    hourlyWage: employee?.hourlyWage || 22.50,
+    perVisitRate: employee?.perVisitRate || 45,
+    emergencyContactName: employee?.emergencyContactName || '',
+    emergencyContactPhone: employee?.emergencyContactPhone || '',
+    requirements: employee?.requirements || {},
+    timeOffBalances: employee?.timeOffBalances || { sick: 5, vacation: 10 },
+    availability: employee?.availability || []
+  });
   
-  const safeExpenses = Array.isArray(expenses) ? expenses : [];
-  const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
+  const [photoFile, setPhotoFile] = useState(null);
+  const [certFiles, setCertFiles] = useState({}); // NEW: Holds the actual certificate files
+  const [activeTab, setActiveTab] = useState('profile'); 
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+  
+  const toggleAvailability = (dayPart) => {
+    setFormData(prev => {
+      const current = prev.availability || [];
+      if (current.includes(dayPart)) {
+        return { ...prev, availability: current.filter(d => d !== dayPart) };
+      } else {
+        return { ...prev, availability: [...current, dayPart] };
+      }
+    });
+  };
+
+  const handleTimeOffChange = (type, value) => {
+    setFormData(prev => ({
+      ...prev,
+      timeOffBalances: {
+        ...prev.timeOffBalances,
+        [type]: Number(value)
+      }
+    }));
+  };
+
+  const handleReqChange = (reqKey, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      requirements: {
+        ...prev.requirements,
+        [reqKey]: {
+          ...(prev.requirements[reqKey] || {}),
+          [field]: value
+        }
+      }
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.name.trim()) return;
+    
+    setIsUploading(true);
+
+    const updatedData = { 
+      ...formData, 
+      payType: formData.payType || 'per_visit',
+      hourlyWage: Number(formData.hourlyWage) || 22.50,
+      perVisitRate: Number(formData.perVisitRate) || 45
+    };
+    
+    if (onSave && employee?.id) {
+      // Step 6: Pass both the photoFile and the certFiles over to App.jsx!
+      await onSave(employee.id, updatedData, photoFile, certFiles);
+    }
+    
+    setIsUploading(false);
+  };
+
+  if (!employee) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[95vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white">
+          <h3 className="text-lg font-bold flex items-center">
+            <User className="h-5 w-5 mr-2 text-teal-200" />
+            Edit Employee: {employee.name}
+          </h3>
+          <button onClick={onClose} disabled={isUploading} className="text-teal-200 hover:text-white transition text-2xl leading-none disabled:opacity-50">&times;</button>
+        </div>
+
+        <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 space-x-6">
+          <button 
+            type="button"
+            onClick={() => setActiveTab('profile')}
+            className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'profile' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Personal & Contact Profile
+          </button>
+          <button 
+            type="button"
+            onClick={() => setActiveTab('compliance')}
+            className={`pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'compliance' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Certificates & Clearances
+          </button>
+        </div>
+        
+        <div className="overflow-y-auto p-6 flex-1 bg-slate-50/30">
+          <form id="edit-employee-form" onSubmit={handleSubmit} className="space-y-6">
+            <div className={activeTab === 'profile' ? 'block space-y-6' : 'hidden'}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
+                    <input type="text" disabled={isUploading} value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Username *</label>
+                      <input type="text" disabled={isUploading} value={formData.username} onChange={(e) => handleChange('username', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Password *</label>
+                      <input type="text" disabled={isUploading} value={formData.password} onChange={(e) => handleChange('password', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                    <select disabled={isUploading} value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                      <option value="Neighbour">Neighbour</option>
+                      <option value="Block Captain">Block Captain</option>
+                      <option value="Administrator">Administrator</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-white">
+                    <div className="col-span-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
+                      <select disabled={isUploading} value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-teal-50">
+                        <option value="per_visit">Per Visit Rate</option>
+                        <option value="hourly">Hourly Rate</option>
+                      </select>
+                    </div>
+                    <div className="col-span-3 sm:col-span-1.5">
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit Rate ($)</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        step="1" 
+                        disabled={isUploading}
+                        value={formData.perVisitRate} 
+                        onChange={(e) => handleChange('perVisitRate', e.target.value)} 
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                        required 
+                      />
+                    </div>
+                    <div className="col-span-3 sm:col-span-1.5">
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Hourly Wage ($)</label>
+                      <input 
+                        type="number" 
+                        min="0" 
+                        step="0.50" 
+                        disabled={isUploading}
+                        value={formData.hourlyWage} 
+                        onChange={(e) => handleChange('hourlyWage', e.target.value)} 
+                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`}
+                        required 
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Update Photo (Optional)</label>
+                    <div className={`mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('edit-emp-photo-upload').click()}>
+                      <div className="space-y-1 text-center">
+                        <ImageIcon className="mx-auto h-5 w-5 text-slate-400" />
+                        <div className="flex text-xs text-slate-600 justify-center">
+                          <span className="relative font-medium text-teal-600">{photoFile ? photoFile.name : <span>Upload a new photo</span>}</span>
+                        </div>
+                      </div>
+                      <input disabled={isUploading} id="edit-emp-photo-upload" type="file" accept="image/*" className="sr-only" onChange={(e) => setPhotoFile(e.target.files[0])} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                    <input disabled={isUploading} type="text" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                    <input disabled={isUploading} type="email" value={formData.email} onChange={(e) => handleChange('email', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Home Address</label>
+                    <input disabled={isUploading} type="text" value={formData.address} onChange={(e) => handleChange('address', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-5">
+                <h4 className="text-sm font-semibold text-slate-800 mb-3 flex items-center"><CalendarDays className="h-4 w-4 mr-1.5 text-slate-500"/> Availability Tracker</h4>
+                <div className="flex flex-wrap gap-3">
+                  {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
+                    <label key={part} className={`flex items-center space-x-2 text-sm text-slate-700 bg-white border border-slate-200 px-3 py-1.5 rounded-lg transition ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}`}>
+                      <input 
+                        type="checkbox" 
+                        disabled={isUploading}
+                        checked={(formData.availability || []).includes(part)}
+                        onChange={() => toggleAvailability(part)}
+                        className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
+                      />
+                      <span>{part}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-5">
+                <h4 className="text-sm font-semibold text-slate-800 mb-3 flex items-center"><CalendarDays className="h-4 w-4 mr-1.5 text-slate-500"/> Time Off Allocation (Annual)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Allowed Sick Days / Yr</label>
+                    <input disabled={isUploading} type="number" min="0" value={formData.timeOffBalances.sick} onChange={(e) => handleTimeOffChange('sick', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Allowed Vacation Days / Yr</label>
+                    <input disabled={isUploading} type="number" min="0" value={formData.timeOffBalances.vacation} onChange={(e) => handleTimeOffChange('vacation', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-5">
+                <h4 className="text-sm font-semibold text-slate-800 mb-3 flex items-center"><Phone className="h-4 w-4 mr-1.5 text-slate-500"/> Emergency Contact</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Name / Relation</label>
+                    <input disabled={isUploading} type="text" value={formData.emergencyContactName} onChange={(e) => handleChange('emergencyContactName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. John Doe (Husband)" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number</label>
+                    <input disabled={isUploading} type="text" value={formData.emergencyContactPhone} onChange={(e) => handleChange('emergencyContactPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className={activeTab === 'compliance' ? 'block' : 'hidden'}>
+              <div className="bg-blue-50 border border-blue-100 text-blue-800 text-sm p-4 rounded-xl mb-6 flex items-start">
+                <Info className="h-5 w-5 mr-2 shrink-0 mt-0.5 text-blue-600"/>
+                <p>Track mandatory employer requirements. Use "Not Applicable" for requirements that do not apply to this specific role to prevent them from flagging as missing.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {ONTARIO_REQUIREMENTS.map(req => {
+                  const currentData = formData.requirements[req.key] || { status: 'missing', expiryDate: '', fileUrl: null };
+                  
+                  return (
+                    <div key={req.key} className="bg-white border border-slate-200 p-3 rounded-lg shadow-sm">
+                      <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-2">
+                        <label className="text-sm font-semibold text-slate-700">{req.label}</label>
+                        <select 
+                          value={currentData.status} 
+                          onChange={(e) => handleReqChange(req.key, 'status', e.target.value)}
+                          disabled={isUploading}
+                          className={`mt-1 xl:mt-0 text-xs font-medium rounded border-slate-300 focus:ring-teal-500 px-2 py-1 ${
+                            currentData.status === 'valid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                            currentData.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                            currentData.status === 'not_applicable' ? 'bg-slate-100 text-slate-600 border-slate-300' :
+                            'bg-red-50 text-red-700 border-red-200'
+                          }`}
+                        >
+                          <option value="missing">Missing / Required</option>
+                          <option value="pending">Pending Verification</option>
+                          <option value="valid">Valid / Verified</option>
+                          <option value="expired">Expired</option>
+                          <option value="not_applicable">Not Applicable</option>
+                        </select>
+                      </div>
+                      
+                      <div className="flex flex-col space-y-2 mt-2 pt-2 border-t border-slate-100">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500">Expiry:</span>
+                          <input 
+                            type="date" 
+                            value={currentData.expiryDate || ''} 
+                            onChange={(e) => handleReqChange(req.key, 'expiryDate', e.target.value)}
+                            disabled={currentData.status === 'not_applicable' || isUploading}
+                            className="w-32 px-2 py-1 border border-slate-200 rounded text-xs text-slate-600 focus:outline-none focus:border-teal-500 disabled:bg-slate-50 disabled:text-slate-400"
+                          />
+                        </div>
+                        
+                        {currentData.status !== 'not_applicable' && (
+                          <div className="flex items-center justify-between">
+                            {currentData.fileUrl || certFiles[req.key] ? (
+                              <div className="flex items-center justify-between w-full bg-teal-50 px-2 py-1.5 rounded border border-teal-100">
+                                <span className="text-xs text-teal-700 font-medium flex items-center">
+                                  <CheckCircle className="h-3 w-3 mr-1"/> Uploaded
+                                </span>
+                                <div className="flex items-center space-x-1">
+                                  {currentData.fileUrl && !certFiles[req.key] && (
+                                    <a href={currentData.fileUrl} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:text-teal-800 p-0.5" title="View Document">
+                                      <Info className="h-3 w-3" />
+                                    </a>
+                                  )}
+                                  <button 
+                                    type="button" 
+                                    disabled={isUploading} 
+                                    onClick={() => {
+                                      handleReqChange(req.key, 'fileUrl', null);
+                                      setCertFiles(prev => { const newFiles = {...prev}; delete newFiles[req.key]; return newFiles; });
+                                    }} 
+                                    className="text-red-500 hover:text-red-700 disabled:opacity-50 p-0.5 rounded transition"
+                                  >
+                                    <Trash2 className="h-3 w-3"/>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button 
+                                type="button" 
+                                disabled={isUploading}
+                                onClick={() => document.getElementById(`req-upload-${req.key}`).click()} 
+                                className="text-xs bg-white hover:bg-slate-50 disabled:bg-slate-100 disabled:cursor-not-allowed text-slate-600 font-medium py-1.5 px-2 rounded border border-slate-300 flex items-center w-full justify-center transition"
+                              >
+                                <ImageIcon className="h-3 w-3 mr-1.5 text-slate-400"/> Attach Certificate File
+                              </button>
+                            )}
+                            <input 
+                              id={`req-upload-${req.key}`} 
+                              type="file" 
+                              accept="image/*,.pdf" 
+                              className="sr-only" 
+                              disabled={isUploading}
+                              onChange={(e) => { 
+                                if(e.target.files[0]) {
+                                  const file = e.target.files[0];
+                                  setCertFiles(prev => ({ ...prev, [req.key]: file }));
+                                  // Temporary ghost link just for UI preview while editing
+                                  handleReqChange(req.key, 'fileUrl', URL.createObjectURL(file)); 
+                                  if (currentData.status === 'missing') handleReqChange(req.key, 'status', 'pending');
+                                }
+                              }} 
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+          </form>
+        </div>
+
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
+          <button type="button" disabled={isUploading} onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50 transition">
+            Cancel
+          </button>
+          <button type="submit" disabled={isUploading} form="edit-employee-form" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 disabled:bg-slate-400 transition flex items-center">
+            {isUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : 'Save Complete Profile'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function EmployeeManager({ employees = [], setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
+  const [newName, setNewName] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState('Neighbour');
+  const [newPayType, setNewPayType] = useState('per_visit');
+  const [newHourlyWage, setNewHourlyWage] = useState('22.50');
+  const [newPerVisitRate, setNewPerVisitRate] = useState('45');
+  const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newAvailability, setNewAvailability] = useState([]);
+  const [newPhotoFile, setNewPhotoFile] = useState(null);
+  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+
   const safeEmployees = Array.isArray(employees) ? employees : [];
-  const safeClients = Array.isArray(clients) ? clients : [];
 
-  const [expenseSort, setExpenseSort] = useState({ key: 'date', direction: 'desc' });
-  const [clientExpSort, setClientExpSort] = useState({ key: 'date', direction: 'desc' });
-  const [selectedMonth, setSelectedMonth] = useState(''); // Format: YYYY-MM
+  const handleAddEmployee = async (e) => {
+    e.preventDefault();
+    if (!newName.trim() || !newUsername.trim() || !newPassword.trim()) return;
+    
+    setIsUploading(true);
 
-  const handleExpSort = (key) => {
-    setExpenseSort(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
+    const newEmp = {
+      id: `emp_${Date.now()}`,
+      name: newName,
+      username: newUsername.trim(),
+      password: newPassword,
+      role: newRole,
+      payType: newPayType,
+      hourlyWage: Number(newHourlyWage) || 22.50,
+      perVisitRate: Number(newPerVisitRate) || 45,
+      phone: newPhone,
+      email: newEmail,
+      photoUrl: newPhotoFile ? '' : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
+      requirements: {},
+      timeOffBalances: { sick: 5, vacation: 10 },
+      availability: newAvailability
+    };
+    
+    if (onAddEmployee) {
+      await onAddEmployee(newEmp, newPhotoFile);
+    }
+    
+    setNewName('');
+    setNewUsername('');
+    setNewPassword('');
+    setNewPayType('per_visit');
+    setNewHourlyWage('22.50');
+    setNewPerVisitRate('45');
+    setNewPhone('');
+    setNewEmail('');
+    setNewAvailability([]);
+    setNewPhotoFile(null);
+    setIsUploading(false);
   };
 
-  const handleClientExpSort = (key) => {
-    setClientExpSort(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
+  const toggleNewAvailability = (dayPart) => {
+    setNewAvailability(prev => {
+      if (prev.includes(dayPart)) return prev.filter(d => d !== dayPart);
+      return [...prev, dayPart];
+    });
   };
 
-  // Filter by selected month before sorting
-  const filteredExpenses = safeExpenses.filter(e => {
-    if (!selectedMonth) return true;
-    return e.date && e.date.startsWith(selectedMonth);
-  });
+  const getComplianceIssues = (emp) => {
+    let issues = 0;
+    ONTARIO_REQUIREMENTS.forEach(req => {
+      const status = emp?.requirements?.[req.key]?.status || 'missing';
+      if (status === 'missing' || status === 'expired') {
+        issues++;
+      }
+    });
+    return issues;
+  };
 
-  const filteredClientExpenses = safeClientExpenses.filter(e => {
-    if (!selectedMonth) return true;
-    return e.date && e.date.startsWith(selectedMonth);
-  });
-
-  const sortedExpenses = [...filteredExpenses].sort((a, b) => {
-    let valA, valB;
-    if (expenseSort.key === 'date') {
-      valA = new Date(a.date || 0).getTime();
-      valB = new Date(b.date || 0).getTime();
-    } else if (expenseSort.key === 'amount') {
-      valA = a.kilometers || 0;
-      valB = b.kilometers || 0;
-    } else if (expenseSort.key === 'status') {
-      valA = a.status || '';
-      valB = b.status || '';
-    }
-    if (valA < valB) return expenseSort.direction === 'asc' ? -1 : 1;
-    if (valA > valB) return expenseSort.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const sortedClientExpenses = [...filteredClientExpenses].sort((a, b) => {
-    let valA, valB;
-    if (clientExpSort.key === 'date') {
-      valA = new Date(a.date || 0).getTime();
-      valB = new Date(b.date || 0).getTime();
-    } else if (clientExpSort.key === 'amount') {
-      valA = a.amount || 0;
-      valB = b.amount || 0;
-    } else if (clientExpSort.key === 'status') {
-      valA = a.status || '';
-      valB = b.status || '';
-    }
-    if (valA < valB) return clientExpSort.direction === 'asc' ? -1 : 1;
-    if (valA > valB) return clientExpSort.direction === 'asc' ? 1 : -1;
-    return 0;
+  const filteredEmployees = safeEmployees.filter(emp => {
+    if (!emp) return false;
+    const nameMatch = (emp.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const roleMatch = (emp.role || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return nameMatch || roleMatch;
   });
 
   return (
-    <div className="space-y-8">
-      {/* Month/Year Filter Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-bold text-slate-800">Reimbursement Approvals</h2>
-          <p className="text-sm text-slate-500">Review and approve employee out-of-pocket expenses and mileage.</p>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center">
+            <Users className="h-5 w-5 mr-2 text-teal-600" />
+            <h2 className="text-lg font-semibold text-slate-800">Staff Directory</h2>
+          </div>
+          
+          <div className="relative w-full sm:w-64">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search name or role..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="block w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition"
+            />
+          </div>
         </div>
-        <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <label className="text-sm font-semibold text-slate-700 whitespace-nowrap">Filter by Month:</label>
-          <input 
-            type="month" 
-            value={selectedMonth} 
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="w-full sm:w-auto px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-          />
-          {selectedMonth && (
-            <button 
-              onClick={() => setSelectedMonth('')} 
-              className="text-xs text-slate-500 hover:text-red-500 underline whitespace-nowrap"
-            >
-              Clear
-            </button>
+
+        <div className="divide-y divide-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 p-4 gap-4 bg-slate-50/50 flex-1 overflow-y-auto">
+          {filteredEmployees.map(emp => {
+            const issuesCount = getComplianceIssues(emp);
+            const isProtected = emp.id === 'admin1' && currentUser?.id !== 'admin1';
+            
+            return (
+              <div key={emp.id || Math.random()} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md transition bg-white relative">
+                {!isProtected && (
+                  <div className="absolute top-3 right-3 flex space-x-1">
+                    <button 
+                      onClick={() => setEditingEmployee(emp)}
+                      className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-md transition"
+                      title="Edit Profile & Compliance"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    {emp.id !== 'admin1' && (
+                      <button 
+                        onClick={() => onRemoveEmployee && onRemoveEmployee(emp.id)}
+                        className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-md transition"
+                        title="Remove Employee"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                
+                <div className="flex items-center space-x-3 mb-3 pr-16">
+                  {emp.photoUrl ? (
+                    <img src={emp.photoUrl} alt={emp.name || 'Staff'} className="h-12 w-12 rounded-full border border-slate-200 object-cover bg-white" />
+                  ) : (
+                    <div className="h-12 w-12 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
+                      <User className="h-6 w-6" />
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="font-bold text-slate-800 leading-tight">{emp.name || 'Unnamed Employee'}</h3>
+                    <div className="flex flex-col mt-0.5 space-y-1">
+                      <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded inline-block w-fit">{emp.role || 'Staff'}</span>
+                      <span className="text-xs font-semibold text-slate-600">
+                        {emp.payType === 'hourly' ? `$${emp.hourlyWage || 22.50}/hr` : `$${emp.perVisitRate || 45}/visit`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-auto space-y-2">
+                  <div className="bg-slate-50 rounded p-2.5 text-xs text-slate-600 border border-slate-100 space-y-1">
+                    {emp.phone && <div className="flex items-center"><Phone className="h-3 w-3 mr-1.5" />{emp.phone}</div>}
+                    {emp.email && <div className="flex items-center"><Mail className="h-3 w-3 mr-1.5" />{emp.email}</div>}
+                    {!emp.phone && !emp.email && <span className="italic text-slate-400">No contact info provided</span>}
+                  </div>
+
+                  <div className="bg-slate-50 rounded p-2.5 text-xs text-slate-600 border border-slate-100">
+                    <div className="font-semibold text-slate-700 mb-1 flex items-center">
+                      <ShieldAlert className="h-3 w-3 mr-1" /> Emergency Contact
+                    </div>
+                    {emp.emergencyContactName ? (
+                      <div>
+                        {emp.emergencyContactName}
+                        <br/>
+                        <span className="text-teal-700 font-medium">{emp.emergencyContactPhone}</span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 italic">Not provided</span>
+                    )}
+                  </div>
+
+                  {(emp.availability && emp.availability.length > 0) && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {emp.availability.map(avail => (
+                        <span key={avail} className="text-[10px] font-medium bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">
+                          {avail}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {issuesCount > 0 ? (
+                    <div className="flex items-center justify-center text-xs font-semibold bg-red-50 text-red-700 p-2 rounded border border-red-100">
+                      <AlertCircle className="h-3.5 w-3.5 mr-1.5" />
+                      {issuesCount} Requirement{issuesCount !== 1 ? 's' : ''} Missing/Expired
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center text-xs font-semibold bg-emerald-50 text-emerald-700 p-2 rounded border border-emerald-100">
+                      <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                      Fully Compliant
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+          {filteredEmployees.length === 0 && (
+            <div className="col-span-full p-8 text-center text-slate-500">No employees found matching "{searchTerm}".</div>
           )}
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
-          <Coffee className="h-5 w-5 mr-2 text-teal-600" />
-          <h2 className="text-lg font-semibold text-slate-800">Client Expense Receipts (Out-of-Pocket)</h2>
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-fit">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <h2 className="text-lg font-semibold text-slate-800">Add Employee</h2>
         </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
-                <th onClick={() => handleClientExpSort('date')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Date ↕</th>
-                <th className="px-6 py-3 font-medium">Staff & Client</th>
-                <th className="px-6 py-3 font-medium hidden md:table-cell">Item/Description</th>
-                <th className="px-6 py-3 font-medium">Receipt</th>
-                <th onClick={() => handleClientExpSort('amount')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Amount ↕</th>
-                <th onClick={() => handleClientExpSort('status')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Status ↕</th>
-                <th className="px-6 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {sortedClientExpenses.length === 0 ? (
-                <tr>
-                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
-                    {selectedMonth ? `No client expenses submitted for ${selectedMonth}.` : "No client expense receipts submitted."}
-                  </td>
-                </tr>
-              ) : (
-                sortedClientExpenses.map(expense => {
-                  if (!expense) return null;
-                  const emp = safeEmployees.find(e => e.id === expense.employeeId);
-                  const client = safeClients.find(c => c.id === expense.clientId);
-                  
-                  return (
-                    <tr key={`ce_${expense.id || Math.random()}`} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4 text-sm text-slate-800 font-medium">{expense.date ? new Date(expense.date).toLocaleDateString() : 'Unknown'}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="font-medium text-slate-700">{emp?.name || 'Unknown'}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">for {client?.name || 'Unknown'}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600 hidden md:table-cell max-w-[200px] truncate" title={expense.description}>{expense.description}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">
-                        {expense.receiptDetails ? (
-                          <div className="flex items-center text-teal-600">
-                            <FileText className="h-4 w-4 mr-1" />
-                            <span className="truncate max-w-[100px]" title={expense.receiptDetails}>{expense.receiptDetails}</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic">No attachment</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm font-semibold text-emerald-600">${(expense.amount || 0).toFixed(2)}</td>
-                      <td className="px-6 py-4">
-                        {expense.status === 'pending' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Pending</span>}
-                        {expense.status === 'approved' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>}
-                        {expense.status === 'rejected' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Rejected</span>}
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        {expense.status === 'pending' && (
-                          <>
-                            <button onClick={() => onUpdateClientExpense && onUpdateClientExpense(expense.id, 'approved')} className="text-green-600 hover:bg-green-50 p-1.5 rounded transition" title="Approve">
-                              <CheckCircle className="h-5 w-5" />
-                            </button>
-                            <button onClick={() => onUpdateClientExpense && onUpdateClientExpense(expense.id, 'rejected')} className="text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="Reject">
-                              <XCircle className="h-5 w-5" />
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+        <form onSubmit={handleAddEmployee} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
+            <input 
+              type="text" 
+              disabled={isUploading}
+              value={newName} 
+              onChange={(e) => setNewName(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500"
+              placeholder="e.g. Jane Doe"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Username *</label>
+              <input 
+                type="text" 
+                disabled={isUploading}
+                value={newUsername} 
+                onChange={(e) => setNewUsername(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                placeholder="e.g. janedoe"
+                required
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Password *</label>
+              <input 
+                type="text" 
+                disabled={isUploading}
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                placeholder="Secure password"
+                required
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-slate-50/50">
+            <div className="col-span-3">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+              <select 
+                disabled={isUploading}
+                value={newRole} 
+                onChange={(e) => setNewRole(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-white"
+              >
+                <option value="Neighbour">Neighbour</option>
+                <option value="Block Captain">Block Captain</option>
+                <option value="Administrator">Administrator</option>
+              </select>
+            </div>
+            <div className="col-span-3">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
+              <select 
+                disabled={isUploading}
+                value={newPayType} 
+                onChange={(e) => setNewPayType(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white"
+              >
+                <option value="per_visit">Per Visit Rate</option>
+                <option value="hourly">Hourly Rate</option>
+              </select>
+            </div>
+            <div className="col-span-3 sm:col-span-1.5">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit ($)</label>
+              <input 
+                type="number" 
+                min="0"
+                step="1"
+                disabled={isUploading}
+                value={newPerVisitRate} 
+                onChange={(e) => setNewPerVisitRate(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`}
+                required
+              />
+            </div>
+            <div className="col-span-3 sm:col-span-1.5">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Hourly ($)</label>
+              <input 
+                type="number" 
+                min="0"
+                step="0.50"
+                disabled={isUploading}
+                value={newHourlyWage} 
+                onChange={(e) => setNewHourlyWage(e.target.value)}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+              <input 
+                type="text" 
+                disabled={isUploading}
+                value={newPhone} 
+                onChange={(e) => setNewPhone(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                placeholder="555-0000"
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <input 
+                type="email" 
+                disabled={isUploading}
+                value={newEmail} 
+                onChange={(e) => setNewEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                placeholder="email@example.com"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Availability</label>
+            <div className="flex flex-wrap gap-2">
+              {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
+                <label key={part} className={`flex items-center space-x-1.5 text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded transition ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}`}>
+                  <input 
+                    type="checkbox" 
+                    disabled={isUploading}
+                    checked={newAvailability.includes(part)}
+                    onChange={() => toggleNewAvailability(part)}
+                    className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
+                  />
+                  <span>{part}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Photo (Optional)</label>
+            <div className={`mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('emp-photo-upload').click()}>
+              <div className="space-y-1 text-center">
+                <ImageIcon className="mx-auto h-6 w-6 text-slate-400" />
+                <div className="flex text-sm text-slate-600 justify-center">
+                  <span className="relative bg-transparent rounded-md font-medium text-teal-600 hover:text-teal-500">
+                    {newPhotoFile ? newPhotoFile.name : <span>Upload a photo</span>}
+                  </span>
+                </div>
+              </div>
+              <input 
+                id="emp-photo-upload" 
+                type="file" 
+                accept="image/*" 
+                className="sr-only" 
+                disabled={isUploading}
+                onChange={(e) => setNewPhotoFile(e.target.files[0])}
+              />
+            </div>
+          </div>
+
+          <button 
+            type="submit"
+            disabled={isUploading}
+            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 transition"
+          >
+            {isUploading ? <><Loader2 className="h-4 w-4 animate-spin"/><span>Uploading...</span></> : <><Plus className="h-4 w-4" /><span>Add Employee Profile</span></>}
+          </button>
+        </form>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
-          <Car className="h-5 w-5 mr-2 text-teal-600" />
-          <h2 className="text-lg font-semibold text-slate-800">Mileage Approvals</h2>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
-                <th onClick={() => handleExpSort('date')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Date ↕</th>
-                <th className="px-6 py-3 font-medium">Staff & Client</th>
-                <th className="px-6 py-3 font-medium hidden md:table-cell">Description</th>
-                <th onClick={() => handleExpSort('amount')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Kilometers ↕</th>
-                <th className="px-6 py-3 font-medium">Reimbursement ($0.68/km)</th>
-                <th onClick={() => handleExpSort('status')} className="px-6 py-3 font-medium cursor-pointer hover:text-teal-600 transition">Status ↕</th>
-                <th className="px-6 py-3 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {sortedExpenses.length === 0 ? (
-                <tr>
-                  <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
-                    {selectedMonth ? `No mileage logs submitted for ${selectedMonth}.` : "No mileage logs submitted."}
-                  </td>
-                </tr>
-              ) : (
-                sortedExpenses.map(expense => {
-                  if (!expense) return null;
-                  const emp = safeEmployees.find(e => e.id === expense.employeeId);
-                  const client = safeClients.find(c => c.id === expense.clientId);
-                  const amount = ((expense.kilometers || 0) * 0.68).toFixed(2);
-                  
-                  return (
-                    <tr key={`mil_${expense.id || Math.random()}`} className="hover:bg-slate-50 transition">
-                      <td className="px-6 py-4 text-sm text-slate-800 font-medium">{expense.date ? new Date(expense.date).toLocaleDateString() : 'Unknown'}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="font-medium text-slate-700">{emp?.name || 'Unknown'}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">for {client?.name || 'Unknown'}</div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600 hidden md:table-cell max-w-[200px] truncate" title={expense.description}>{expense.description}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{expense.kilometers} km</td>
-                      <td className="px-6 py-4 text-sm font-semibold text-emerald-600">${amount}</td>
-                      <td className="px-6 py-4">
-                        {expense.status === 'pending' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Pending</span>}
-                        {expense.status === 'approved' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Approved</span>}
-                        {expense.status === 'rejected' && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Rejected</span>}
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        {expense.status === 'pending' && (
-                          <>
-                            <button onClick={() => onUpdateExpense && onUpdateExpense(expense.id, 'approved')} className="text-green-600 hover:bg-green-50 p-1.5 rounded transition" title="Approve">
-                              <CheckCircle className="h-5 w-5" />
-                            </button>
-                            <button onClick={() => onUpdateExpense && onUpdateExpense(expense.id, 'rejected')} className="text-red-600 hover:bg-red-50 p-1.5 rounded transition" title="Reject">
-                              <XCircle className="h-5 w-5" />
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {editingEmployee && (
+        <EditEmployeeModal 
+          employee={editingEmployee} 
+          onClose={() => setEditingEmployee(null)} 
+          onSave={async (id, data, file, certFiles) => {
+            if (updateEmployee) await updateEmployee(id, data, file, certFiles);
+            setEditingEmployee(null);
+          }} 
+        />
+      )}
     </div>
   );
 }

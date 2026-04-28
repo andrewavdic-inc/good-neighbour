@@ -710,11 +710,16 @@ const handleLogin = async (email, password) => {
               if (file) url = await handleFileUpload(file, 'avatars');
               runMutation('gn_employees', d.id, 'set', { ...d, photoUrl: url });
               }} 
-            onRemoveEmployee={(id) => runMutation('gn_employees', id, 'delete')} 
-            updateEmployee={async (id, d, file) => {
-              let url = d.photoUrl || '';
-              if (file) url = await handleFileUpload(file, 'avatars');
-              runMutation('gn_employees', id, 'update', { ...d, photoUrl: url });
+updateEmployee={async (id, d, file) => {
+  // Check if the employee already has a photo so we don't overwrite it!
+  const existingEmp = employees.find(e => e.id === id);
+  let url = d.photoUrl || existingEmp?.photoUrl || '';
+  
+  if (file) {
+    const newUrl = await handleFileUpload(file, 'avatars');
+    if (newUrl) url = newUrl;
+  }
+  runMutation('gn_employees', id, 'update', { ...d, photoUrl: url });
 }}
             clients={clients} 
             onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
@@ -786,14 +791,20 @@ const handleLogin = async (email, password) => {
             onPickupShift={(shiftId, empId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: empId })} 
             setSelectedClient={setSelectedClient}
             getClientRemainingBalance={getClientRemainingBalance}
-            onUpdateProfile={async (id, d, file) => {
-              let url = d.photoUrl || '';
-              if (file) url = await handleFileUpload(file, 'avatars');
-              const updatedData = { ...d, photoUrl: url };
-              runMutation('gn_employees', id, 'update', updatedData);
-              setCurrentUser(prev => ({ ...prev, ...updatedData })); 
-              }}
-          />
+onUpdateProfile={async (id, d, file) => {
+  // Protect the employee's existing photo from being wiped out
+  const existingEmp = employees.find(e => e.id === id);
+  let url = d.photoUrl || existingEmp?.photoUrl || '';
+  
+  if (file) {
+    const newUrl = await handleFileUpload(file, 'avatars');
+    if (newUrl) url = newUrl;
+  }
+  
+  const updatedData = { ...d, photoUrl: url };
+  runMutation('gn_employees', id, 'update', updatedData);
+  setCurrentUser(prev => ({ ...prev, ...updatedData })); 
+}}          />
         )}
       </main>
 

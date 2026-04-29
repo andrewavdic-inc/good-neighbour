@@ -195,7 +195,8 @@ export default function TimeOffManager({ employees = [], timeOffLogs = [], onApp
                       </div>
                       <div>
                         <div className="font-semibold text-slate-800 text-sm">
-                          {emp?.name || 'Unknown Employee'} <span className="font-normal text-slate-500 ml-1">took {req.type === 'sick' ? 'Sick Leave' : req.type === 'vacation' ? 'Vacation' : 'Unpaid Leave'}</span>
+                          {/* THE BUG WAS HERE: changed req.type to log.type */}
+                          {emp?.name || 'Unknown Employee'} <span className="font-normal text-slate-500 ml-1">took {log.type === 'sick' ? 'Sick Leave' : log.type === 'vacation' ? 'Vacation' : 'Unpaid Leave'}</span>
                         </div>
                         <div className="text-xs font-bold text-slate-700 mt-1">
                           {start.toLocaleDateString()} - {end.toLocaleDateString()}

@@ -53,17 +53,24 @@ const SafeAvatar = ({ url, name, role, className }) => {
 // ==========================================
 // 1. CARE PLAN DASHBOARD MODAL
 // ==========================================
-function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpenses = [], onClose }) {
+function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpenses = [], expenses = [], onClose }) {
   if (!client) return null;
 
-  // Budget Math
+  // Budget Math (FIXED TO INCLUDE MILEAGE)
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
   
-  const spentThisMonth = safeClientExpenses
+  const oopSpentThisMonth = safeClientExpenses
     .filter(e => e.clientId === client.id && e.status === 'approved' && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
     .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+  const mileageSpentThisMonth = safeExpenses
+    .filter(e => e.clientId === client.id && e.status === 'approved' && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
+    .reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
+
+  const spentThisMonth = oopSpentThisMonth + mileageSpentThisMonth;
     
   const allowance = Number(client.monthlyAllowance || 0);
   const remaining = allowance - spentThisMonth;
@@ -404,7 +411,7 @@ function EditClientModal({ client, onClose, onSave }) {
 // ==========================================
 // 3. MAIN COMPONENT
 // ==========================================
-export default function ClientManager({ clients = [], shifts = [], employees = [], clientExpenses = [], onAddClient, onRemoveClient, updateClient }) {
+export default function ClientManager({ clients = [], shifts = [], employees = [], clientExpenses = [], expenses = [], onAddClient, onRemoveClient, updateClient }) {
   const [formData, setFormData] = useState({
     name: '', dateOfBirth: '', phone: '', address: '', notes: '', dietary: '', mobility: '', hobbies: '',
     accountHolderName: '', accountHolderAddress: '', accountHolderPhone: '', accountHolderEmail: '',
@@ -582,7 +589,7 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       </div>
 
       {editingClient && <EditClientModal client={editingClient} onClose={() => setEditingClient(null)} onSave={(id, data) => { if (updateClient) updateClient(id, data); setEditingClient(null); }} />}
-      {viewingClient && <ClientCarePlanModal client={viewingClient} shifts={shifts} employees={employees} clientExpenses={clientExpenses} onClose={() => setViewingClient(null)} />}
+      {viewingClient && <ClientCarePlanModal client={viewingClient} shifts={shifts} employees={employees} clientExpenses={clientExpenses} expenses={expenses} onClose={() => setViewingClient(null)} />}
     </div>
   );
 }

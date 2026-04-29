@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
@@ -250,8 +250,16 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
 
 export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense, getClientRemainingBalance }) {
   const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [kilometers, setKilometers] = useState(''); const [description, setDescription] = useState('');
+  const [filterMonth, setFilterMonth] = useState(''); // NEW STATE FOR FILTERING
+  
   const safeExpenses = Array.isArray(myExpenses) ? myExpenses : []; const safeClients = Array.isArray(clients) ? clients : [];
   const handleSubmit = (e) => { e.preventDefault(); if (!date || !clientId || !kilometers) return; if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description }); setDate(''); setClientId(''); setKilometers(''); setDescription(''); };
+
+  // Filter logs based on selected month
+  const displayExpenses = safeSortByDateDesc(safeExpenses).filter(exp => {
+    if (!filterMonth) return true;
+    return exp.date && exp.date.startsWith(filterMonth);
+  });
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
@@ -280,9 +288,25 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
           <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Log</button>
         </form>
       </div>
+      
+      {/* FILTER UI HEADER */}
+      <div className="flex items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200">
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Log History</span>
+        <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition">
+          <Filter className="h-3 w-3 mr-1.5 text-slate-400" />
+          <input 
+            type="month" 
+            value={filterMonth} 
+            onChange={(e) => setFilterMonth(e.target.value)} 
+            className="text-xs py-1 border-none focus:outline-none text-slate-600 bg-transparent w-32" 
+            title="Filter by Month" 
+          />
+        </div>
+      </div>
+      
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {safeExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logged yet.</div> :
-          safeSortByDateDesc(safeExpenses).map(exp => {
+        {displayExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logs found for this period.</div> :
+          displayExpenses.map(exp => {
             if(!exp) return null; const d = parseLocalSafe(exp.date); const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString(); const clientName = safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown Client';
             return (
               <div key={exp.id || `exp_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
@@ -304,6 +328,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
   const [description, setDescription] = useState(''); 
   const [receiptFile, setReceiptFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [filterMonth, setFilterMonth] = useState(''); // NEW STATE FOR FILTERING
   
   const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : []; 
   const safeClients = Array.isArray(clients) ? clients : [];
@@ -331,6 +356,12 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
     setReceiptFile(null);
     setIsUploading(false);
   };
+
+  // Filter logs based on selected month
+  const displayExpenses = safeSortByDateDesc(safeClientExpenses).filter(exp => {
+    if (!filterMonth) return true;
+    return exp.date && exp.date.startsWith(filterMonth);
+  });
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
@@ -363,9 +394,25 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
           </button>
         </form>
       </div>
+
+      {/* FILTER UI HEADER */}
+      <div className="flex items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200">
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Log History</span>
+        <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition">
+          <Filter className="h-3 w-3 mr-1.5 text-slate-400" />
+          <input 
+            type="month" 
+            value={filterMonth} 
+            onChange={(e) => setFilterMonth(e.target.value)} 
+            className="text-xs py-1 border-none focus:outline-none text-slate-600 bg-transparent w-32" 
+            title="Filter by Month" 
+          />
+        </div>
+      </div>
+
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {safeClientExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged yet.</div> :
-          safeSortByDateDesc(safeClientExpenses).map(exp => {
+        {displayExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged for this period.</div> :
+          displayExpenses.map(exp => {
             if(!exp) return null; const d = parseLocalSafe(exp.date); const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString(); const clientName = safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown Client';
             return (
               <div key={exp.id || `ce_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
@@ -708,23 +755,24 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 </div>
               )}
 
-{activeTab === 'expenses' && (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
-    <EmployeeMileageLog 
-      myExpenses={myExpenses} 
-      clients={safeClients} 
-      onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
-      getClientRemainingBalance={getClientRemainingBalance}
-    />
-    <EmployeeClientExpenseLog 
-      myClientExpenses={myClientExpenses} 
-      clients={safeClients} 
-      // FIX: We added 'file' here so the baton doesn't get dropped!
-      onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
-      getClientRemainingBalance={getClientRemainingBalance}
-    />
-  </div>
-)}
+              {activeTab === 'expenses' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
+                  <EmployeeMileageLog 
+                    myExpenses={myExpenses} 
+                    clients={safeClients} 
+                    onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
+                    getClientRemainingBalance={getClientRemainingBalance}
+                  />
+                  <EmployeeClientExpenseLog 
+                    myClientExpenses={myClientExpenses} 
+                    clients={safeClients} 
+                    // FIX: Passed the file properly
+                    onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
+                    getClientRemainingBalance={getClientRemainingBalance}
+                  />
+                </div>
+              )}
+
               {activeTab === 'awards' && isBonusActive && (
                 <div className="p-6">
                   <AwardsLeaderboard 
@@ -745,7 +793,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                     isAdmin={false} 
                   />
                   
-                  {/* NEW: PERSONAL UPLOADS MODULE */}
+                  {/* PERSONAL UPLOADS MODULE */}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
                       <h2 className="text-lg font-semibold text-slate-800 flex items-center">
@@ -779,7 +827,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                         </div>
                       </div>
 
-                      {/* List their previous uploads */}
                       <div className="space-y-3">
                         {myUploads.length === 0 ? (
                           <div className="text-center py-4 text-sm text-slate-500">You haven't uploaded any personal files yet.</div>

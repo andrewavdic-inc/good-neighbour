@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart } from 'lucide-react';
+import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter } from 'lucide-react';
 
 export default function ExpenseManager({ expenses = [], clientExpenses = [], employees = [], clients = [], onUpdateExpense, onUpdateClientExpense }) {
   const [activeTab, setActiveTab] = useState('mileage');
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterMonth, setFilterMonth] = useState(''); // NEW FILTER STATE
 
   // Bulletproof arrays
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
@@ -18,6 +19,11 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
   const filterData = (data) => {
     return data.filter(item => {
       if (!item) return false;
+      
+      // 1. Month Filter
+      if (filterMonth && item.date && !item.date.startsWith(filterMonth)) return false;
+
+      // 2. Search Filter
       const empMatch = getEmpName(item.employeeId).toLowerCase().includes(searchTerm.toLowerCase());
       const clientMatch = getClientName(item.clientId).toLowerCase().includes(searchTerm.toLowerCase());
       return empMatch || clientMatch;
@@ -37,22 +43,38 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
       
       {/* Header & Search */}
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center">
           <Receipt className="h-5 w-5 mr-2 text-teal-600" />
           <h2 className="text-lg font-semibold text-slate-800">Reimbursement Requests</h2>
         </div>
-        <div className="relative w-full sm:w-64">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-slate-400" />
+        
+        <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+          {/* MONTH FILTER */}
+          <div className="flex items-center bg-white border border-slate-300 rounded-md px-3 py-1.5 focus-within:ring-1 focus-within:ring-teal-500 focus-within:border-teal-500 transition">
+            <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
+            <input
+              type="month"
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="block w-full text-slate-600 focus:outline-none text-sm bg-transparent"
+              title="Filter by Month"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Search staff or client..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="block w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition"
-          />
+          
+          {/* SEARCH BAR */}
+          <div className="relative w-full sm:w-64 shrink-0">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search staff or client..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="block w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition"
+            />
+          </div>
         </div>
       </div>
 
@@ -79,7 +101,7 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
         {activeTab === 'mileage' && (
           <div className="divide-y divide-slate-100">
             {filteredMileage.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">No mileage logs found.</div>
+              <div className="p-8 text-center text-slate-500">No mileage logs found for this period.</div>
             ) : (
               filteredMileage.map(exp => (
                 <div key={exp.id} className="p-4 hover:bg-slate-50 transition flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -122,7 +144,7 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
         {activeTab === 'oop' && (
           <div className="divide-y divide-slate-100">
             {filteredOOP.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">No client purchase expenses found.</div>
+              <div className="p-8 text-center text-slate-500">No client purchase expenses found for this period.</div>
             ) : (
               filteredOOP.map(exp => (
                 <div key={exp.id} className="p-4 hover:bg-slate-50 transition flex flex-col md:flex-row md:items-center justify-between gap-4">

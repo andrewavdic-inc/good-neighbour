@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter, Sun, CheckCircle, XCircle } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
@@ -250,12 +250,11 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
 
 export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense, getClientRemainingBalance }) {
   const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [kilometers, setKilometers] = useState(''); const [description, setDescription] = useState('');
-  const [filterMonth, setFilterMonth] = useState(''); // NEW STATE FOR FILTERING
+  const [filterMonth, setFilterMonth] = useState(''); 
   
   const safeExpenses = Array.isArray(myExpenses) ? myExpenses : []; const safeClients = Array.isArray(clients) ? clients : [];
   const handleSubmit = (e) => { e.preventDefault(); if (!date || !clientId || !kilometers) return; if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description }); setDate(''); setClientId(''); setKilometers(''); setDescription(''); };
 
-  // Filter logs based on selected month
   const displayExpenses = safeSortByDateDesc(safeExpenses).filter(exp => {
     if (!filterMonth) return true;
     return exp.date && exp.date.startsWith(filterMonth);
@@ -289,7 +288,6 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
         </form>
       </div>
       
-      {/* FILTER UI HEADER */}
       <div className="flex items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Log History</span>
         <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition">
@@ -328,7 +326,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
   const [description, setDescription] = useState(''); 
   const [receiptFile, setReceiptFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [filterMonth, setFilterMonth] = useState(''); // NEW STATE FOR FILTERING
+  const [filterMonth, setFilterMonth] = useState(''); 
   
   const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : []; 
   const safeClients = Array.isArray(clients) ? clients : [];
@@ -349,15 +347,10 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
       }, receiptFile); 
     }
     
-    setDate(''); 
-    setClientId(''); 
-    setAmount(''); 
-    setDescription(''); 
-    setReceiptFile(null);
+    setDate(''); setClientId(''); setAmount(''); setDescription(''); setReceiptFile(null);
     setIsUploading(false);
   };
 
-  // Filter logs based on selected month
   const displayExpenses = safeSortByDateDesc(safeClientExpenses).filter(exp => {
     if (!filterMonth) return true;
     return exp.date && exp.date.startsWith(filterMonth);
@@ -395,7 +388,6 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
         </form>
       </div>
 
-      {/* FILTER UI HEADER */}
       <div className="flex items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Log History</span>
         <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition">
@@ -474,17 +466,23 @@ export function EmployeePaystubs({ myPaystubs = [] }) {
   );
 }
 
-export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, onEmployeeFileUpload }) {
+export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, onEmployeeFileUpload, onAddTimeOff }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  
+  // Time Off Request State
+  const [toStartDate, setToStartDate] = useState('');
+  const [toEndDate, setToEndDate] = useState('');
+  const [toType, setToType] = useState('sick');
+  const [toNote, setToNote] = useState('');
 
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeClients = Array.isArray(clients) ? clients : [];
+  const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
   
-  // LIVE DATABASE LINK: Look at the live employees array instead of the static currentUser snapshot
   const liveEmployee = employees.find(e => e && e.id === currentUser.id) || currentUser;
   const myUploads = liveEmployee.uploadedFiles || [];
   
@@ -492,6 +490,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id);
   const myClientExpenses = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id);
   const myPaystubs = (Array.isArray(paystubs) ? paystubs : []).filter(p => p && p.employeeId === currentUser.id);
+  const myTimeOffLogs = safeTimeOffLogs.filter(l => l && l.employeeId === currentUser.id);
   const openShifts = safeShifts.filter(s => s && s.employeeId === 'unassigned');
   
   const now = new Date();
@@ -507,6 +506,75 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
+
+  // --- TIME OFF BALANCE CALCULATIONS ---
+  const currentYear = new Date().getFullYear();
+  const currentYearLogs = myTimeOffLogs.filter(l => l.startDate && parseLocalSafe(l.startDate).getFullYear() === currentYear);
+  
+  let usedSick = 0; let usedVacation = 0;
+  let pendingSick = 0; let pendingVacation = 0;
+
+  currentYearLogs.forEach(log => {
+    const start = parseLocalSafe(log.startDate);
+    const end = parseLocalSafe(log.endDate);
+    const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (log.status === 'approved') {
+      if (log.type === 'sick') usedSick += diffDays;
+      if (log.type === 'vacation') usedVacation += diffDays;
+    } else if (log.status === 'pending') {
+      if (log.type === 'sick') pendingSick += diffDays;
+      if (log.type === 'vacation') pendingVacation += diffDays;
+    }
+  });
+
+  const allowedSick = currentUser.timeOffBalances?.sick || 0;
+  const allowedVacation = currentUser.timeOffBalances?.vacation || 0;
+  const remainingSick = allowedSick - usedSick - pendingSick;
+  const remainingVacation = allowedVacation - usedVacation - pendingVacation;
+
+  const calculateRequestedDays = (startStr, endStr) => {
+    if (!startStr || !endStr) return 0;
+    const start = parseLocalSafe(startStr);
+    const end = parseLocalSafe(endStr);
+    if (end < start) return 0;
+    return Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const handleTimeOffSubmit = (e) => {
+    e.preventDefault();
+    const requestedDays = calculateRequestedDays(toStartDate, toEndDate);
+    
+    if (requestedDays <= 0) {
+      alert('End date must be the same or after the start date.');
+      return;
+    }
+    
+    if (toType === 'sick' && requestedDays > remainingSick) {
+      alert(`You only have ${remainingSick} sick days remaining. You cannot request ${requestedDays}.`);
+      return;
+    }
+    
+    if (toType === 'vacation' && requestedDays > remainingVacation) {
+      alert(`You only have ${remainingVacation} vacation days remaining. You cannot request ${requestedDays}.`);
+      return;
+    }
+
+    if (onAddTimeOff) {
+      onAddTimeOff({
+        id: `to_${Date.now()}`,
+        employeeId: currentUser.id,
+        startDate: toStartDate,
+        endDate: toEndDate,
+        type: toType,
+        note: toNote
+      });
+    }
+
+    setToStartDate('');
+    setToEndDate('');
+    setToNote('');
+  };
 
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
@@ -586,7 +654,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
       <div className="flex flex-col md:flex-row gap-6">
         <div className="md:w-1/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
-            
             <div className="relative mb-4 group">
               <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden relative">
                 {isUploadingPhoto ? (
@@ -667,17 +734,124 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
         <div className="md:w-2/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
-              <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>My Schedule</button>
-              <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Logs & Expenses</button>
+              <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>My Schedule</button>
+              {/* TIME OFF TAB BUTTON */}
+              <button onClick={() => setActiveTab('timeoff')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'timeoff' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Time Off</button>
+              <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Logs & Expenses</button>
               {isBonusActive && (
-                <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Awards</button>
+                <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Awards</button>
               )}
-              <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'documents' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Documents</button>
-              <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
-              <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Team Feed</button>
+              <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'documents' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Documents</button>
+              <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
+              <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Team Feed</button>
             </div>
 
             <div className="p-0">
+              
+              {/* ========================================== */}
+              {/* NEW TIME OFF TAB CONTENT                   */}
+              {/* ========================================== */}
+              {activeTab === 'timeoff' && (
+                <div className="p-6 space-y-6">
+                  
+                  {/* Balance Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center">
+                      <div className="p-3 rounded-full bg-red-100 text-red-600 mr-4"><Activity className="h-6 w-6"/></div>
+                      <div>
+                        <div className="text-sm font-bold text-slate-500 uppercase tracking-wider">Sick Days Remaining</div>
+                        <div className="text-2xl font-black text-slate-800">{remainingSick} <span className="text-sm font-medium text-slate-400">/ {allowedSick}</span></div>
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center">
+                      <div className="p-3 rounded-full bg-blue-100 text-blue-600 mr-4"><Sun className="h-6 w-6"/></div>
+                      <div>
+                        <div className="text-sm font-bold text-slate-500 uppercase tracking-wider">Vacation Days Remaining</div>
+                        <div className="text-2xl font-black text-slate-800">{remainingVacation} <span className="text-sm font-medium text-slate-400">/ {allowedVacation}</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Request Form */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center"><CalendarDays className="h-5 w-5 mr-2 text-teal-600"/> Request Time Off</h3>
+                    <form onSubmit={handleTimeOffSubmit} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Start Date *</label>
+                          <input type="date" value={toStartDate} onChange={(e) => setToStartDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" required />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">End Date *</label>
+                          <input type="date" value={toEndDate} onChange={(e) => setToEndDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" required />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Leave Type *</label>
+                          <select value={toType} onChange={(e) => setToType(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm font-semibold text-slate-700" required>
+                            <option value="sick">Sick Leave</option>
+                            <option value="vacation">Paid Vacation</option>
+                            <option value="unpaid">Unpaid Leave</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-1">Note to Admin</label>
+                          <input type="text" value={toNote} onChange={(e) => setToNote(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" placeholder="Optional context" />
+                        </div>
+                      </div>
+                      <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-semibold py-2.5 rounded-md hover:bg-teal-700 transition flex items-center justify-center">
+                        <Plus className="h-4 w-4 mr-2"/> Submit Request for Approval
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Request History */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center"><Clock className="h-5 w-5 mr-2 text-teal-600"/> My Time Off History</h3>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                      {myTimeOffLogs.length === 0 ? (
+                        <div className="text-center py-6 text-slate-500 text-sm border border-dashed border-slate-200 rounded-lg">No time off requests found.</div>
+                      ) : (
+                        myTimeOffLogs.sort((a,b) => new Date(b.dateSubmitted) - new Date(a.dateSubmitted)).map(req => {
+                          const isSick = req.type === 'sick';
+                          const start = parseLocalSafe(req.startDate);
+                          const end = parseLocalSafe(req.endDate);
+                          return (
+                            <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-slate-200 rounded-lg bg-slate-50 hover:bg-white transition gap-3">
+                              <div className="flex items-center space-x-3">
+                                <div className={`p-2 rounded-full shrink-0 ${isSick ? 'bg-red-100 text-red-600' : req.type === 'vacation' ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-600'}`}>
+                                  {isSick ? <Activity className="h-4 w-4" /> : req.type === 'vacation' ? <Sun className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-slate-800 text-sm">
+                                    {start.toLocaleDateString()} <span className="text-slate-400 font-normal mx-1">to</span> {end.toLocaleDateString()}
+                                  </div>
+                                  <div className="text-xs text-slate-500 mt-0.5">
+                                    {req.type === 'sick' ? 'Sick Leave' : req.type === 'vacation' ? 'Vacation' : 'Unpaid Leave'}
+                                    {req.note && <span className="italic ml-2">"{req.note}"</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center sm:justify-end">
+                                {req.status === 'approved' ? (
+                                  <span className="flex items-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full"><CheckCircle className="h-3.5 w-3.5 mr-1" /> Approved</span>
+                                ) : req.status === 'rejected' ? (
+                                  <span className="flex items-center text-xs font-bold text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full"><XCircle className="h-3.5 w-3.5 mr-1" /> Denied</span>
+                                ) : (
+                                  <span className="flex items-center text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full"><Clock className="h-3.5 w-3.5 mr-1" /> Pending</span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
               {activeTab === 'schedule' && (
                 <div className="flex flex-col">
                   <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-end">
@@ -766,7 +940,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                   <EmployeeClientExpenseLog 
                     myClientExpenses={myClientExpenses} 
                     clients={safeClients} 
-                    // FIX: Passed the file properly
                     onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
                     getClientRemainingBalance={getClientRemainingBalance}
                   />
@@ -788,18 +961,12 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
 
               {activeTab === 'documents' && (
                 <div className="p-6 space-y-6">
-                  <DocumentManager 
-                    documents={documents} 
-                    isAdmin={false} 
-                  />
+                  <DocumentManager documents={documents} isAdmin={false} />
                   
                   {/* PERSONAL UPLOADS MODULE */}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-                      <h2 className="text-lg font-semibold text-slate-800 flex items-center">
-                        <FileText className="h-5 w-5 mr-2 text-teal-600" />
-                        My Personal Uploads
-                      </h2>
+                      <h2 className="text-lg font-semibold text-slate-800 flex items-center"><FileText className="h-5 w-5 mr-2 text-teal-600" /> My Personal Uploads</h2>
                     </div>
                     <div className="p-6">
                       <div className="mb-6">
@@ -807,22 +974,11 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                         <div className="flex items-center justify-center w-full">
                           <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg bg-slate-50 transition ${isUploadingDoc ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
                             <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                              {isUploadingDoc ? (
-                                <Loader2 className="w-8 h-8 mb-3 text-teal-600 animate-spin" />
-                              ) : (
-                                <Upload className="w-8 h-8 mb-3 text-slate-400" />
-                              )}
-                              <p className="mb-2 text-sm text-slate-500">
-                                {isUploadingDoc ? <span className="font-semibold text-teal-600">Uploading securely...</span> : <><span className="font-semibold text-teal-600">Click to upload</span> or drag and drop</>}
-                              </p>
+                              {isUploadingDoc ? <Loader2 className="w-8 h-8 mb-3 text-teal-600 animate-spin" /> : <Upload className="w-8 h-8 mb-3 text-slate-400" />}
+                              <p className="mb-2 text-sm text-slate-500">{isUploadingDoc ? <span className="font-semibold text-teal-600">Uploading securely...</span> : <><span className="font-semibold text-teal-600">Click to upload</span> or drag and drop</>}</p>
                               <p className="text-xs text-slate-500">PDF, JPG, or PNG</p>
                             </div>
-                            <input 
-                              type="file" 
-                              className="hidden" 
-                              disabled={isUploadingDoc}
-                              onChange={handleDocumentUpload} 
-                            />
+                            <input type="file" className="hidden" disabled={isUploadingDoc} onChange={handleDocumentUpload} />
                           </label>
                         </div>
                       </div>
@@ -840,14 +996,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                                   <div className="text-xs text-slate-500 mt-0.5">{new Date(file.date).toLocaleDateString()}</div>
                                 </div>
                               </div>
-                              <a 
-                                href={file.url} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="bg-white border border-teal-200 text-teal-700 hover:bg-teal-600 hover:text-white px-3 py-1.5 rounded transition text-xs font-semibold shadow-sm shrink-0" 
-                              >
-                                View
-                              </a>
+                              <a href={file.url} target="_blank" rel="noopener noreferrer" className="bg-white border border-teal-200 text-teal-700 hover:bg-teal-600 hover:text-white px-3 py-1.5 rounded transition text-xs font-semibold shadow-sm shrink-0">View</a>
                             </div>
                           ))
                         )}

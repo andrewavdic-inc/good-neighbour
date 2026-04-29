@@ -319,7 +319,7 @@ function AdminDashboard({
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} />;      
       case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
       case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
-      case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onAddTimeOff={onAddTimeOffLog} onRemoveTimeOff={onRemoveTimeOffLog} />;
+      case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={handleApproveTimeOff} onReject={handleRejectTimeOff} onRemoveTimeOff={handleRemoveTimeOffLog} />;
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />;
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} /></div>;
@@ -733,6 +733,27 @@ updateEmployee={async (id, d, file, certFiles = {}) => {
     }
   }
 
+  // --- AUTOMATED TIME OFF APPROVAL PIPELINE ---
+  const handleApproveTimeOff = (request) => {
+    // 1. Mark request as approved
+    runMutation('gn_timeOff', request.id, 'update', { status: 'approved' });
+
+    // 2. Clear employee from shifts on those dates
+    const shiftMatches = shifts.filter(s => 
+      s.employeeId === request.employeeId && 
+      s.date >= request.startDate && 
+      s.date <= request.endDate
+    );
+    
+    shiftMatches.forEach(shift => {
+      runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' });
+    });
+  };
+
+  const handleRejectTimeOff = (requestId) => {
+    runMutation('gn_timeOff', requestId, 'update', { status: 'rejected' });
+  };
+
   // 3. Save everything to the database
   runMutation('gn_employees', id, 'update', { ...d, photoUrl: url, requirements: updatedReqs });
 }}            clients={clients} 
@@ -834,6 +855,8 @@ updateEmployee={async (id, d, file, certFiles = {}) => {
               runMutation('gn_employees', employeeId, 'update', { uploadedFiles: updatedUploads });
               setCurrentUser(prev => ({ ...prev, uploadedFiles: updatedUploads }));
             }}
+               onAddTimeOff={(req) => runMutation('gn_timeOff', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
+
           />
         )}
       </main>

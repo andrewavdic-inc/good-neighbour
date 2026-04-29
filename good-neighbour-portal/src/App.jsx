@@ -228,12 +228,10 @@ function AdminDashboard({
     return d;
   });
 
-  // Bulletproof array mapping to prevent crash on corrupt DB items
   const safeEmployees = Array.isArray(employees) ? employees.filter(Boolean) : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
   const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
   
-  // SECURE NULL-SAFE FILTER
   const filteredShifts = safeShifts.filter(s => {
     if (!s) return false;
     if (!scheduleSearch.trim()) return true;
@@ -248,7 +246,6 @@ function AdminDashboard({
     return empMatch || clientMatch;
   });
 
-  // Calculate dayViewShifts cleanly outside the JSX
   let dayViewShifts = [];
   if (calendarView === 'day') {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
@@ -267,6 +264,22 @@ function AdminDashboard({
     const dayShifts = filteredShifts
       .filter(s => s && s.date === dateStr)
       .sort((a,b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
+
+    // --- NEW: TIME OFF LOGIC ---
+    const cellTime = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
+    
+    const dayTimeOff = safeTimeOffLogs.filter(log => {
+      if (log.status !== 'approved') return false;
+      if (!log.startDate || !log.endDate) return false;
+      
+      const start = parseLocalSafe(log.startDate);
+      const end = parseLocalSafe(log.endDate);
+      const sTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+      const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+      
+      return cellTime >= sTime && cellTime <= eTime;
+    });
     
     return (
       <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
@@ -277,10 +290,26 @@ function AdminDashboard({
             {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
           </div>
         </div>
+        
         <div className="space-y-1">
+          {/* --- RENDER TIME OFF BADGES --- */}
+          {dayTimeOff.map(log => {
+            const emp = safeEmployees.find(e => e.id === log.employeeId);
+            const isSick = log.type === 'sick';
+            const isVacation = log.type === 'vacation';
+            return (
+              <div key={`to_${log.id}`} className={`text-xs p-1.5 rounded relative border shadow-sm ${isSick ? 'bg-red-50 text-red-800 border-red-200' : isVacation ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-slate-50 text-slate-800 border-slate-200'}`} title={`${String(emp?.name || 'Unknown')} - ${isSick ? 'Sick Leave' : isVacation ? 'Vacation' : 'Unpaid Time Off'}`}>
+                <div className="font-semibold truncate flex items-center">
+                  {isSick ? <Activity className="h-3 w-3 mr-1" /> : isVacation ? <Sun className="h-3 w-3 mr-1" /> : <CalendarDays className="h-3 w-3 mr-1" />}
+                  {String(emp?.name || 'Unknown').split(' ')[0]}
+                </div>
+                <div className="text-[9px] mt-0.5 opacity-90 uppercase tracking-wider">{isSick ? 'Sick Day' : isVacation ? 'Vacation' : 'Unpaid Leave'}</div>
+              </div>
+            );
+          })}
+
           {dayShifts.map(shift => {
             const isOpen = shift.employeeId === 'unassigned';
-            // Null-safe finds
             const emp = isOpen ? null : safeEmployees.find(e => e && e.id === shift.employeeId);
             const client = safeClients.find(c => c && c.id === shift.clientId);
             
@@ -581,7 +610,7 @@ export default function App() {
     }
   };
 
-const handleLogin = async (email, password) => {
+  const handleLogin = async (email, password) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const secureEmail = userCredential.user.email;

@@ -617,10 +617,47 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
             const holiday = getHoliday(dateStr);
             const dayShifts = myShifts.filter(s => s && s.date === dateStr);
             
+            // --- NEW: TIME OFF LOGIC ---
+            const cellTime = new Date(year, month, day).getTime();
+            const dayTimeOff = myTimeOffLogs.filter(log => {
+              if (log.status !== 'approved') return false;
+              if (!log.startDate || !log.endDate) return false;
+              
+              const start = parseLocalSafe(log.startDate);
+              const end = parseLocalSafe(log.endDate);
+              const sTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+              const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+              
+              return cellTime >= sTime && cellTime <= eTime;
+            });
+            
             return (
               <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : ''}`}>
-                <div className="font-medium text-sm text-slate-600 mb-1">{day}</div>
+                
+                {/* --- NEW: HOLIDAY AND PAYDAY HEADER --- */}
+                <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
+                  <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
+                  <div className="flex flex-col items-end gap-1">
+                    {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
+                    {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
+                  </div>
+                </div>
+
                 <div className="space-y-1">
+                  {/* --- RENDER TIME OFF BADGES --- */}
+                  {dayTimeOff.map(log => {
+                    const isSick = log.type === 'sick';
+                    const isVacation = log.type === 'vacation';
+                    return (
+                      <div key={`to_${log.id}`} className={`text-xs p-1.5 rounded relative border shadow-sm mb-1 ${isSick ? 'bg-red-50 text-red-800 border-red-200' : isVacation ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-slate-50 text-slate-800 border-slate-200'}`} title={`${isSick ? 'Sick Leave' : isVacation ? 'Vacation' : 'Unpaid Time Off'}`}>
+                        <div className="font-semibold truncate flex items-center">
+                          {isSick ? <Activity className="h-3 w-3 mr-1" /> : isVacation ? <Sun className="h-3 w-3 mr-1" /> : <CalendarDays className="h-3 w-3 mr-1" />}
+                          {isSick ? 'Sick Day' : isVacation ? 'Vacation' : 'Unpaid Leave'}
+                        </div>
+                      </div>
+                    );
+                  })}
+
                   {dayShifts.map(shift => {
                     const client = clients.find(c => c && c.id === shift.clientId);
                     return (
@@ -749,7 +786,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
             <div className="p-0">
               
               {/* ========================================== */}
-              {/* NEW TIME OFF TAB CONTENT                   */}
+              {/* TIME OFF TAB CONTENT                   */}
               {/* ========================================== */}
               {activeTab === 'timeoff' && (
                 <div className="p-6 space-y-6">

@@ -3,7 +3,8 @@ import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, Chevr
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
+import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- UTILS & COMPONENTS ---
@@ -23,7 +24,7 @@ import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal';
 
-// --- PHOTO CLEANER (Ignores broken dicebear links from mock data) ---
+// --- PHOTO CLEANER ---
 const getValidPhoto = (url) => {
   if (!url || typeof url !== 'string' || url.includes('dicebear.com')) return null;
   return url.startsWith('[') ? (url.match(/\]\((.*?)\)/)?.[1] || null) : url;
@@ -61,15 +62,6 @@ const parseLocalSafe = (dateStr) => {
   } catch (e) {
     return new Date();
   }
-};
-
-const safeShiftsSort = (arr) => {
-  if (!Array.isArray(arr)) return [];
-  return [...arr].sort((a, b) => {
-    const dA = a?.date && a?.startTime ? new Date(`${a.date}T${a.startTime}`).getTime() : 0;
-    const dB = b?.date && b?.startTime ? new Date(`${b.date}T${b.startTime}`).getTime() : 0;
-    return dA - dB;
-  });
 };
 
 // ==========================================
@@ -167,7 +159,8 @@ function AdminDashboard({
   onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, 
   documents = [], onAddDocument, onRemoveDocument, messages = [], onSendMessage, currentUser, 
   payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
-  onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient 
+  onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient,
+  onApproveTimeOff, onRejectTimeOff
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -319,7 +312,7 @@ function AdminDashboard({
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} />;      
       case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
       case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
-      case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={handleApproveTimeOff} onReject={handleRejectTimeOff} onRemoveTimeOff={handleRemoveTimeOffLog} />;
+      case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={onApproveTimeOff} onReject={onRejectTimeOff} onRemoveTimeOff={onRemoveTimeOffLog} />;
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />;
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} /></div>;
@@ -590,11 +583,9 @@ export default function App() {
 
 const handleLogin = async (email, password) => {
     try {
-      // 1. Authenticate with Google's Secure Servers
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const secureEmail = userCredential.user.email;
 
-      // 2. Find the Employee Profile in your Database that matches this email
       const safeEmployees = Array.isArray(employees) ? employees : [];
       const foundEmp = safeEmployees.find(e => e && e.email && String(e.email).toLowerCase() === String(secureEmail).toLowerCase());
       
@@ -673,6 +664,27 @@ const handleLogin = async (email, password) => {
     return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
   };
 
+  // --- AUTOMATED TIME OFF APPROVAL PIPELINE ---
+  const handleApproveTimeOff = (request) => {
+    // 1. Mark request as approved
+    runMutation('gn_timeOffLogs', request.id, 'update', { status: 'approved' });
+
+    // 2. Clear employee from shifts on those dates
+    const shiftMatches = shifts.filter(s => 
+      s.employeeId === request.employeeId && 
+      s.date >= request.startDate && 
+      s.date <= request.endDate
+    );
+    
+    shiftMatches.forEach(shift => {
+      runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' });
+    });
+  };
+
+  const handleRejectTimeOff = (requestId) => {
+    runMutation('gn_timeOffLogs', requestId, 'update', { status: 'rejected' });
+  };
+
   if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={Boolean(isDbReady)} hasData={Boolean(Array.isArray(employees) && employees.length > 0)} onSeedData={handleSeedData} />;
 
   const isAdmin = String(currentUser.role).includes('Admin');
@@ -710,53 +722,32 @@ const handleLogin = async (email, password) => {
               if (file) url = await handleFileUpload(file, 'avatars');
               runMutation('gn_employees', d.id, 'set', { ...d, photoUrl: url });
               }} 
-updateEmployee={async (id, d, file, certFiles = {}) => {
-  // 1. Handle the Profile Picture
-  const existingEmp = employees.find(e => e.id === id);
-  let url = d.photoUrl || existingEmp?.photoUrl || '';
-  
-  if (file) {
-    const newUrl = await handleFileUpload(file, 'avatars');
-    if (newUrl) url = newUrl;
-  }
+            updateEmployee={async (id, d, file, certFiles = {}) => {
+              // 1. Handle the Profile Picture
+              const existingEmp = employees.find(e => e.id === id);
+              let url = d.photoUrl || existingEmp?.photoUrl || '';
+              
+              if (file) {
+                const newUrl = await handleFileUpload(file, 'avatars');
+                if (newUrl) url = newUrl;
+              }
 
-  // 2. Handle the Compliance Certificates
-  const updatedReqs = { ...(d.requirements || existingEmp?.requirements || {}) };
-  
-  // Loop through any new certificate files that were attached
-  for (const [reqKey, certFile] of Object.entries(certFiles)) {
-    if (certFile) {
-      const certUrl = await handleFileUpload(certFile, 'certificates');
-      if (certUrl) {
-        updatedReqs[reqKey] = { ...updatedReqs[reqKey], fileUrl: certUrl };
-      }
-    }
-  }
+              // 2. Handle the Compliance Certificates
+              const updatedReqs = { ...(d.requirements || existingEmp?.requirements || {}) };
+              
+              for (const [reqKey, certFile] of Object.entries(certFiles)) {
+                if (certFile) {
+                  const certUrl = await handleFileUpload(certFile, 'certificates');
+                  if (certUrl) {
+                    updatedReqs[reqKey] = { ...updatedReqs[reqKey], fileUrl: certUrl };
+                  }
+                }
+              }
 
-  // --- AUTOMATED TIME OFF APPROVAL PIPELINE ---
-  const handleApproveTimeOff = (request) => {
-    // 1. Mark request as approved
-    runMutation('gn_timeOff', request.id, 'update', { status: 'approved' });
-
-    // 2. Clear employee from shifts on those dates
-    const shiftMatches = shifts.filter(s => 
-      s.employeeId === request.employeeId && 
-      s.date >= request.startDate && 
-      s.date <= request.endDate
-    );
-    
-    shiftMatches.forEach(shift => {
-      runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' });
-    });
-  };
-
-  const handleRejectTimeOff = (requestId) => {
-    runMutation('gn_timeOff', requestId, 'update', { status: 'rejected' });
-  };
-
-  // 3. Save everything to the database
-  runMutation('gn_employees', id, 'update', { ...d, photoUrl: url, requirements: updatedReqs });
-}}            clients={clients} 
+              // 3. Save everything to the database
+              runMutation('gn_employees', id, 'update', { ...d, photoUrl: url, requirements: updatedReqs });
+            }}            
+            clients={clients} 
             onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
             onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
             updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} 
@@ -800,9 +791,11 @@ updateEmployee={async (id, d, file, certFiles = {}) => {
             }} 
             onRemoveShift={(id) => runMutation('gn_shifts', id, 'delete')} 
             onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
+            onApproveTimeOff={handleApproveTimeOff}
+            onRejectTimeOff={handleRejectTimeOff}
           />
         ) : (
-<EmployeeDashboard 
+          <EmployeeDashboard 
             shifts={shifts} 
             employees={employees} 
             currentUser={currentUser} 
@@ -855,8 +848,7 @@ updateEmployee={async (id, d, file, certFiles = {}) => {
               runMutation('gn_employees', employeeId, 'update', { uploadedFiles: updatedUploads });
               setCurrentUser(prev => ({ ...prev, uploadedFiles: updatedUploads }));
             }}
-               onAddTimeOff={(req) => runMutation('gn_timeOff', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
-
+            onAddTimeOff={(req) => runMutation('gn_timeOffLogs', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
           />
         )}
       </main>

@@ -708,23 +708,23 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 </div>
               )}
 
-              {activeTab === 'expenses' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
-                  <EmployeeMileageLog 
-                    myExpenses={myExpenses} 
-                    clients={safeClients} 
-                    onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
-                    getClientRemainingBalance={getClientRemainingBalance}
-                  />
-                  <EmployeeClientExpenseLog 
-                    myClientExpenses={myClientExpenses} 
-                    clients={safeClients} 
-                    onAddClientExpense={(exp) => onAddClientExpense({ ...exp, employeeId: currentUser.id })} 
-                    getClientRemainingBalance={getClientRemainingBalance}
-                  />
-                </div>
-              )}
-
+{activeTab === 'expenses' && (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
+    <EmployeeMileageLog 
+      myExpenses={myExpenses} 
+      clients={safeClients} 
+      onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
+      getClientRemainingBalance={getClientRemainingBalance}
+    />
+    <EmployeeClientExpenseLog 
+      myClientExpenses={myClientExpenses} 
+      clients={safeClients} 
+      // FIX: We added 'file' here so the baton doesn't get dropped!
+      onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
+      getClientRemainingBalance={getClientRemainingBalance}
+    />
+  </div>
+)}
               {activeTab === 'awards' && isBonusActive && (
                 <div className="p-6">
                   <AwardsLeaderboard 

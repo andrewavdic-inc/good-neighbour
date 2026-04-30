@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Settings, Award, CalendarDays, Trophy, Medal, HardDrive, RefreshCw, Info, Server } from 'lucide-react';
+import { Settings, Award, CalendarDays, Trophy, Medal, HardDrive, RefreshCw, Info, Server, Sun } from 'lucide-react';
 import { getStorage, ref, listAll, getMetadata } from 'firebase/storage';
 
-export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings }) {
+export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, isVacationEnabled, setIsVacationEnabled }) {
   // --- EXISTING BONUS LOGIC ---
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
 
@@ -83,12 +83,21 @@ export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isB
           <div className="border-t border-slate-200 pt-5">
             <label className="flex items-center space-x-3 cursor-pointer group w-fit">
               <div className="relative flex items-center justify-center">
-                <input 
-                  type="checkbox" 
-                  checked={isBonusActive || false} 
-                  onChange={(e) => setIsBonusActive(e.target.checked)} 
-                  className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" 
-                />
+                <input type="checkbox" checked={isVacationEnabled} onChange={(e) => setIsVacationEnabled(e.target.checked)} className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" />
+              </div>
+              <span className="font-bold text-slate-800 flex items-center group-hover:text-teal-700 transition">
+                <Sun className="h-5 w-5 mr-1.5 text-blue-500"/> Enable Employee Paid Vacation Requests
+              </span>
+            </label>
+            <div className="mt-2 ml-8 text-xs text-slate-500 leading-relaxed max-w-xl">
+              When active, employees can view and submit requests for their banked Paid Vacation days. Employees must have 1-year of tenure based on their Hire Date to unlock their vacation balance.
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 pt-5">
+            <label className="flex items-center space-x-3 cursor-pointer group w-fit">
+              <div className="relative flex items-center justify-center">
+                <input type="checkbox" checked={isBonusActive || false} onChange={(e) => setIsBonusActive(e.target.checked)} className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" />
               </div>
               <span className="font-bold text-slate-800 flex items-center group-hover:text-teal-700 transition">
                 <Award className="h-5 w-5 mr-1.5 text-amber-500"/> Enable Performance Bonus System

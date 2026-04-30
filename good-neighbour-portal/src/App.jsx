@@ -159,8 +159,8 @@ function AdminDashboard({
   onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, 
   documents = [], onAddDocument, onRemoveDocument, messages = [], onSendMessage, currentUser, 
   payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
-  onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, onRemoveEmployee, onAddClient, onRemoveClient,
-  onApproveTimeOff, onRejectTimeOff
+  isVacationEnabled, setIsVacationEnabled, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, 
+  onRemoveEmployee, onAddClient, onRemoveClient, onApproveTimeOff, onRejectTimeOff, onClientFileUpload
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -254,18 +254,15 @@ function AdminDashboard({
       .sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
   }
 
-  // Reusable Calendar Cell UI
   const renderCalendarCell = (d, minHeight = "min-h-[120px]") => {
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
     
-    // Sort shifts safely
     const dayShifts = filteredShifts
       .filter(s => s && s.date === dateStr)
       .sort((a,b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
 
-    // --- NEW: TIME OFF LOGIC ---
     const cellTime = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
     
@@ -292,7 +289,6 @@ function AdminDashboard({
         </div>
         
         <div className="space-y-1">
-          {/* --- RENDER TIME OFF BADGES --- */}
           {dayTimeOff.map(log => {
             const emp = safeEmployees.find(e => e.id === log.employeeId);
             const isSick = log.type === 'sick';
@@ -337,7 +333,7 @@ function AdminDashboard({
   const renderAdminTab = () => {
     switch (activeAdminTab) {
       case 'employees': return <EmployeeManager employees={safeEmployees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
-      case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} />;
+      case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} />;      
       case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
       case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
@@ -345,7 +341,7 @@ function AdminDashboard({
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />;
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} /></div>;
-      case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} />;
+      case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} isVacationEnabled={isVacationEnabled} setIsVacationEnabled={setIsVacationEnabled} />;
       case 'schedule':
       default: return (
         <div className="space-y-4">
@@ -539,6 +535,7 @@ export default function App() {
   // Settings State
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
   const [isBonusActive, setIsBonusActive] = useState(false);
+  const [isVacationEnabled, setIsVacationEnabled] = useState(true);
   const [bonusSettings, setBonusSettings] = useState({ monthly: [100, 50, 20], annual: [3000, 2000, 1000] });
 
   // Setup Firebase Auth
@@ -583,6 +580,7 @@ export default function App() {
         if (data.payPeriodStart) setPayPeriodStart(data.payPeriodStart);
         if (data.isBonusActive !== undefined) setIsBonusActive(data.isBonusActive);
         if (data.bonusAmounts) setBonusSettings(data.bonusAmounts);
+        if (data.isVacationEnabled !== undefined) setIsVacationEnabled(data.isVacationEnabled);
       }
     }, handleError));
 
@@ -619,7 +617,7 @@ export default function App() {
       const foundEmp = safeEmployees.find(e => e && e.email && String(e.email).toLowerCase() === String(secureEmail).toLowerCase());
       
       if (foundEmp) {
-        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl });
+        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, hireDate: foundEmp.hireDate });
         setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
       } else { 
         alert("Login successful, but this email is not assigned to an employee profile in the directory. Please contact the administrator."); 
@@ -658,10 +656,22 @@ export default function App() {
 
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
+    
+    // Update local state immediately for UI responsiveness
     if (field === 'payPeriodStart') setPayPeriodStart(value);
     if (field === 'isBonusActive') setIsBonusActive(value);
     if (field === 'bonusAmounts') setBonusSettings(value);
-    await setDoc(getDocRef('gn_settings', 'global'), { payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, isBonusActive: field === 'isBonusActive' ? value : isBonusActive, bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings }, { merge: true });
+    if (field === 'isVacationEnabled') setIsVacationEnabled(value);
+    
+    // Save to Firebase
+    const payload = { 
+      payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, 
+      isBonusActive: field === 'isBonusActive' ? value : isBonusActive, 
+      bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings,
+      isVacationEnabled: field === 'isVacationEnabled' ? value : isVacationEnabled
+    };
+    
+    await setDoc(getDocRef('gn_settings', 'global'), payload, { merge: true });
   };
 
   const getClientRemainingBalance = (clientId) => {
@@ -779,7 +789,28 @@ export default function App() {
             clients={clients} 
             onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
             onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
-            updateClient={(id, d) => runMutation('gn_clients', id, 'update', d)} 
+            updateClient={async (id, d, file) => {
+              // Now fully supports permanent avatar uploading!
+              const existingClient = clients.find(c => c.id === id);
+              let url = d.photoUrl || existingClient?.photoUrl || '';
+              if (file) {
+                const newUrl = await handleFileUpload(file, 'avatars');
+                if (newUrl) url = newUrl;
+              }
+              runMutation('gn_clients', id, 'update', { ...d, photoUrl: url });
+            }} 
+            onClientFileUpload={async (clientId, file) => {
+              // New Document Hub handler for clients
+              if (!file) return;
+              const url = await handleFileUpload(file, 'documents');
+              if (!url) return;
+
+              const existingClient = clients.find(c => c.id === clientId);
+              const currentUploads = existingClient?.uploadedFiles || [];
+              const newFileRecord = { name: file.name, url: url, date: new Date().toISOString() };
+              
+              runMutation('gn_clients', clientId, 'update', { uploadedFiles: [...currentUploads, newFileRecord] });
+            }}
             expenses={expenses} 
             onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} 
             clientExpenses={clientExpenses} 
@@ -787,7 +818,10 @@ export default function App() {
             paystubs={paystubs} 
             timeOffLogs={timeOffLogs} 
             onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })} 
-            onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'delete')} 
+            
+            // SOFT DELETE PRESERVATION
+            onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'update', { status: 'cancelled' })} 
+            
             documents={documents} 
             messages={messages} 
             onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
@@ -798,6 +832,8 @@ export default function App() {
             setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} 
             bonusSettings={bonusSettings} 
             setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
+            isVacationEnabled={isVacationEnabled}
+            setIsVacationEnabled={(v) => handleSaveSettings('isVacationEnabled', v)}
             onAddDocument={async (d, file) => {
               let url = d.fileUrl || '';
               if (file) url = await handleFileUpload(file, 'documents');

@@ -26,6 +26,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
     payType: employee?.payType || 'per_visit',
     hourlyWage: employee?.hourlyWage || 22.50,
     perVisitRate: employee?.perVisitRate || 45,
+    hireDate: employee?.hireDate || new Date().toISOString().split('T')[0],
     emergencyContactName: employee?.emergencyContactName || '',
     emergencyContactPhone: employee?.emergencyContactPhone || '',
     requirements: employee?.requirements || {},
@@ -122,7 +123,6 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
           >
             Certificates & Clearances
           </button>
-          {/* NEW UPLOADS TAB BUTTON */}
           <button 
             type="button"
             onClick={() => setActiveTab('uploads')}
@@ -135,7 +135,6 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
         <div className="overflow-y-auto p-6 flex-1 bg-slate-50/30">
           <form id="edit-employee-form" onSubmit={handleSubmit} className="space-y-6">
             
-            {/* EXISTING PROFILE TAB CONTENT */}
             <div className={activeTab === 'profile' ? 'block space-y-6' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
@@ -153,13 +152,20 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                       <input type="text" disabled={isUploading} value={formData.password} onChange={(e) => handleChange('password', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                    <select disabled={isUploading} value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
-                      <option value="Neighbour">Neighbour</option>
-                      <option value="Block Captain">Block Captain</option>
-                      <option value="Administrator">Administrator</option>
-                    </select>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                      <select disabled={isUploading} value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                        <option value="Neighbour">Neighbour</option>
+                        <option value="Block Captain">Block Captain</option>
+                        <option value="Administrator">Administrator</option>
+                      </select>
+                    </div>
+                    <div>
+                      {/* NEW HIRE DATE FIELD */}
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Hire Date</label>
+                      <input type="date" disabled={isUploading} value={formData.hireDate} onChange={(e) => handleChange('hireDate', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
+                    </div>
                   </div>
                   <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-white">
                     <div className="col-span-3">
@@ -171,29 +177,11 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                     </div>
                     <div className="col-span-3 sm:col-span-1.5">
                       <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit Rate ($)</label>
-                      <input 
-                        type="number" 
-                        min="0" 
-                        step="1" 
-                        disabled={isUploading}
-                        value={formData.perVisitRate} 
-                        onChange={(e) => handleChange('perVisitRate', e.target.value)} 
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`}
-                        required 
-                      />
+                      <input type="number" min="0" step="1" disabled={isUploading} value={formData.perVisitRate} onChange={(e) => handleChange('perVisitRate', e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`} required />
                     </div>
                     <div className="col-span-3 sm:col-span-1.5">
                       <label className="block text-xs font-medium text-slate-700 mb-1">Hourly Wage ($)</label>
-                      <input 
-                        type="number" 
-                        min="0" 
-                        step="0.50" 
-                        disabled={isUploading}
-                        value={formData.hourlyWage} 
-                        onChange={(e) => handleChange('hourlyWage', e.target.value)} 
-                        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`}
-                        required 
-                      />
+                      <input type="number" min="0" step="0.50" disabled={isUploading} value={formData.hourlyWage} onChange={(e) => handleChange('hourlyWage', e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`} required />
                     </div>
                   </div>
                   <div>
@@ -231,13 +219,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                 <div className="flex flex-wrap gap-3">
                   {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
                     <label key={part} className={`flex items-center space-x-2 text-sm text-slate-700 bg-white border border-slate-200 px-3 py-1.5 rounded-lg transition ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}`}>
-                      <input 
-                        type="checkbox" 
-                        disabled={isUploading}
-                        checked={(formData.availability || []).includes(part)}
-                        onChange={() => toggleAvailability(part)}
-                        className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
-                      />
+                      <input type="checkbox" disabled={isUploading} checked={(formData.availability || []).includes(part)} onChange={() => toggleAvailability(part)} className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4" />
                       <span>{part}</span>
                     </label>
                   ))}
@@ -273,7 +255,6 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
               </div>
             </div>
 
-            {/* EXISTING COMPLIANCE TAB CONTENT */}
             <div className={activeTab === 'compliance' ? 'block' : 'hidden'}>
               <div className="bg-blue-50 border border-blue-100 text-blue-800 text-sm p-4 rounded-xl mb-6 flex items-start">
                 <Info className="h-5 w-5 mr-2 shrink-0 mt-0.5 text-blue-600"/>
@@ -379,7 +360,6 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
               </div>
             </div>
 
-            {/* NEW UPLOADS TAB CONTENT */}
             <div className={activeTab === 'uploads' ? 'block' : 'hidden'}>
               <div className="bg-white border border-slate-200 rounded-lg p-6">
                 <h4 className="text-sm font-semibold text-slate-800 mb-4 flex items-center">
@@ -442,6 +422,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
   const [newPayType, setNewPayType] = useState('per_visit');
   const [newHourlyWage, setNewHourlyWage] = useState('22.50');
   const [newPerVisitRate, setNewPerVisitRate] = useState('45');
+  const [newHireDate, setNewHireDate] = useState(new Date().toISOString().split('T')[0]);
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newAvailability, setNewAvailability] = useState([]);
@@ -467,6 +448,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
       payType: newPayType,
       hourlyWage: Number(newHourlyWage) || 22.50,
       perVisitRate: Number(newPerVisitRate) || 45,
+      hireDate: newHireDate,
       phone: newPhone,
       email: newEmail,
       photoUrl: newPhotoFile ? '' : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
@@ -485,6 +467,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
     setNewPayType('per_visit');
     setNewHourlyWage('22.50');
     setNewPerVisitRate('45');
+    setNewHireDate(new Date().toISOString().split('T')[0]);
     setNewPhone('');
     setNewEmail('');
     setNewAvailability([]);
@@ -661,106 +644,52 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-sm font-medium text-slate-700 mb-1">Username *</label>
-              <input 
-                type="text" 
-                disabled={isUploading}
-                value={newUsername} 
-                onChange={(e) => setNewUsername(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                placeholder="e.g. janedoe"
-                required
-              />
+              <input type="text" disabled={isUploading} value={newUsername} onChange={(e) => setNewUsername(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. janedoe" required />
             </div>
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-sm font-medium text-slate-700 mb-1">Password *</label>
-              <input 
-                type="text" 
-                disabled={isUploading}
-                value={newPassword} 
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                placeholder="Secure password"
-                required
-              />
+              <input type="text" disabled={isUploading} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="Secure password" required />
             </div>
           </div>
           
-          <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-slate-50/50">
-            <div className="col-span-3">
+          <div className="grid grid-cols-2 gap-3 border border-slate-200 p-3 rounded-md bg-slate-50/50">
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-              <select 
-                disabled={isUploading}
-                value={newRole} 
-                onChange={(e) => setNewRole(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-white"
-              >
+              <select disabled={isUploading} value={newRole} onChange={(e) => setNewRole(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-white">
                 <option value="Neighbour">Neighbour</option>
                 <option value="Block Captain">Block Captain</option>
                 <option value="Administrator">Administrator</option>
               </select>
             </div>
-            <div className="col-span-3">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Hire Date</label>
+              <input type="date" disabled={isUploading} value={newHireDate} onChange={(e) => setNewHireDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white" />
+            </div>
+            <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
-              <select 
-                disabled={isUploading}
-                value={newPayType} 
-                onChange={(e) => setNewPayType(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white"
-              >
+              <select disabled={isUploading} value={newPayType} onChange={(e) => setNewPayType(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white">
                 <option value="per_visit">Per Visit Rate</option>
                 <option value="hourly">Hourly Rate</option>
               </select>
             </div>
-            <div className="col-span-3 sm:col-span-1.5">
+            <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit ($)</label>
-              <input 
-                type="number" 
-                min="0"
-                step="1"
-                disabled={isUploading}
-                value={newPerVisitRate} 
-                onChange={(e) => setNewPerVisitRate(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`}
-                required
-              />
+              <input type="number" min="0" step="1" disabled={isUploading} value={newPerVisitRate} onChange={(e) => setNewPerVisitRate(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`} required />
             </div>
-            <div className="col-span-3 sm:col-span-1.5">
+            <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-slate-700 mb-1">Hourly ($)</label>
-              <input 
-                type="number" 
-                min="0"
-                step="0.50"
-                disabled={isUploading}
-                value={newHourlyWage} 
-                onChange={(e) => setNewHourlyWage(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`}
-                required
-              />
+              <input type="number" min="0" step="0.50" disabled={isUploading} value={newHourlyWage} onChange={(e) => setNewHourlyWage(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`} required />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
               <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-              <input 
-                type="text" 
-                disabled={isUploading}
-                value={newPhone} 
-                onChange={(e) => setNewPhone(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                placeholder="555-0000"
-              />
+              <input type="text" disabled={isUploading} value={newPhone} onChange={(e) => setNewPhone(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="555-0000" />
             </div>
             <div className="col-span-2 sm:col-span-1 lg:col-span-2 xl:col-span-1">
               <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-              <input 
-                type="email" 
-                disabled={isUploading}
-                value={newEmail} 
-                onChange={(e) => setNewEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
-                placeholder="email@example.com"
-              />
+              <input type="email" disabled={isUploading} value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" placeholder="email@example.com" />
             </div>
           </div>
 
@@ -769,13 +698,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             <div className="flex flex-wrap gap-2">
               {['Weekday Mornings', 'Weekday Afternoons', 'Weekday Evenings', 'Weekends', 'Overnights'].map(part => (
                 <label key={part} className={`flex items-center space-x-1.5 text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded transition ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-slate-50'}`}>
-                  <input 
-                    type="checkbox" 
-                    disabled={isUploading}
-                    checked={newAvailability.includes(part)}
-                    onChange={() => toggleNewAvailability(part)}
-                    className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
-                  />
+                  <input type="checkbox" disabled={isUploading} checked={newAvailability.includes(part)} onChange={() => toggleNewAvailability(part)} className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4" />
                   <span>{part}</span>
                 </label>
               ))}
@@ -793,22 +716,11 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                   </span>
                 </div>
               </div>
-              <input 
-                id="emp-photo-upload" 
-                type="file" 
-                accept="image/*" 
-                className="sr-only" 
-                disabled={isUploading}
-                onChange={(e) => setNewPhotoFile(e.target.files[0])}
-              />
+              <input id="emp-photo-upload" type="file" accept="image/*" className="sr-only" disabled={isUploading} onChange={(e) => setNewPhotoFile(e.target.files[0])} />
             </div>
           </div>
 
-          <button 
-            type="submit"
-            disabled={isUploading}
-            className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 transition"
-          >
+          <button type="submit" disabled={isUploading} className="w-full flex items-center justify-center space-x-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 transition">
             {isUploading ? <><Loader2 className="h-4 w-4 animate-spin"/><span>Uploading...</span></> : <><Plus className="h-4 w-4" /><span>Add Employee Profile</span></>}
           </button>
         </form>

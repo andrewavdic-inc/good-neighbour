@@ -1,162 +1,129 @@
 import React from 'react';
-import { User, CalendarDays, MapPin, Phone, Mail, Info, Heart, Wallet, ShieldAlert, XCircle, Star, Sun, Moon, TreePine, Sailboat, Cloud, Zap } from 'lucide-react';
+import { MapPin, HeartPulse, ShieldAlert, Phone, Mail, User, Shield, Wallet } from 'lucide-react';
 
-const CaptainHatIcon = ({ className }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
-    <path d="M2 14c0-2.5 2-4 5-4h10c3 0 5 1.5 5 4 0 2-4 3-10 3S2 16.5 2 14z" />
-    <circle cx="12" cy="10" r="1.5" />
-  </svg>
-);
-
-const SafeAvatar = ({ url, name, role, className }) => {
-  const [imgError, setImgError] = React.useState(false);
-  
-  let cleanUrl = url || '';
-  if (cleanUrl.startsWith('[')) {
-    const match = cleanUrl.match(/\]\((.*?)\)/);
-    if (match && match[1]) cleanUrl = match[1];
-  }
-
-  const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
-  const iconIndex = name ? name.length % ICONS.length : 0;
-  const iconName = ICONS[iconIndex];
-
-  const renderIcon = () => {
-    if (String(role).includes('Admin')) return <CaptainHatIcon className={className} />;
-    if (iconName === 'Star') return <Star className={className} fill="currentColor" />;
-    if (iconName === 'Sun') return <Sun className={className} />;
-    if (iconName === 'Moon') return <Moon className={className} />;
-    if (iconName === 'TreePine') return <TreePine className={className} />;
-    if (iconName === 'Sailboat') return <Sailboat className={className} />;
-    if (iconName === 'Cloud') return <Cloud className={className} />;
-    if (iconName === 'Zap') return <Zap className={className} fill="currentColor" />;
-    return <User className={className} />;
-  };
-
-  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) return renderIcon();
-  return <img src={cleanUrl} alt={name || 'Avatar'} className={`h-full w-full object-cover bg-white ${className}`} onError={() => setImgError(true)} />;
-};
-
-export default function ClientProfileModal({ client, remainingBalance, onClose }) {
+export default function ClientProfileModal({ client, remainingBalance = 0, onClose }) {
   if (!client) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden relative max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[95vh] flex flex-col">
         
-        <div className="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-teal-700 text-white shrink-0">
-          <div className="flex items-center space-x-3">
-            <Heart className="h-6 w-6 text-teal-200 fill-current" />
-            <h3 className="text-xl font-bold tracking-wide">Client Care Plan</h3>
-          </div>
-          <button onClick={onClose} className="p-2 bg-teal-800/50 hover:bg-teal-800 rounded-full transition text-teal-100 hover:text-white">
-            <XCircle className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="p-6 overflow-y-auto bg-slate-50 flex-1">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-            <div className="h-24 w-24 rounded-full bg-teal-100 border-4 border-teal-50 flex items-center justify-center shadow-sm overflow-hidden text-teal-600">
-               <SafeAvatar url={client.photoUrl} name={client.name} role="" className="h-12 w-12" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-3xl font-extrabold text-slate-800 mb-3">{client.name}</h2>
-              <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  <Wallet className="h-3.5 w-3.5 mr-1.5" /> ${Number(remainingBalance || 0).toFixed(2)} Monthly Funds Left
-                </span>
-                {client.dateOfBirth && (
-                  <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                    <CalendarDays className="h-3.5 w-3.5 mr-1.5" /> DOB: {client.dateOfBirth}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-6">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-teal-500"></div>
-                <h4 className="text-sm font-bold text-teal-800 uppercase tracking-wider mb-4 flex items-center">
-                  <Info className="h-5 w-5 mr-2" /> Care Notes & Routine
-                </h4>
-                <p className="text-slate-700 leading-relaxed whitespace-pre-wrap text-sm">
-                  {client.notes || 'No specific care notes or routine instructions provided.'}
-                </p>
-              </div>
-
-              {(client.phone || client.address) && (
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Client Location & Contact</h4>
-                  <div className="space-y-4">
-                    {client.phone && (
-                      <div className="flex items-center text-sm text-slate-700">
-                        <div className="p-2 bg-slate-100 rounded-lg mr-3"><Phone className="h-4 w-4 text-slate-500" /></div>
-                        <span className="font-semibold text-lg">{client.phone}</span>
-                      </div>
-                    )}
-                    {client.address && (
-                      <div className="flex items-start text-sm text-slate-700">
-                        <div className="p-2 bg-slate-100 rounded-lg mr-3 mt-0.5"><MapPin className="h-4 w-4 text-slate-500" /></div>
-                        <span className="font-medium leading-relaxed">{client.address}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+        {/* Header */}
+        <div className="px-6 py-4 bg-gradient-to-r from-teal-700 to-teal-800 text-white flex justify-between items-center shrink-0">
+          <div className="flex items-center space-x-4">
+            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/30 overflow-hidden">
+              {client.photoUrl && !client.photoUrl.includes('dicebear') ? (
+                <img src={client.photoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" />
+              ) : (
+                <User className="h-6 w-6 text-white" />
               )}
             </div>
+            <div>
+              <h3 className="text-xl font-bold leading-tight">{client.name}</h3>
+              <div className="text-teal-100 text-sm flex items-center mt-0.5">
+                <MapPin className="h-3.5 w-3.5 mr-1" /> {client.address || 'No address on file'}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-teal-200 hover:text-white transition text-3xl leading-none">&times;</button>
+        </div>
 
-            <div className="space-y-6">
-              <div className="bg-red-50 p-6 rounded-xl border border-red-100 shadow-sm">
-                <h4 className="text-sm font-bold text-red-800 uppercase tracking-wider mb-4 flex items-center">
-                  <ShieldAlert className="h-5 w-5 mr-2" /> Emergency Contacts
+        <div className="overflow-y-auto p-6 flex-1 bg-slate-50/50">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* LEFT COLUMN: Health & Notes */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
+                  <HeartPulse className="h-5 w-5 mr-2 text-rose-500" /> Neighbour Notes & Care Plan
                 </h4>
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                    <span className="text-xs font-bold text-orange-800 uppercase tracking-wider mb-1 block">Dietary & Allergies</span>
+                    <p className="text-sm text-slate-700 font-medium">{client.dietary || 'None specified.'}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                    <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Mobility Needs</span>
+                    <p className="text-sm text-slate-700 font-medium">{client.mobility || 'Fully mobile.'}</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-100 md:col-span-2">
+                    <span className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-1 block">Hobbies, Interests & Triggers</span>
+                    <p className="text-sm text-slate-700 font-medium">{client.hobbies || 'None specified.'}</p>
+                  </div>
+                  {client.notes && (
+                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 md:col-span-2">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">General Care Notes</span>
+                      <p className="text-sm text-slate-700">{client.notes}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Budget & Contacts */}
+            <div className="space-y-6">
+              
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
+                  <Wallet className="h-5 w-5 mr-2 text-emerald-600" /> Authorized Budget
+                </h4>
+                <div className="mb-2">
+                  <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Funds Remaining This Month</div>
+                  <div className={`text-2xl font-black ${remainingBalance < 20 ? 'text-red-600' : 'text-emerald-600'}`}>${remainingBalance.toFixed(2)}</div>
+                </div>
+                <div className="text-xs text-slate-500 italic mt-3">This is the max limit authorized for Out-of-Pocket purchases and mileage logs.</div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
+                  <ShieldAlert className="h-5 w-5 mr-2 text-amber-500" /> Quick Contacts
+                </h4>
+                <div className="space-y-3">
+                  {/* Primary Contact */}
                   {client.emergencyContactName ? (
-                    <div className="bg-white p-4 rounded-lg border border-red-100 shadow-sm relative overflow-hidden">
-                      <div className="absolute left-0 top-0 w-1 h-full bg-red-500"></div>
-                      <div className="text-[10px] font-bold text-red-500 uppercase tracking-wider mb-1">Primary Contact</div>
-                      <div className="font-bold text-slate-800 text-base">{client.emergencyContactName}</div>
-                      <div className="text-xl font-black text-red-600 mt-1 flex items-center"><Phone className="h-5 w-5 mr-2" /> {client.emergencyContactPhone}</div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Primary Emergency</div>
+                      <div className="font-bold text-slate-800 text-sm mb-2">{client.emergencyContactName}</div>
+                      <a href={`tel:${client.emergencyContactPhone}`} className="w-full flex items-center justify-center bg-white border border-slate-300 hover:border-teal-400 hover:text-teal-700 text-slate-600 font-medium py-1.5 rounded transition text-xs shadow-sm">
+                        <Phone className="h-3 w-3 mr-1.5" /> {client.emergencyContactPhone || 'Call'}
+                      </a>
                     </div>
                   ) : (
-                    <div className="text-sm text-red-600 italic bg-white p-4 rounded-lg border border-red-100">No primary emergency contact listed.</div>
+                    <div className="text-sm text-slate-500 italic p-2 bg-slate-50 rounded">No primary emergency contact.</div>
                   )}
 
+                  {/* Secondary Contact */}
                   {client.secondaryEmergencyName && (
-                    <div className="bg-white p-4 rounded-lg border border-red-100 shadow-sm opacity-90 relative overflow-hidden">
-                      <div className="absolute left-0 top-0 w-1 h-full bg-red-300"></div>
-                      <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Secondary Contact</div>
-                      <div className="font-bold text-slate-800">{client.secondaryEmergencyName}</div>
-                      <div className="text-lg font-bold text-red-600 mt-1 flex items-center"><Phone className="h-4 w-4 mr-2" /> {client.secondaryEmergencyPhone}</div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Secondary Emergency</div>
+                      <div className="font-bold text-slate-800 text-sm mb-2">{client.secondaryEmergencyName}</div>
+                      <a href={`tel:${client.secondaryEmergencyPhone}`} className="w-full flex items-center justify-center bg-white border border-slate-300 hover:border-teal-400 hover:text-teal-700 text-slate-600 font-medium py-1.5 rounded transition text-xs shadow-sm">
+                        <Phone className="h-3 w-3 mr-1.5" /> {client.secondaryEmergencyPhone || 'Call'}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Billing Contact */}
+                  {client.accountHolderName && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Account / Billing</div>
+                      <div className="font-bold text-slate-800 text-sm mb-2">{client.accountHolderName}</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <a href={`tel:${client.accountHolderPhone}`} className="flex items-center justify-center bg-white border border-slate-300 hover:border-teal-400 hover:text-teal-700 text-slate-600 font-medium py-1.5 rounded transition text-xs shadow-sm">
+                          <Phone className="h-3 w-3 mr-1" /> Call
+                        </a>
+                        <a href={`mailto:${client.accountHolderEmail}`} className="flex items-center justify-center bg-white border border-slate-300 hover:border-teal-400 hover:text-teal-700 text-slate-600 font-medium py-1.5 rounded transition text-xs shadow-sm">
+                          <Mail className="h-3 w-3 mr-1" /> Email
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {client.accountHolderName && (
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                  <h4 className="text-sm font-bold text-indigo-800 uppercase tracking-wider mb-4 flex items-center">
-                    <User className="h-5 w-5 mr-2 text-indigo-500" /> Account Holder
-                  </h4>
-                  <div className="bg-indigo-50/50 p-4 rounded-lg border border-indigo-100 space-y-3">
-                    <div className="font-extrabold text-slate-800 text-base pb-2 border-b border-indigo-100/50">{client.accountHolderName}</div>
-                    {client.accountHolderPhone && <div className="flex items-center text-sm text-slate-700 font-medium"><Phone className="h-4 w-4 mr-2.5 text-indigo-400" /> {client.accountHolderPhone}</div>}
-                    {client.accountHolderEmail && <div className="flex items-center text-sm text-slate-700 font-medium"><Mail className="h-4 w-4 mr-2.5 text-indigo-400" /> {client.accountHolderEmail}</div>}
-                    {client.accountHolderAddress && <div className="flex items-start text-sm text-slate-700 font-medium mt-1"><MapPin className="h-4 w-4 mr-2.5 text-indigo-400 mt-0.5" /> <span className="leading-relaxed">{client.accountHolderAddress}</span></div>}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
-        </div>
-
-        <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end shrink-0">
-          <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-lg hover:bg-slate-200 transition shadow-sm">
-            Close Care Plan
-          </button>
         </div>
       </div>
     </div>

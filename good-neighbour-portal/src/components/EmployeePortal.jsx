@@ -875,11 +875,12 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                                   <span className="flex items-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full"><CheckCircle className="h-3.5 w-3.5 mr-1" /> Approved</span>
                                 ) : req.status === 'rejected' ? (
                                   <span className="flex items-center text-xs font-bold text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full"><XCircle className="h-3.5 w-3.5 mr-1" /> Denied</span>
+                                ) : req.status === 'cancelled' ? (
+                                  <span className="flex items-center text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-1 rounded-full"><Trash2 className="h-3.5 w-3.5 mr-1" /> Cancelled</span>
                                 ) : (
                                   <span className="flex items-center text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full"><Clock className="h-3.5 w-3.5 mr-1" /> Pending</span>
                                 )}
-                              </div>
-                            </div>
+                              </div>                            </div>
                           )
                         })
                       )}

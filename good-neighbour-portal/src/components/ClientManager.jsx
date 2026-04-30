@@ -11,13 +11,11 @@ const CaptainHatIcon = ({ className }) => (
 
 const SafeAvatar = ({ url, name, role, className }) => {
   const [imgError, setImgError] = React.useState(false);
-  
   let cleanUrl = url || '';
   if (cleanUrl.startsWith('[')) {
     const match = cleanUrl.match(/\]\((.*?)\)/);
     if (match && match[1]) cleanUrl = match[1];
   }
-
   const ICONS = ['Star', 'Sun', 'Moon', 'TreePine', 'Sailboat', 'Cloud', 'Zap'];
   const iconIndex = name ? name.length % ICONS.length : 0;
   const iconName = ICONS[iconIndex];
@@ -34,41 +32,198 @@ const SafeAvatar = ({ url, name, role, className }) => {
     return <User className={className} />;
   };
 
-  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) {
-    return renderIcon();
-  }
-
-  return (
-    <img 
-      src={cleanUrl} 
-      alt={name || 'Avatar'} 
-      className={`h-full w-full object-cover bg-white ${className}`} 
-      onError={() => setImgError(true)} 
-    />
-  );
+  if (!cleanUrl || imgError || cleanUrl.includes('dicebear.com')) return renderIcon();
+  return <img src={cleanUrl} alt={name || 'Avatar'} className={`h-full w-full object-cover bg-white ${className}`} onError={() => setImgError(true)} />;
 };
 
 // ==========================================
-// 1. EDIT CLIENT MODAL
+// 1. ADMIN CARE PLAN DASHBOARD MODAL
+// ==========================================
+function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpenses = [], expenses = [], onClose }) {
+  if (!client) return null;
+
+  // Budget Math
+  const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
+  const safeExpenses = Array.isArray(expenses) ? expenses : [];
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  
+  const oopSpentThisMonth = safeClientExpenses
+    .filter(e => e.clientId === client.id && e.status === 'approved' && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+  const mileageSpentThisMonth = safeExpenses
+    .filter(e => e.clientId === client.id && e.status === 'approved' && new Date(e.date).getMonth() === currentMonth && new Date(e.date).getFullYear() === currentYear)
+    .reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
+
+  const spentThisMonth = oopSpentThisMonth + mileageSpentThisMonth;
+  const allowance = Number(client.monthlyAllowance || 0);
+  const remaining = allowance - spentThisMonth;
+  const percentUsed = allowance > 0 ? Math.min((spentThisMonth / allowance) * 100, 100) : 0;
+
+  // Shift Math
+  const safeShifts = Array.isArray(shifts) ? shifts : [];
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+  const now = new Date();
+  
+  const clientShifts = safeShifts.filter(s => s.clientId === client.id).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const upcomingShifts = clientShifts.filter(s => new Date(`${s.date}T${s.endTime || '23:59'}`) >= now).slice(0, 3);
+  const pastShifts = clientShifts.filter(s => new Date(`${s.date}T${s.endTime || '23:59'}`) < now).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
+  const getEmpName = (id) => safeEmployees.find(e => e.id === id)?.name || 'Unassigned';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[95vh] flex flex-col">
+        <div className="px-6 py-4 bg-gradient-to-r from-teal-700 to-teal-800 text-white flex justify-between items-center shrink-0">
+          <div className="flex items-center space-x-4">
+            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center border-2 border-white/30 overflow-hidden">
+              <SafeAvatar url={client.photoUrl} name={client.name} role="" className="h-6 w-6 text-white"/>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold leading-tight">{client.name}</h3>
+              <div className="text-teal-100 text-sm flex items-center mt-0.5">
+                <MapPin className="h-3.5 w-3.5 mr-1" /> {client.address || 'No address on file'}
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-teal-200 hover:text-white transition text-3xl leading-none">&times;</button>
+        </div>
+
+        <div className="overflow-y-auto p-6 flex-1 bg-slate-50/50">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
+                  <HeartPulse className="h-5 w-5 mr-2 text-rose-500" /> Neighbour Notes & Care Plan
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                    <span className="text-xs font-bold text-orange-800 uppercase tracking-wider mb-1 block">Dietary & Allergies</span>
+                    <p className="text-sm text-slate-700 font-medium">{client.dietary || 'None specified.'}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                    <span className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-1 block">Mobility Needs</span>
+                    <p className="text-sm text-slate-700 font-medium">{client.mobility || 'Fully mobile.'}</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-100 md:col-span-2">
+                    <span className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-1 block">Hobbies, Interests & Triggers</span>
+                    <p className="text-sm text-slate-700 font-medium">{client.hobbies || 'None specified.'}</p>
+                  </div>
+                  {client.notes && (
+                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 md:col-span-2">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">General Care Notes</span>
+                      <p className="text-sm text-slate-700">{client.notes}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
+                  <CalendarDays className="h-5 w-5 mr-2 text-teal-600" /> Visit History
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Upcoming Visits</h5>
+                    <div className="space-y-2">
+                      {upcomingShifts.length === 0 ? <p className="text-sm text-slate-500 italic">No upcoming visits scheduled.</p> : upcomingShifts.map(s => (
+                        <div key={s.id} className="flex items-center justify-between bg-teal-50 border border-teal-100 p-2.5 rounded-lg">
+                          <div>
+                            <div className="text-sm font-bold text-teal-900">{new Date(s.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                            <div className="text-xs text-teal-700">{s.startTime} - {s.endTime}</div>
+                          </div>
+                          <div className="text-xs font-semibold bg-white px-2 py-1 rounded shadow-sm text-slate-600">{getEmpName(s.employeeId)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Recent Past</h5>
+                    <div className="space-y-2">
+                      {pastShifts.length === 0 ? <p className="text-sm text-slate-500 italic">No past visits logged.</p> : pastShifts.map(s => (
+                        <div key={s.id} className="flex items-center justify-between bg-slate-50 border border-slate-200 p-2.5 rounded-lg opacity-80">
+                          <div><div className="text-sm font-bold text-slate-700">{new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div></div>
+                          <div className="text-xs font-semibold text-slate-500">{getEmpName(s.employeeId)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
+                  <PieChart className="h-5 w-5 mr-2 text-emerald-600" /> Expense Budget
+                </h4>
+                <div className="mb-2 flex justify-between items-end">
+                  <div>
+                    <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Remaining (This Month)</div>
+                    <div className={`text-2xl font-black ${remaining < 20 ? 'text-red-600' : 'text-emerald-600'}`}>${remaining.toFixed(2)}</div>
+                  </div>
+                  <div className="text-xs text-slate-400 text-right mb-1">of ${allowance.toFixed(2)}</div>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-2.5 mb-1 overflow-hidden">
+                  <div className={`h-2.5 rounded-full ${percentUsed > 90 ? 'bg-red-500' : percentUsed > 75 ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${percentUsed}%` }}></div>
+                </div>
+                <div className="text-right text-[10px] font-semibold text-slate-400">{percentUsed.toFixed(0)}% Utilized</div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
+                  <ShieldAlert className="h-5 w-5 mr-2 text-amber-500" /> Quick Contacts
+                </h4>
+                <div className="space-y-3">
+                  {client.emergencyContactName ? (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Primary Emergency</div>
+                      <div className="font-bold text-slate-800 text-sm mb-2">{client.emergencyContactName}</div>
+                      <a href={`tel:${client.emergencyContactPhone}`} className="w-full flex items-center justify-center bg-white border border-slate-300 hover:border-teal-400 hover:text-teal-700 text-slate-600 font-medium py-1.5 rounded transition text-xs shadow-sm"><Phone className="h-3 w-3 mr-1.5" /> {client.emergencyContactPhone || 'Call'}</a>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-slate-500 italic p-2 bg-slate-50 rounded">No primary emergency contact.</div>
+                  )}
+
+                  {client.secondaryEmergencyName && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Secondary Emergency</div>
+                      <div className="font-bold text-slate-800 text-sm mb-2">{client.secondaryEmergencyName}</div>
+                      <a href={`tel:${client.secondaryEmergencyPhone}`} className="w-full flex items-center justify-center bg-white border border-slate-300 hover:border-teal-400 hover:text-teal-700 text-slate-600 font-medium py-1.5 rounded transition text-xs shadow-sm"><Phone className="h-3 w-3 mr-1.5" /> {client.secondaryEmergencyPhone || 'Call'}</a>
+                    </div>
+                  )}
+
+                  {client.accountHolderName && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Account / Billing</div>
+                      <div className="font-bold text-slate-800 text-sm mb-2">{client.accountHolderName}</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <a href={`tel:${client.accountHolderPhone}`} className="flex items-center justify-center bg-white border border-slate-300 hover:border-teal-400 hover:text-teal-700 text-slate-600 font-medium py-1.5 rounded transition text-xs shadow-sm"><Phone className="h-3 w-3 mr-1" /> Call</a>
+                        <a href={`mailto:${client.accountHolderEmail}`} className="flex items-center justify-center bg-white border border-slate-300 hover:border-teal-400 hover:text-teal-700 text-slate-600 font-medium py-1.5 rounded transition text-xs shadow-sm"><Mail className="h-3 w-3 mr-1" /> Email</a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 2. EDIT CLIENT MODAL
 // ==========================================
 function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
   const [formData, setFormData] = useState({
-    name: client.name || '',
-    dateOfBirth: client.dateOfBirth || '',
-    phone: client.phone || '',
-    address: client.address || '',
-    notes: client.notes || '',
-    dietary: client.dietary || '',
-    mobility: client.mobility || '',
-    hobbies: client.hobbies || '',
-    emergencyContactName: client.emergencyContactName || '',
-    emergencyContactPhone: client.emergencyContactPhone || '',
-    secondaryEmergencyName: client.secondaryEmergencyName || '',
-    secondaryEmergencyPhone: client.secondaryEmergencyPhone || '',
-    accountHolderName: client.accountHolderName || '',
-    accountHolderAddress: client.accountHolderAddress || '',
-    accountHolderPhone: client.accountHolderPhone || '',
-    accountHolderEmail: client.accountHolderEmail || '',
+    name: client.name || '', dateOfBirth: client.dateOfBirth || '', phone: client.phone || '', address: client.address || '',
+    notes: client.notes || '', dietary: client.dietary || '', mobility: client.mobility || '', hobbies: client.hobbies || '',
+    emergencyContactName: client.emergencyContactName || '', emergencyContactPhone: client.emergencyContactPhone || '',
+    secondaryEmergencyName: client.secondaryEmergencyName || '', secondaryEmergencyPhone: client.secondaryEmergencyPhone || '',
+    accountHolderName: client.accountHolderName || '', accountHolderAddress: client.accountHolderAddress || '',
+    accountHolderPhone: client.accountHolderPhone || '', accountHolderEmail: client.accountHolderEmail || '',
     monthlyAllowance: client.monthlyAllowance?.toString() || '0'
   });
   
@@ -78,19 +233,14 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
   const [isDocUploading, setIsDocUploading] = useState(false);
 
   const clientUploads = client.uploadedFiles || [];
-
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name.trim()) return;
-    
     setIsUploading(true);
     const updatedData = { ...formData, monthlyAllowance: Number(formData.monthlyAllowance) || 0 };
-
-    if (onSave) {
-      await onSave(client.id, updatedData, photoFile);
-    }
+    if (onSave) await onSave(client.id, updatedData, photoFile);
     setIsUploading(false);
   };
 
@@ -118,105 +268,50 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
 
         <div className="overflow-y-auto p-6 bg-slate-50/50">
           <form id="edit-client-form" onSubmit={handleSubmit} className={activeTab === 'profile' ? 'space-y-6' : 'hidden'}>
-            
-            {/* Core Details */}
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Client Details</h4>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label>
-                <input type="text" disabled={isUploading} value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500" required />
-              </div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Full Name *</label><input type="text" disabled={isUploading} value={formData.name} onChange={(e) => handleChange('name', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500" required /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label>
-                  <input type="date" disabled={isUploading} value={formData.dateOfBirth} onChange={(e) => handleChange('dateOfBirth', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
-                  <input type="text" disabled={isUploading} value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" />
-                </div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth</label><input type="date" disabled={isUploading} value={formData.dateOfBirth} onChange={(e) => handleChange('dateOfBirth', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label><input type="text" disabled={isUploading} value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Client Home Address</label>
-                <input type="text" disabled={isUploading} value={formData.address} onChange={(e) => handleChange('address', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" />
-              </div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Client Home Address</label><input type="text" disabled={isUploading} value={formData.address} onChange={(e) => handleChange('address', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
             </div>
 
-            {/* Care Notes */}
             <div className="space-y-4 pt-2">
               <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Neighbour Notes & Care Plan</h4>
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Dietary Restrictions & Allergies</label>
-                  <input type="text" disabled={isUploading} value={formData.dietary} onChange={(e) => handleChange('dietary', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. Gluten free, no nuts" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Mobility Notes</label>
-                  <input type="text" disabled={isUploading} value={formData.mobility} onChange={(e) => handleChange('mobility', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. Uses a walker" />
-                </div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Dietary Restrictions & Allergies</label><input type="text" disabled={isUploading} value={formData.dietary} onChange={(e) => handleChange('dietary', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. Gluten free, no nuts" /></div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Mobility Notes</label><input type="text" disabled={isUploading} value={formData.mobility} onChange={(e) => handleChange('mobility', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. Uses a walker" /></div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Hobbies & Triggers</label>
-                <input type="text" disabled={isUploading} value={formData.hobbies} onChange={(e) => handleChange('hobbies', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. Loves gardening." />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">General Care Plan</label>
-                <textarea disabled={isUploading} value={formData.notes} onChange={(e) => handleChange('notes', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" rows="3" />
-              </div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">Hobbies & Triggers</label><input type="text" disabled={isUploading} value={formData.hobbies} onChange={(e) => handleChange('hobbies', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="e.g. Loves gardening." /></div>
+              <div><label className="block text-sm font-medium text-slate-700 mb-1">General Care Notes</label><textarea disabled={isUploading} value={formData.notes} onChange={(e) => handleChange('notes', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" rows="3" /></div>
             </div>
 
-            {/* Billing */}
             <div className="space-y-4 pt-2">
               <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Account Holder & Billing</h4>
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Account Holder Full Name</label>
-                  <input type="text" disabled={isUploading} value={formData.accountHolderName} onChange={(e) => handleChange('accountHolderName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Expense Allowance ($) *</label>
-                  <input type="number" disabled={isUploading} min="0" value={formData.monthlyAllowance} onChange={(e) => handleChange('monthlyAllowance', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
-                </div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Account Holder Full Name</label><input type="text" disabled={isUploading} value={formData.accountHolderName} onChange={(e) => handleChange('accountHolderName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Monthly Expense Allowance ($) *</label><input type="number" disabled={isUploading} min="0" value={formData.monthlyAllowance} onChange={(e) => handleChange('monthlyAllowance', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Account Phone</label>
-                  <input type="text" disabled={isUploading} value={formData.accountHolderPhone} onChange={(e) => handleChange('accountHolderPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Account Email</label>
-                  <input type="email" disabled={isUploading} value={formData.accountHolderEmail} onChange={(e) => handleChange('accountHolderEmail', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" />
-                </div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Account Phone</label><input type="text" disabled={isUploading} value={formData.accountHolderPhone} onChange={(e) => handleChange('accountHolderPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Account Email</label><input type="email" disabled={isUploading} value={formData.accountHolderEmail} onChange={(e) => handleChange('accountHolderEmail', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
               </div>
             </div>
 
-            {/* Emergency Contacts - FIXED */}
             <div className="space-y-4 pt-2">
               <h4 className="text-sm font-semibold text-slate-800 border-b pb-2">Emergency Contacts</h4>
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Primary Emergency Contact</label>
-                  <input type="text" disabled={isUploading} value={formData.emergencyContactName} onChange={(e) => handleChange('emergencyContactName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="Name (e.g. Son)" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Primary Phone</label>
-                  <input type="text" disabled={isUploading} value={formData.emergencyContactPhone} onChange={(e) => handleChange('emergencyContactPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="555-0000" />
-                </div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Primary Emergency Contact</label><input type="text" disabled={isUploading} value={formData.emergencyContactName} onChange={(e) => handleChange('emergencyContactName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="Name (e.g. Son)" /></div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Primary Phone</label><input type="text" disabled={isUploading} value={formData.emergencyContactPhone} onChange={(e) => handleChange('emergencyContactPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="555-0000" /></div>
               </div>
-              
               <div className="grid grid-cols-2 gap-3 mt-3">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Contact (Optional)</label>
-                  <input type="text" disabled={isUploading} value={formData.secondaryEmergencyName} onChange={(e) => handleChange('secondaryEmergencyName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="Name" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Phone</label>
-                  <input type="text" disabled={isUploading} value={formData.secondaryEmergencyPhone} onChange={(e) => handleChange('secondaryEmergencyPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="555-0000" />
-                </div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Secondary Contact (Optional)</label><input type="text" disabled={isUploading} value={formData.secondaryEmergencyName} onChange={(e) => handleChange('secondaryEmergencyName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="Name" /></div>
+                <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Secondary Phone</label><input type="text" disabled={isUploading} value={formData.secondaryEmergencyPhone} onChange={(e) => handleChange('secondaryEmergencyPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="555-0000" /></div>
               </div>
             </div>
 
-            {/* Photo Upload */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Update Photo</label>
               <div className={`mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md transition ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer bg-white'}`} onClick={() => !isUploading && document.getElementById('edit-client-photo-upload').click()}>
@@ -233,14 +328,12 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
             </div>
           </form>
 
-          {/* DOCUMENT UPLOADS TAB */}
           <div className={activeTab === 'uploads' ? 'block' : 'hidden'}>
             <div className="bg-white border border-slate-200 rounded-lg p-6">
               <h4 className="text-sm font-semibold text-slate-800 mb-4 flex items-center">
                 <FileText className="h-5 w-5 mr-2 text-teal-600"/> 
                 Forms & Documents for {client.name}
               </h4>
-              
               <div className="mb-6">
                 <div className="flex items-center justify-center w-full">
                   <label className={`flex flex-col items-center justify-center w-full h-24 border-2 border-slate-300 border-dashed rounded-lg bg-slate-50 transition ${isDocUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
@@ -275,7 +368,6 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
               )}
             </div>
           </div>
-
         </div>
 
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3 shrink-0">
@@ -302,6 +394,7 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
   
   const [newPhotoFile, setNewPhotoFile] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
+  const [viewingClient, setViewingClient] = useState(null); // RESTORED!
   const [searchTerm, setSearchTerm] = useState('');
 
   const safeClients = Array.isArray(clients) ? clients : [];
@@ -318,7 +411,6 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : '', 
       monthlyAllowance: Number(formData.monthlyAllowance) || 0
     };
-    
     if (onAddClient) onAddClient(newClient);
 
     setFormData({
@@ -384,6 +476,16 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
                 {client.address && <div className="flex items-start"><MapPin className="h-4 w-4 mr-2 text-slate-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{client.address}</span></div>}
               </div>
               
+              {/* RESTORED CARE PLAN BUTTON! */}
+              <div className="mt-auto border-t border-slate-100 pt-4">
+                <button 
+                  onClick={() => setViewingClient(client)}
+                  className="w-full flex items-center justify-center bg-teal-50 hover:bg-teal-100 text-teal-700 font-semibold py-2 rounded-lg transition border border-teal-200 text-sm"
+                >
+                  <HeartPulse className="h-4 w-4 mr-2" /> View Care Plan Hub
+                </button>
+              </div>
+
             </div>
           ))}
           {filteredClients.length === 0 && (
@@ -451,7 +553,6 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
                 <input type="text" value={formData.emergencyContactPhone} onChange={(e) => handleChange('emergencyContactPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" placeholder="555-0000" />
               </div>
             </div>
-            {/* Added secondary contacts to the Add Client form too */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div className="col-span-2 sm:col-span-1">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Secondary Contact</label>
@@ -486,6 +587,9 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       </div>
 
       {editingClient && <EditClientModal client={editingClient} onClose={() => setEditingClient(null)} onSave={async (id, data, file) => { if (updateClient) await updateClient(id, data, file); setEditingClient(null); }} onClientFileUpload={onClientFileUpload} />}
+      
+      {/* RESTORED! */}
+      {viewingClient && <ClientCarePlanModal client={viewingClient} shifts={shifts} employees={employees} clientExpenses={clientExpenses} expenses={expenses} onClose={() => setViewingClient(null)} />}
     </div>
   );
 }

@@ -23,6 +23,7 @@ import SettingsManager from './components/SettingsManager';
 import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal';
+import AdminDesk from './components/AdminDesk'; // NEW: Import the Desk
 
 // --- PHOTO CLEANER ---
 const getValidPhoto = (url) => {
@@ -50,9 +51,6 @@ try {
   console.error("Firebase init error:", e);
 }
 
-// ==========================================
-// HELPERS
-// ==========================================
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
   try {
@@ -64,12 +62,9 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-// ==========================================
-// INLINE MODALS
-// ==========================================
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], onSave }) {
-  const safeEmps = Array.isArray(employees) ? employees.filter(Boolean) : [];
-  const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
+  const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false) : [];
+  const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
   const [employeeId, setEmployeeId] = useState(safeEmps[0]?.id || '');
   const [clientId, setClientId] = useState(safeClients[0]?.id || '');
   const [startTime, setStartTime] = useState('09:00');
@@ -150,9 +145,6 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   );
 }
 
-// ==========================================
-// ADMIN DASHBOARD ORCHESTRATOR
-// ==========================================
 function AdminDashboard({ 
   shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, 
   expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], 
@@ -161,16 +153,27 @@ function AdminDashboard({
   payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
   onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, 
   onRemoveEmployee, onAddClient, onRemoveClient, onApproveTimeOff, onRejectTimeOff, onClientFileUpload,
-  onAddClientExpense, onEmployeeFileUpload
+  onAddClientExpense, onEmployeeFileUpload, notes = [], businessExpenses = [], onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense // NEW PROPS
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
-  const [activeAdminTab, setActiveAdminTab] = useState('schedule');
+  const [activeAdminTab, setActiveAdminTab] = useState('desk'); // Default to the new Desk tab
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [calendarView, setCalendarView] = useState('month'); 
 
-  // Intelligent Navigation based on current view
+  // Master Admin Check
+  const isMasterAdmin = currentUser.role === 'Master Admin' || currentUser.id === 'admin1';
+
+  // Desktop Notifications Check
+  const urgentNotes = notes.filter(n => {
+    if (n.authorId !== currentUser.id || !n.reminderDate) return false;
+    const reminder = parseLocalSafe(n.reminderDate);
+    const today = new Date();
+    return reminder.getDate() === today.getDate() && reminder.getMonth() === today.getMonth() && reminder.getFullYear() === today.getFullYear();
+  });
+  const hasUrgentDeskItem = urgentNotes.length > 0;
+
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
     if (calendarView === 'month') newDate.setMonth(newDate.getMonth() - 1);
@@ -201,18 +204,16 @@ function AdminDashboard({
     setIsModalOpen(true);
   };
 
-  // Calendar Math
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate() || 30;
   const firstDayOfMonth = new Date(year, month, 1).getDay() || 0; 
   
   const startOfWeek = new Date(currentDate);
-  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay()); // Anchor to Sunday
+  startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6); // Saturday
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
   
-  // Headers
   const formatMonthYear = (date) => date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const formatFullDate = (date) => date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   let displayHeader = '';
@@ -220,7 +221,6 @@ function AdminDashboard({
   if (calendarView === 'week') displayHeader = `${startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   if (calendarView === 'day') displayHeader = formatFullDate(currentDate);
 
-  // Arrays
   const monthDaysArray = Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1));
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
   const weekDaysArray = Array.from({ length: 7 }, (_, i) => {
@@ -236,14 +236,11 @@ function AdminDashboard({
   const filteredShifts = safeShifts.filter(s => {
     if (!s) return false;
     if (!scheduleSearch.trim()) return true;
-    
     const emp = safeEmployees.find(e => e && e.id === s.employeeId);
     const client = safeClients.find(c => c && c.id === s.clientId);
     const searchLower = scheduleSearch.toLowerCase();
-    
     const empMatch = emp && emp.name && String(emp.name).toLowerCase().includes(searchLower);
     const clientMatch = client && client.name && String(client.name).toLowerCase().includes(searchLower);
-    
     return empMatch || clientMatch;
   });
 
@@ -270,12 +267,10 @@ function AdminDashboard({
     const dayTimeOff = safeTimeOffLogs.filter(log => {
       if (log.status !== 'approved') return false;
       if (!log.startDate || !log.endDate) return false;
-      
       const start = parseLocalSafe(log.startDate);
       const end = parseLocalSafe(log.endDate);
       const sTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
       const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
-      
       return cellTime >= sTime && cellTime <= eTime;
     });
     
@@ -288,7 +283,6 @@ function AdminDashboard({
             {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
           </div>
         </div>
-        
         <div className="space-y-1">
           {dayTimeOff.map(log => {
             const emp = safeEmployees.find(e => e.id === log.employeeId);
@@ -309,7 +303,6 @@ function AdminDashboard({
             const isOpen = shift.employeeId === 'unassigned';
             const emp = isOpen ? null : safeEmployees.find(e => e && e.id === shift.employeeId);
             const client = safeClients.find(c => c && c.id === shift.clientId);
-            
             const empNameDisplay = isOpen ? '🚨 OPEN SHIFT' : String(emp?.name || 'Unknown').split(' ')[0];
             const clientNameDisplay = String(client?.name || 'Unknown Client').split(' ')[0];
             
@@ -318,7 +311,6 @@ function AdminDashboard({
                 <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{empNameDisplay}</div>
                 <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{clientNameDisplay}</span></div>
                 <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
-                
                 <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
                   {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
                   <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
@@ -333,6 +325,7 @@ function AdminDashboard({
 
   const renderAdminTab = () => {
     switch (activeAdminTab) {
+      case 'desk': return <AdminDesk notes={notes} businessExpenses={businessExpenses} currentUser={currentUser} onAddNote={onAddNote} onRemoveNote={onRemoveNote} onUpdateNote={onUpdateNote} onAddBusinessExpense={onAddBusinessExpense} onRemoveBusinessExpense={onRemoveBusinessExpense} employees={employees} />;
       case 'employees': return <EmployeeManager employees={safeEmployees} shifts={safeShifts} payPeriodStart={payPeriodStart} onEmployeeFileUpload={onEmployeeFileUpload} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} onAddClientExpense={onAddClientExpense} />;      
@@ -354,9 +347,7 @@ function AdminDashboard({
                 <input type="text" placeholder="Search employee or client..." value={scheduleSearch} onChange={(e) => setScheduleSearch(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition" />
               </div>
             </div>
-            {scheduleSearch.trim() !== '' && (
-              <div className="text-xs text-teal-700 font-semibold bg-teal-50 px-3 py-1.5 rounded-full border border-teal-100 whitespace-nowrap">Filtered View Active</div>
-            )}
+            {scheduleSearch.trim() !== '' && <div className="text-xs text-teal-700 font-semibold bg-teal-50 px-3 py-1.5 rounded-full border border-teal-100 whitespace-nowrap">Filtered View Active</div>}
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -374,7 +365,6 @@ function AdminDashboard({
                   <button onClick={() => setCalendarView('week')} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${calendarView === 'week' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Week</button>
                   <button onClick={() => setCalendarView('month')} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${calendarView === 'month' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Month</button>
                 </div>
-
                 <div className="flex space-x-2 w-full sm:w-auto justify-end">
                   <button onClick={jumpToToday} className="px-3 py-1.5 rounded bg-white border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition shadow-sm">Today</button>
                   <button onClick={navigatePrev} className="p-1.5 rounded bg-white border border-slate-300 hover:bg-slate-50 transition shadow-sm"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
@@ -383,13 +373,10 @@ function AdminDashboard({
               </div>
             </div>
 
-            {/* MONTH VIEW */}
             {calendarView === 'month' && (
               <>
                 <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                    <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
-                  ))}
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (<div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>))}
                 </div>
                 <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
                   {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[120px] opacity-50 p-2"></div>))}
@@ -398,14 +385,11 @@ function AdminDashboard({
               </>
             )}
 
-            {/* WEEK VIEW */}
             {calendarView === 'week' && (
               <>
                 <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => (
-                    <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      {day} {weekDaysArray[idx].getDate()}
-                    </div>
+                    <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day} {weekDaysArray[idx].getDate()}</div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
@@ -414,7 +398,6 @@ function AdminDashboard({
               </>
             )}
 
-            {/* DAY VIEW */}
             {calendarView === 'day' && (
               <div className="p-6 bg-slate-50 min-h-[400px]">
                 {dayViewShifts.length === 0 ? (
@@ -429,7 +412,6 @@ function AdminDashboard({
                       const isOpen = shift.employeeId === 'unassigned';
                       const emp = isOpen ? null : safeEmployees.find(e => e.id === shift.employeeId);
                       const client = safeClients.find(c => c.id === shift.clientId);
-                      
                       return (
                         <div key={shift.id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:border-teal-300 hover:shadow-md transition gap-4">
                           <div className="flex items-center gap-5 w-full sm:w-auto">
@@ -447,14 +429,8 @@ function AdminDashboard({
                             </div>
                           </div>
                           <div className="flex flex-row sm:flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                            {!isOpen && (
-                              <button onClick={() => onMarkShiftOpen(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-md hover:bg-amber-100 transition font-medium flex items-center justify-center">
-                                <UserMinus className="h-4 w-4 mr-1.5 shrink-0" /> Mark Open
-                              </button>
-                            )}
-                            <button onClick={() => onRemoveShift(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-100 transition font-medium flex items-center justify-center">
-                              <Trash2 className="h-4 w-4 mr-1.5 shrink-0"/> Delete Shift
-                            </button>
+                            {!isOpen && (<button onClick={() => onMarkShiftOpen(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-md hover:bg-amber-100 transition font-medium flex items-center justify-center"><UserMinus className="h-4 w-4 mr-1.5 shrink-0" /> Mark Open</button>)}
+                            <button onClick={() => onRemoveShift(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-100 transition font-medium flex items-center justify-center"><Trash2 className="h-4 w-4 mr-1.5 shrink-0"/> Delete Shift</button>
                           </div>
                         </div>
                       )
@@ -468,6 +444,24 @@ function AdminDashboard({
       );
     }
   };
+
+  const tabs = [
+    {id: 'desk', icon: Coffee, label: 'The Desk'}, 
+    {id: 'schedule', icon: CalendarIcon, label: 'Schedule'}, 
+    {id: 'employees', icon: Users, label: 'Employees'}, 
+    {id: 'clients', icon: Heart, label: 'Clients'}, 
+    {id: 'client-funds', icon: Wallet, label: 'Client Funds'}, 
+    {id: 'expenses', icon: Receipt, label: 'Reimbursements'}, 
+    {id: 'earnings', icon: Coins, label: 'Earnings'}, 
+    {id: 'timeoff', icon: CalendarDays, label: 'Time Off'}, 
+    {id: 'paystubs', icon: FileText, label: 'Paystubs'}, 
+    {id: 'documents', icon: BookOpen, label: 'Documents'}, 
+    {id: 'announcements', icon: MessageSquare, label: 'Announcements'}
+  ];
+
+  if (isMasterAdmin) {
+    tabs.push({id: 'settings', icon: Settings, label: 'Settings'});
+  }
 
   return (
     <div className="space-y-6">
@@ -484,21 +478,10 @@ function AdminDashboard({
       </div>
 
       <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide pb-2">
-        {[ 
-          {id: 'schedule', icon: CalendarIcon, label: 'Schedule'}, 
-          {id: 'employees', icon: Users, label: 'Employees'}, 
-          {id: 'clients', icon: Heart, label: 'Clients'}, 
-          {id: 'client-funds', icon: Wallet, label: 'Client Funds'}, 
-          {id: 'expenses', icon: Receipt, label: 'Reimbursements'}, 
-          {id: 'earnings', icon: Coins, label: 'Earnings'}, 
-          {id: 'timeoff', icon: CalendarDays, label: 'Time Off'}, 
-          {id: 'paystubs', icon: FileText, label: 'Paystubs'}, 
-          {id: 'documents', icon: BookOpen, label: 'Documents'}, 
-          {id: 'announcements', icon: MessageSquare, label: 'Announcements'}, 
-          {id: 'settings', icon: Settings, label: 'Settings'}
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
+        {tabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
+            {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
           </button>
         ))}
       </div>
@@ -512,9 +495,6 @@ function AdminDashboard({
   );
 }
 
-// ==========================================
-// MAIN APP ENTRY POINT
-// ==========================================
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [firebaseUser, setFirebaseUser] = useState(null);
@@ -533,6 +513,10 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [documents, setDocuments] = useState([]);
   
+  // --- NEW DATABASES FOR THE DESK ---
+  const [notes, setNotes] = useState([]);
+  const [businessExpenses, setBusinessExpenses] = useState([]);
+
   // Settings State
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
   const [isBonusActive, setIsBonusActive] = useState(false);
@@ -551,7 +535,6 @@ export default function App() {
       } catch (error) { console.error('Firebase Auth Error:', error); }
     };
     initAuth();
-
     const unsubscribe = onAuthStateChanged(auth, user => { setFirebaseUser(user); });
     return () => unsubscribe();
   }, []);
@@ -574,6 +557,10 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_documents'), snap => setDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
+    // NEW DESK LISTENERS
+    unsubs.push(onSnapshot(getCol('gn_notes'), snap => setNotes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_businessExpenses'), snap => setBusinessExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+
     unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
       if (snap.exists()) {
         const data = snap.data();
@@ -655,19 +642,15 @@ export default function App() {
 
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
-    
-    // Update local state immediately for UI responsiveness
     if (field === 'payPeriodStart') setPayPeriodStart(value);
     if (field === 'isBonusActive') setIsBonusActive(value);
     if (field === 'bonusAmounts') setBonusSettings(value);
     
-    // Save to Firebase
     const payload = { 
       payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, 
       isBonusActive: field === 'isBonusActive' ? value : isBonusActive, 
       bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings
     };
-    
     await setDoc(getDocRef('gn_settings', 'global'), payload, { merge: true });
   };
 
@@ -700,21 +683,10 @@ export default function App() {
     return (client.monthlyAllowance || 0) - spentThisMonth - mileageThisMonth;
   };
 
-  // --- AUTOMATED TIME OFF APPROVAL PIPELINE ---
   const handleApproveTimeOff = (request) => {
-    // 1. Mark request as approved
     runMutation('gn_timeOffLogs', request.id, 'update', { status: 'approved' });
-
-    // 2. Clear employee from shifts on those dates
-    const shiftMatches = shifts.filter(s => 
-      s.employeeId === request.employeeId && 
-      s.date >= request.startDate && 
-      s.date <= request.endDate
-    );
-    
-    shiftMatches.forEach(shift => {
-      runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' });
-    });
+    const shiftMatches = shifts.filter(s => s.employeeId === request.employeeId && s.date >= request.startDate && s.date <= request.endDate);
+    shiftMatches.forEach(shift => { runMutation('gn_shifts', shift.id, 'update', { employeeId: 'unassigned' }); });
   };
 
   const handleRejectTimeOff = (requestId) => {
@@ -725,7 +697,6 @@ export default function App() {
 
   const isAdmin = String(currentUser.role).includes('Admin');
   const showAdminView = isAdmin && viewMode === 'admin';
-
   const finalPhotoUrl = getValidPhoto(currentUser.photoUrl);
 
   return (
@@ -759,28 +730,19 @@ export default function App() {
               runMutation('gn_employees', d.id, 'set', { ...d, photoUrl: url });
               }} 
             updateEmployee={async (id, d, file, certFiles = {}) => {
-              // 1. Handle the Profile Picture
               const existingEmp = employees.find(e => e.id === id);
               let url = d.photoUrl || existingEmp?.photoUrl || '';
-              
               if (file) {
                 const newUrl = await handleFileUpload(file, 'avatars');
                 if (newUrl) url = newUrl;
               }
-
-              // 2. Handle the Compliance Certificates
               const updatedReqs = { ...(d.requirements || existingEmp?.requirements || {}) };
-              
               for (const [reqKey, certFile] of Object.entries(certFiles)) {
                 if (certFile) {
                   const certUrl = await handleFileUpload(certFile, 'certificates');
-                  if (certUrl) {
-                    updatedReqs[reqKey] = { ...updatedReqs[reqKey], fileUrl: certUrl };
-                  }
+                  if (certUrl) updatedReqs[reqKey] = { ...updatedReqs[reqKey], fileUrl: certUrl };
                 }
               }
-
-              // 3. Save everything to the database
               runMutation('gn_employees', id, 'update', { ...d, photoUrl: url, requirements: updatedReqs });
             }}            
             clients={clients} 
@@ -793,6 +755,15 @@ export default function App() {
                 const newUrl = await handleFileUpload(file, 'avatars');
                 if (newUrl) url = newUrl;
               }
+              
+              // --- AUTO CLEAR SHIFTS ON DEACTIVATION ---
+              if (d.isActive === false && existingClient?.isActive !== false) {
+                 const now = new Date();
+                 const upcoming = shifts.filter(s => s.clientId === id && new Date(`${s.date}T${s.endTime || '23:59'}`) >= now);
+                 for (const s of upcoming) {
+                     await runMutation('gn_shifts', s.id, 'delete');
+                 }
+              }
               runMutation('gn_clients', id, 'update', { ...d, photoUrl: url });
             }} 
             onClientFileUpload={async (clientId, file) => {
@@ -804,8 +775,6 @@ export default function App() {
               const newFileRecord = { name: file.name, url: url, date: new Date().toISOString() };
               runMutation('gn_clients', clientId, 'update', { uploadedFiles: [...currentUploads, newFileRecord] });
             }}
-            
-            // --- NEW: PASSED DOWN FOR SECURE ADMIN-TO-EMPLOYEE DOCUMENTS ---
             onEmployeeFileUpload={async (employeeId, file) => {
               if (!file) return;
               const url = await handleFileUpload(file, 'documents');
@@ -815,7 +784,6 @@ export default function App() {
               const newFileRecord = { name: file.name, url: url, date: new Date().toISOString() };
               runMutation('gn_employees', employeeId, 'update', { uploadedFiles: [...currentUploads, newFileRecord] });
             }}
-
             expenses={expenses} 
             onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} 
             clientExpenses={clientExpenses} 
@@ -865,6 +833,19 @@ export default function App() {
             onMarkShiftOpen={(id) => runMutation('gn_shifts', id, 'update', { employeeId: 'unassigned' })}
             onApproveTimeOff={handleApproveTimeOff}
             onRejectTimeOff={handleRejectTimeOff}
+
+            // --- DESK PROPS ---
+            notes={notes}
+            businessExpenses={businessExpenses}
+            onAddNote={(data) => runMutation('gn_notes', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })}
+            onUpdateNote={(id, data) => runMutation('gn_notes', id, 'update', data)}
+            onRemoveNote={(id) => runMutation('gn_notes', id, 'delete')}
+            onAddBusinessExpense={async (d, file) => {
+              let url = d.receiptUrl || '';
+              if (file) url = await handleFileUpload(file, 'receipts');
+              runMutation('gn_businessExpenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), receiptUrl: url });
+            }}
+            onRemoveBusinessExpense={(id) => runMutation('gn_businessExpenses', id, 'delete')}
           />
         ) : (
           <EmployeeDashboard 
@@ -906,19 +887,11 @@ export default function App() {
               if (!file) return;
               const url = await handleFileUpload(file, 'documents');
               if (!url) return;
-
               const existingEmp = employees.find(e => e.id === employeeId);
               const currentUploads = existingEmp?.uploadedFiles || [];
-              
-              const newFileRecord = {
-                name: file.name,
-                url: url,
-                date: new Date().toISOString()
-              };
-
-              const updatedUploads = [...currentUploads, newFileRecord];
-              runMutation('gn_employees', employeeId, 'update', { uploadedFiles: updatedUploads });
-              setCurrentUser(prev => ({ ...prev, uploadedFiles: updatedUploads }));
+              const newFileRecord = { name: file.name, url: url, date: new Date().toISOString() };
+              runMutation('gn_employees', employeeId, 'update', { uploadedFiles: [...currentUploads, newFileRecord] });
+              setCurrentUser(prev => ({ ...prev, uploadedFiles: [...currentUploads, newFileRecord] }));
             }}
             onAddTimeOff={(req) => runMutation('gn_timeOffLogs', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
           />

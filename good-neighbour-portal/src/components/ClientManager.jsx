@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Heart, Search, Edit, Trash2, User, Phone, Wallet, Image as ImageIcon, Plus, MapPin, CalendarDays, Info, ShieldAlert, AlertCircle, Star, Sun, Moon, TreePine, Sailboat, Cloud, Zap, Coffee, HeartPulse, PieChart, Mail, FileText, ChevronRight, Clock, Upload, Loader2 } from 'lucide-react';
+import { Heart, Search, Edit, Trash2, User, Phone, Wallet, Image as ImageIcon, Plus, MapPin, CalendarDays, Info, ShieldAlert, AlertCircle, Star, Sun, Moon, TreePine, Sailboat, Cloud, Zap, Coffee, HeartPulse, PieChart, Mail, FileText, ChevronRight, Clock, Upload, Loader2, Archive, RefreshCcw } from 'lucide-react';
 
 const CaptainHatIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -36,13 +36,9 @@ const SafeAvatar = ({ url, name, role, className }) => {
   return <img src={cleanUrl} alt={name || 'Avatar'} className={`h-full w-full object-cover bg-white ${className}`} onError={() => setImgError(true)} />;
 };
 
-// ==========================================
-// 1. ADMIN CARE PLAN DASHBOARD MODAL
-// ==========================================
 function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpenses = [], expenses = [], onClose }) {
   if (!client) return null;
 
-  // Budget Math
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const currentMonth = new Date().getMonth();
@@ -61,7 +57,6 @@ function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpens
   const remaining = allowance - spentThisMonth;
   const percentUsed = allowance > 0 ? Math.min((spentThisMonth / allowance) * 100, 100) : 0;
 
-  // Shift Math
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeEmployees = Array.isArray(employees) ? employees : [];
   const now = new Date();
@@ -80,7 +75,7 @@ function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpens
               <SafeAvatar url={client.photoUrl} name={client.name} role="" className="h-6 w-6 text-white"/>
             </div>
             <div>
-              <h3 className="text-xl font-bold leading-tight">{client.name}</h3>
+              <h3 className="text-xl font-bold leading-tight">{client.name} {client.isActive === false && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded ml-2 align-middle">DEACTIVATED</span>}</h3>
               <div className="text-teal-100 text-sm flex items-center mt-0.5">
                 <MapPin className="h-3.5 w-3.5 mr-1" /> {client.address || 'No address on file'}
               </div>
@@ -213,9 +208,6 @@ function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpens
   );
 }
 
-// ==========================================
-// 2. EDIT CLIENT MODAL
-// ==========================================
 function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
   const [formData, setFormData] = useState({
     name: client.name || '', dateOfBirth: client.dateOfBirth || '', phone: client.phone || '', address: client.address || '',
@@ -381,9 +373,6 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
   );
 }
 
-// ==========================================
-// 3. MAIN COMPONENT
-// ==========================================
 export default function ClientManager({ clients = [], shifts = [], employees = [], clientExpenses = [], expenses = [], onAddClient, onRemoveClient, updateClient, onClientFileUpload }) {
   const [formData, setFormData] = useState({
     name: '', dateOfBirth: '', phone: '', address: '', notes: '', dietary: '', mobility: '', hobbies: '',
@@ -394,8 +383,11 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
   
   const [newPhotoFile, setNewPhotoFile] = useState(null);
   const [editingClient, setEditingClient] = useState(null);
-  const [viewingClient, setViewingClient] = useState(null); // RESTORED!
+  const [viewingClient, setViewingClient] = useState(null); 
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // NEW: Toggle to view Active vs Deactivated clients
+  const [clientStatusView, setClientStatusView] = useState('active'); 
 
   const safeClients = Array.isArray(clients) ? clients : [];
 
@@ -409,7 +401,8 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       ...formData,
       id: `client_${Date.now()}`,
       photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : '', 
-      monthlyAllowance: Number(formData.monthlyAllowance) || 0
+      monthlyAllowance: Number(formData.monthlyAllowance) || 0,
+      isActive: true // NEW: Automatically mark new clients as active
     };
     if (onAddClient) onAddClient(newClient);
 
@@ -422,10 +415,18 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
     setNewPhotoFile(null);
   };
 
-  const filteredClients = safeClients.filter(client => 
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (client.notes && client.notes.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  // NEW: Filter explicitly checks the isActive property
+  const filteredClients = safeClients.filter(client => {
+    const isMatch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                    (client.notes && client.notes.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    // If client.isActive is undefined, we assume they are active (for backwards compatibility with old data)
+    const isStatusMatch = clientStatusView === 'active' 
+      ? client.isActive !== false 
+      : client.isActive === false;
+      
+    return isMatch && isStatusMatch;
+  });
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -435,7 +436,7 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
           <div className="flex items-center">
             <Heart className="h-5 w-5 mr-2 text-teal-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Current Clients</h2>
+            <h2 className="text-lg font-semibold text-slate-800">Client Directory</h2>
             <span className="ml-3 bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-0.5 rounded-full">{filteredClients.length} Profiles</span>
           </div>
 
@@ -453,21 +454,75 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
           </div>
         </div>
 
+        {/* NEW: Tabs for Active/Deactivated */}
+        <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide bg-slate-50/50">
+          <button 
+            onClick={() => setClientStatusView('active')} 
+            className={`flex-1 py-2 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${clientStatusView === 'active' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Active Clients
+          </button>
+          <button 
+            onClick={() => setClientStatusView('deactivated')} 
+            className={`flex-1 py-2 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${clientStatusView === 'deactivated' ? 'border-amber-500 text-amber-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Deactivated Profiles
+          </button>
+        </div>
+
         <div className="divide-y divide-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 p-4 gap-5 flex-1 overflow-y-auto bg-slate-50/50">
           {filteredClients.map(client => (
-            <div key={client.id} className="border border-slate-200 rounded-xl p-5 flex flex-col justify-between hover:shadow-md transition duration-200 bg-white relative group">
-              <div className="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-md p-1">
-                <button onClick={() => setEditingClient(client)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition" title="Edit Profile & Documents"><Edit className="h-4 w-4" /></button>
-                <button onClick={() => onRemoveClient && onRemoveClient(client.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition" title="Remove Client"><Trash2 className="h-4 w-4" /></button>
+            <div key={client.id} className={`border border-slate-200 rounded-xl p-5 flex flex-col justify-between transition duration-200 bg-white relative group ${client.isActive === false ? 'opacity-80' : 'hover:shadow-md'}`}>
+              
+              <div className="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-md p-1 z-10">
+                <button onClick={() => setEditingClient(client)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition" title="Edit Profile & Documents">
+                  <Edit className="h-4 w-4" />
+                </button>
+                
+                {/* NEW: Safe Soft-Deactivate / Reactivate button */}
+                {client.isActive !== false ? (
+                  <button 
+                    onClick={() => {
+                      if(window.confirm(`Deactivate ${client.name}? They will be hidden from the active schedule and assignments, but their history will be saved.`)) {
+                        updateClient(client.id, { isActive: false }, null);
+                      }
+                    }} 
+                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition" 
+                    title="Deactivate Client"
+                  >
+                    <Archive className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      if(window.confirm(`Reactivate ${client.name}? They will be placed back into the active rotation.`)) {
+                        updateClient(client.id, { isActive: true }, null);
+                      }
+                    }} 
+                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition" 
+                    title="Reactivate Client"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               
               <div className="flex items-center space-x-4 mb-4 pr-16">
-                <div className="h-14 w-14 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-2 border-teal-50 shadow-sm shrink-0 overflow-hidden">
+                <div className={`h-14 w-14 rounded-full flex items-center justify-center border-2 shadow-sm shrink-0 overflow-hidden ${client.isActive === false ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-teal-100 text-teal-600 border-teal-50'}`}>
                   <SafeAvatar url={client.photoUrl} name={client.name} role="" className="h-7 w-7"/>
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-800 text-lg leading-tight">{client.name}</h3>
-                  <div className="text-xs font-bold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-0.5 rounded inline-block mt-1 uppercase tracking-wider">Client</div>
+                  <div className="flex space-x-2 mt-1">
+                    <div className={`text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wider ${client.isActive === false ? 'bg-slate-100 text-slate-500 border border-slate-200' : 'bg-teal-50 text-teal-700 border border-teal-100'}`}>
+                      Client
+                    </div>
+                    {client.isActive === false && (
+                      <div className="text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                        Deactivated
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -476,11 +531,10 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
                 {client.address && <div className="flex items-start"><MapPin className="h-4 w-4 mr-2 text-slate-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{client.address}</span></div>}
               </div>
               
-              {/* RESTORED CARE PLAN BUTTON! */}
               <div className="mt-auto border-t border-slate-100 pt-4">
                 <button 
                   onClick={() => setViewingClient(client)}
-                  className="w-full flex items-center justify-center bg-teal-50 hover:bg-teal-100 text-teal-700 font-semibold py-2 rounded-lg transition border border-teal-200 text-sm"
+                  className="w-full flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg transition border border-slate-200 text-sm"
                 >
                   <HeartPulse className="h-4 w-4 mr-2" /> View Care Plan Hub
                 </button>
@@ -489,7 +543,9 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
             </div>
           ))}
           {filteredClients.length === 0 && (
-            <div className="col-span-full p-8 text-center text-slate-500">No clients found matching "{searchTerm}".</div>
+            <div className="col-span-full p-8 text-center text-slate-500">
+              {clientStatusView === 'active' ? `No active clients found matching "${searchTerm}".` : "No deactivated clients on file."}
+            </div>
           )}
         </div>
       </div>
@@ -587,8 +643,6 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       </div>
 
       {editingClient && <EditClientModal client={editingClient} onClose={() => setEditingClient(null)} onSave={async (id, data, file) => { if (updateClient) await updateClient(id, data, file); setEditingClient(null); }} onClientFileUpload={onClientFileUpload} />}
-      
-      {/* RESTORED! */}
       {viewingClient && <ClientCarePlanModal client={viewingClient} shifts={shifts} employees={employees} clientExpenses={clientExpenses} expenses={expenses} onClose={() => setViewingClient(null)} />}
     </div>
   );

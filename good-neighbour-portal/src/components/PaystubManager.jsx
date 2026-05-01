@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Plus, Trash2, Loader2, Download, Search, User } from 'lucide-react';
+import { FileText, Plus, Trash2, Loader2, Download, Search, User, Filter } from 'lucide-react';
 
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
@@ -17,7 +17,9 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
   const [date, setDate] = useState('');
   const [paystubFile, setPaystubFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterMonth, setFilterMonth] = useState(''); // NEW: Month Filter
 
   // Bulletproof arrays
   const safePaystubs = Array.isArray(paystubs) ? paystubs : [];
@@ -43,11 +45,15 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
     setIsUploading(false);
   };
 
-  // Filter paystubs based on the search bar
+  // Filter paystubs based on search bar AND Month Filter
   const filteredPaystubs = safePaystubs.filter(ps => {
     if (!ps) return false;
-    if (!searchTerm.trim()) return true;
     
+    // 1. Month Filter
+    if (filterMonth && ps.date && !ps.date.startsWith(filterMonth)) return false;
+
+    // 2. Search Filter
+    if (!searchTerm.trim()) return true;
     const emp = safeEmployees.find(e => e.id === ps.employeeId);
     const empName = emp?.name || 'Unknown Employee';
     
@@ -131,19 +137,35 @@ export default function PaystubManager({ paystubs = [], employees = [], onAddPay
 
       {/* PAYSTUB LIST (Right Column) */}
       <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full max-h-[800px]">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-slate-800">Recent Paystubs</h2>
-          <div className="relative w-full sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-slate-400" />
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <h2 className="text-lg font-semibold text-slate-800 shrink-0">Recent Paystubs</h2>
+          
+          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            {/* MONTH FILTER */}
+            <div className="flex items-center bg-white border border-slate-300 rounded-md px-3 py-1.5 focus-within:ring-1 focus-within:ring-teal-500 focus-within:border-teal-500 transition">
+              <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
+              <input
+                type="month"
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="block w-full text-slate-600 focus:outline-none text-sm bg-transparent"
+                title="Filter by Month"
+              />
             </div>
-            <input
-              type="text"
-              placeholder="Search by employee..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="block w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition"
-            />
+
+            {/* SEARCH */}
+            <div className="relative w-full sm:w-56 shrink-0">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search by employee..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="block w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition"
+              />
+            </div>
           </div>
         </div>
         

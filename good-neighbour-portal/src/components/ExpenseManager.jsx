@@ -4,9 +4,8 @@ import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filt
 export default function ExpenseManager({ expenses = [], clientExpenses = [], employees = [], clients = [], onUpdateExpense, onUpdateClientExpense }) {
   const [activeTab, setActiveTab] = useState('mileage');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterMonth, setFilterMonth] = useState(''); // NEW FILTER STATE
+  const [filterMonth, setFilterMonth] = useState('');
 
-  // Bulletproof arrays
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
   const safeEmployees = Array.isArray(employees) ? employees : [];
@@ -15,25 +14,24 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
   const getEmpName = (id) => safeEmployees.find(e => e.id === id)?.name || 'Unknown Staff';
   const getClientName = (id) => safeClients.find(c => c.id === id)?.name || 'Unknown Client';
 
-  // Filter and sort data
+  // --- NEW: SORTS PENDING TO THE VERY TOP ---
   const filterData = (data) => {
     return data.filter(item => {
       if (!item) return false;
-      
-      // 1. Month Filter
       if (filterMonth && item.date && !item.date.startsWith(filterMonth)) return false;
-
-      // 2. Search Filter
       const empMatch = getEmpName(item.employeeId).toLowerCase().includes(searchTerm.toLowerCase());
       const clientMatch = getClientName(item.clientId).toLowerCase().includes(searchTerm.toLowerCase());
       return empMatch || clientMatch;
-    }).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    }).sort((a, b) => {
+      if (a.status === 'pending' && b.status !== 'pending') return -1;
+      if (b.status === 'pending' && a.status !== 'pending') return 1;
+      return new Date(b.date || 0) - new Date(a.date || 0);
+    });
   };
 
   const filteredMileage = filterData(safeExpenses);
   const filteredOOP = filterData(safeClientExpenses);
 
-  // --- NATIVE CSV EXPORT LOGIC ---
   const exportToCSV = () => {
     let headers = [];
     let rows = [];
@@ -83,8 +81,6 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-      
-      {/* Header & Search */}
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center">
           <Receipt className="h-5 w-5 mr-2 text-teal-600" />
@@ -92,12 +88,10 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-          {/* NEW EXPORT BUTTON */}
           <button onClick={exportToCSV} className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-slate-800 text-white px-3 py-1.5 rounded hover:bg-slate-700 transition shadow-sm text-sm font-medium">
             <Download className="h-4 w-4" /> <span>Export CSV</span>
           </button>
 
-          {/* MONTH FILTER */}
           <div className="flex items-center bg-white border border-slate-300 rounded-md px-3 py-1.5 focus-within:ring-1 focus-within:ring-teal-500 focus-within:border-teal-500 transition">
             <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
             <input
@@ -109,7 +103,6 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
             />
           </div>
           
-          {/* SEARCH BAR */}
           <div className="relative w-full sm:w-64 shrink-0">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-slate-400" />
@@ -125,7 +118,6 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
         <button 
           onClick={() => setActiveTab('mileage')} 
@@ -141,10 +133,8 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
         </button>
       </div>
 
-      {/* Content */}
       <div className="p-0 overflow-y-auto max-h-[600px] bg-slate-50/30">
         
-        {/* MILEAGE TAB */}
         {activeTab === 'mileage' && (
           <div className="divide-y divide-slate-100">
             {filteredMileage.length === 0 ? (
@@ -187,7 +177,6 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
           </div>
         )}
 
-        {/* OUT OF POCKET TAB */}
         {activeTab === 'oop' && (
           <div className="divide-y divide-slate-100">
             {filteredOOP.length === 0 ? (

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, ShieldAlert, Loader2, FileText } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, ShieldAlert, Loader2, FileText, Upload, Archive, RefreshCcw } from 'lucide-react';
+import { getPayPeriodBounds, parseLocal } from '../utils';
 
 const ONTARIO_REQUIREMENTS = [
   { key: 'cpr', label: 'CPR / First Aid' }, 
@@ -14,7 +15,7 @@ const ONTARIO_REQUIREMENTS = [
   { key: 'references', label: 'Professional References' }
 ];
 
-function EditEmployeeModal({ employee, onClose, onSave }) {
+function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload }) {
   const [formData, setFormData] = useState({
     name: employee?.name || '',
     username: employee?.username || '',
@@ -38,6 +39,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   const [certFiles, setCertFiles] = useState({});
   const [activeTab, setActiveTab] = useState('profile'); 
   const [isUploading, setIsUploading] = useState(false);
+  const [isDocUploading, setIsDocUploading] = useState(false);
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
   
@@ -73,6 +75,15 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
         }
       }
     }));
+  };
+
+  const handleDocumentUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file && onEmployeeFileUpload) {
+      setIsDocUploading(true);
+      await onEmployeeFileUpload(employee.id, file);
+      setIsDocUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -128,7 +139,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
             onClick={() => setActiveTab('uploads')}
             className={`whitespace-nowrap pb-3 pt-2 px-1 font-medium text-sm transition-colors border-b-2 ${activeTab === 'uploads' ? 'border-teal-600 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           >
-            Uploaded Documents
+            Secure Documents
           </button>
         </div>
         
@@ -162,7 +173,6 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
                       </select>
                     </div>
                     <div>
-                      {/* NEW HIRE DATE FIELD */}
                       <label className="block text-sm font-medium text-slate-700 mb-1">Hire Date</label>
                       <input type="date" disabled={isUploading} value={formData.hireDate} onChange={(e) => handleChange('hireDate', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                     </div>
@@ -364,13 +374,25 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
               <div className="bg-white border border-slate-200 rounded-lg p-6">
                 <h4 className="text-sm font-semibold text-slate-800 mb-4 flex items-center">
                   <FileText className="h-5 w-5 mr-2 text-teal-600"/> 
-                  Files Uploaded by {employee.name}
+                  Secure File Uploads
                 </h4>
                 
+                <div className="mb-6">
+                  <div className="flex items-center justify-center w-full">
+                    <label className={`flex flex-col items-center justify-center w-full h-24 border-2 border-slate-300 border-dashed rounded-lg bg-slate-50 transition ${isDocUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        {isDocUploading ? <Loader2 className="w-6 h-6 mb-2 text-teal-600 animate-spin" /> : <Upload className="w-6 h-6 mb-2 text-slate-400" />}
+                        <p className="text-sm text-slate-500">{isDocUploading ? <span className="font-semibold text-teal-600">Uploading securely...</span> : <><span className="font-semibold text-teal-600">Click to upload</span> a secure document to this employee</>}</p>
+                      </div>
+                      <input type="file" className="hidden" disabled={isDocUploading} onChange={handleDocumentUpload} />
+                    </label>
+                  </div>
+                </div>
+
                 {(!employee.uploadedFiles || employee.uploadedFiles.length === 0) ? (
                   <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-100">
                     <FileText className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm text-slate-500 font-medium">No files have been uploaded yet.</p>
+                    <p className="text-sm text-slate-500 font-medium">No files have been uploaded to this profile.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -414,7 +436,7 @@ function EditEmployeeModal({ employee, onClose, onSave }) {
   );
 }
 
-export default function EmployeeManager({ employees = [], setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
+export default function EmployeeManager({ employees = [], shifts = [], payPeriodStart = '2026-04-01', onEmployeeFileUpload, setEmployees, updateEmployee, onAddEmployee, onRemoveEmployee, currentUser }) {
   const [newName, setNewName] = useState('');
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -430,8 +452,21 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  
+  // NEW: Toggle to view Active vs Deactivated employees
+  const [employeeStatusView, setEmployeeStatusView] = useState('active'); 
 
   const safeEmployees = Array.isArray(employees) ? employees : [];
+  const safeShifts = Array.isArray(shifts) ? shifts : [];
+
+  const currentBounds = useMemo(() => getPayPeriodBounds(payPeriodStart), [payPeriodStart]);
+  const nextBounds = useMemo(() => {
+    const start = new Date(currentBounds.end);
+    start.setDate(start.getDate() + 1);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 13);
+    return { start, end };
+  }, [currentBounds]);
 
   const handleAddEmployee = async (e) => {
     e.preventDefault();
@@ -454,25 +489,17 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
       photoUrl: newPhotoFile ? '' : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
       requirements: {},
       timeOffBalances: { sick: 5, vacation: 10 },
-      availability: newAvailability
+      availability: newAvailability,
+      isActive: true // NEW: Default to active
     };
     
     if (onAddEmployee) {
       await onAddEmployee(newEmp, newPhotoFile);
     }
     
-    setNewName('');
-    setNewUsername('');
-    setNewPassword('');
-    setNewPayType('per_visit');
-    setNewHourlyWage('22.50');
-    setNewPerVisitRate('45');
-    setNewHireDate(new Date().toISOString().split('T')[0]);
-    setNewPhone('');
-    setNewEmail('');
-    setNewAvailability([]);
-    setNewPhotoFile(null);
-    setIsUploading(false);
+    setNewName(''); setNewUsername(''); setNewPassword(''); setNewPayType('per_visit'); setNewHourlyWage('22.50');
+    setNewPerVisitRate('45'); setNewHireDate(new Date().toISOString().split('T')[0]); setNewPhone('');
+    setNewEmail(''); setNewAvailability([]); setNewPhotoFile(null); setIsUploading(false);
   };
 
   const toggleNewAvailability = (dayPart) => {
@@ -486,18 +513,23 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
     let issues = 0;
     ONTARIO_REQUIREMENTS.forEach(req => {
       const status = emp?.requirements?.[req.key]?.status || 'missing';
-      if (status === 'missing' || status === 'expired') {
-        issues++;
-      }
+      if (status === 'missing' || status === 'expired') issues++;
     });
     return issues;
   };
 
+  // NEW: Filter explicitly checks the isActive property
   const filteredEmployees = safeEmployees.filter(emp => {
     if (!emp) return false;
     const nameMatch = (emp.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     const roleMatch = (emp.role || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return nameMatch || roleMatch;
+    
+    // If emp.isActive is undefined, we assume they are active
+    const isStatusMatch = employeeStatusView === 'active' 
+      ? emp.isActive !== false 
+      : emp.isActive === false;
+      
+    return (nameMatch || roleMatch) && isStatusMatch;
   });
 
   return (
@@ -523,13 +555,33 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
           </div>
         </div>
 
+        {/* NEW: Tabs for Active/Deactivated */}
+        <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide bg-slate-50/50">
+          <button 
+            onClick={() => setEmployeeStatusView('active')} 
+            className={`flex-1 py-2 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${employeeStatusView === 'active' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Active Staff
+          </button>
+          <button 
+            onClick={() => setEmployeeStatusView('deactivated')} 
+            className={`flex-1 py-2 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${employeeStatusView === 'deactivated' ? 'border-amber-500 text-amber-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          >
+            Deactivated Profiles
+          </button>
+        </div>
+
         <div className="divide-y divide-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 p-4 gap-4 bg-slate-50/50 flex-1 overflow-y-auto">
           {filteredEmployees.map(emp => {
             const issuesCount = getComplianceIssues(emp);
             const isProtected = emp.id === 'admin1' && currentUser?.id !== 'admin1';
             
+            const empShifts = safeShifts.filter(s => s.employeeId === emp.id);
+            const currentCount = empShifts.filter(s => { const d = parseLocal(s.date); return d >= currentBounds.start && d <= currentBounds.end; }).length;
+            const nextCount = empShifts.filter(s => { const d = parseLocal(s.date); return d >= nextBounds.start && d <= nextBounds.end; }).length;
+
             return (
-              <div key={emp.id || Math.random()} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md transition bg-white relative">
+              <div key={emp.id || Math.random()} className={`border border-slate-200 rounded-xl p-4 flex flex-col justify-between transition bg-white relative ${emp.isActive === false ? 'opacity-80' : 'hover:shadow-md'}`}>
                 {!isProtected && (
                   <div className="absolute top-3 right-3 flex space-x-1">
                     <button 
@@ -539,30 +591,53 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
                     >
                       <Edit className="h-4 w-4" />
                     </button>
+                    
+                    {/* NEW: Safe Soft-Deactivate / Reactivate button */}
                     {emp.id !== 'admin1' && (
-                      <button 
-                        onClick={() => onRemoveEmployee && onRemoveEmployee(emp.id)}
-                        className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-md transition"
-                        title="Remove Employee"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      emp.isActive !== false ? (
+                        <button 
+                          onClick={() => {
+                            if(window.confirm(`Deactivate ${emp.name}? They will lose login access and be hidden from the active schedule, but their history will be preserved.`)) {
+                              updateEmployee(emp.id, { isActive: false }, null, {});
+                            }
+                          }}
+                          className="p-1.5 text-slate-300 hover:text-amber-600 hover:bg-amber-50 rounded-md transition"
+                          title="Deactivate Employee"
+                        >
+                          <Archive className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => {
+                            if(window.confirm(`Reactivate ${emp.name}? They will regain login access and be placed back into the active staff directory.`)) {
+                              updateEmployee(emp.id, { isActive: true }, null, {});
+                            }
+                          }}
+                          className="p-1.5 text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition"
+                          title="Reactivate Employee"
+                        >
+                          <RefreshCcw className="h-4 w-4" />
+                        </button>
+                      )
                     )}
                   </div>
                 )}
                 
                 <div className="flex items-center space-x-3 mb-3 pr-16">
                   {emp.photoUrl ? (
-                    <img src={emp.photoUrl} alt={emp.name || 'Staff'} className="h-12 w-12 rounded-full border border-slate-200 object-cover bg-white" />
+                    <img src={emp.photoUrl} alt={emp.name || 'Staff'} className={`h-12 w-12 rounded-full border border-slate-200 object-cover bg-white ${emp.isActive === false && 'grayscale'}`} />
                   ) : (
-                    <div className="h-12 w-12 rounded-full bg-teal-100 flex items-center justify-center text-teal-600">
+                    <div className={`h-12 w-12 rounded-full flex items-center justify-center ${emp.isActive === false ? 'bg-slate-100 text-slate-400' : 'bg-teal-100 text-teal-600'}`}>
                       <User className="h-6 w-6" />
                     </div>
                   )}
                   <div>
                     <h3 className="font-bold text-slate-800 leading-tight">{emp.name || 'Unnamed Employee'}</h3>
                     <div className="flex flex-col mt-0.5 space-y-1">
-                      <span className="text-xs font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded inline-block w-fit">{emp.role || 'Staff'}</span>
+                      <div className="flex items-center space-x-2">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded inline-block w-fit ${emp.isActive === false ? 'bg-slate-100 text-slate-500' : 'bg-teal-50 text-teal-700'}`}>{emp.role || 'Staff'}</span>
+                        {emp.isActive === false && <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase">Deactivated</span>}
+                      </div>
                       <span className="text-xs font-semibold text-slate-600">
                         {emp.payType === 'hourly' ? `$${emp.hourlyWage || 22.50}/hr` : `$${emp.perVisitRate || 45}/visit`}
                       </span>
@@ -579,17 +654,16 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
 
                   <div className="bg-slate-50 rounded p-2.5 text-xs text-slate-600 border border-slate-100">
                     <div className="font-semibold text-slate-700 mb-1 flex items-center">
-                      <ShieldAlert className="h-3 w-3 mr-1" /> Emergency Contact
+                      <CalendarDays className="h-3 w-3 mr-1.5" /> Scheduled Shifts
                     </div>
-                    {emp.emergencyContactName ? (
-                      <div>
-                        {emp.emergencyContactName}
-                        <br/>
-                        <span className="text-teal-700 font-medium">{emp.emergencyContactPhone}</span>
-                      </div>
-                    ) : (
-                      <span className="text-slate-400 italic">Not provided</span>
-                    )}
+                    <div className="flex justify-between items-center mb-0.5">
+                      <span>Current Period:</span>
+                      <span className="font-bold text-teal-700">{currentCount}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Next Period:</span>
+                      <span className="font-bold text-teal-700">{nextCount}</span>
+                    </div>
                   </div>
 
                   {(emp.availability && emp.availability.length > 0) && (
@@ -618,7 +692,9 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
             )
           })}
           {filteredEmployees.length === 0 && (
-            <div className="col-span-full p-8 text-center text-slate-500">No employees found matching "{searchTerm}".</div>
+            <div className="col-span-full p-8 text-center text-slate-500">
+              {employeeStatusView === 'active' ? `No active employees found matching "${searchTerm}".` : "No deactivated staff on file."}
+            </div>
           )}
         </div>
       </div>
@@ -730,6 +806,7 @@ export default function EmployeeManager({ employees = [], setEmployees, updateEm
         <EditEmployeeModal 
           employee={editingEmployee} 
           onClose={() => setEditingEmployee(null)} 
+          onEmployeeFileUpload={onEmployeeFileUpload}
           onSave={async (id, data, file, certFiles) => {
             if (updateEmployee) await updateEmployee(id, data, file, certFiles);
             setEditingEmployee(null);

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter, Sun, CheckCircle, XCircle } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
@@ -116,14 +116,19 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
   const now = new Date();
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   const currentLeaderboard = useMemo(() => getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, employees), [shifts, expenses, clientExpenses, employees, now]);
+  
+  // --- NEW: ADDED MONTH TRACKING ---
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const annualStandings = useMemo(() => {
     if(!Array.isArray(employees)) return [];
-    const scores = {}; employees.forEach(e => { if(e && e.id) scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, totalScore: 0 }; });
+    const scores = {}; 
+    employees.forEach(e => { if(e && e.id) scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, totalScore: 0, monthsWon: [] }; });
+    
     for (let m = 0; m <= now.getMonth(); m++) {
       const lb = getMonthlyLeaderboard(now.getFullYear(), m, shifts, expenses, clientExpenses, employees);
-      if (lb[0] && scores[lb[0].emp.id]) { scores[lb[0].emp.id].gold++; scores[lb[0].emp.id].totalScore += 3; }
-      if (lb[1] && scores[lb[1].emp.id]) { scores[lb[1].emp.id].silver++; scores[lb[1].emp.id].totalScore += 2; }
-      if (lb[2] && scores[lb[2].emp.id]) { scores[lb[2].emp.id].bronze++; scores[lb[2].emp.id].totalScore += 1; }
+      if (lb[0] && scores[lb[0].emp.id]) { scores[lb[0].emp.id].gold++; scores[lb[0].emp.id].totalScore += 3; scores[lb[0].emp.id].monthsWon.push(monthNames[m]); }
+      if (lb[1] && scores[lb[1].emp.id]) { scores[lb[1].emp.id].silver++; scores[lb[1].emp.id].totalScore += 2; scores[lb[1].emp.id].monthsWon.push(monthNames[m]); }
+      if (lb[2] && scores[lb[2].emp.id]) { scores[lb[2].emp.id].bronze++; scores[lb[2].emp.id].totalScore += 1; scores[lb[2].emp.id].monthsWon.push(monthNames[m]); }
     }
     return Object.values(scores).filter(s => s.totalScore > 0).sort((a, b) => b.totalScore - a.totalScore);
   }, [shifts, expenses, clientExpenses, employees, now]);
@@ -166,21 +171,26 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
           <h2 className="text-lg font-semibold text-slate-800 flex items-center"><Trophy className="h-5 w-5 mr-2 text-yellow-500" /> Annual Trophy Standings</h2>
-          <p className="text-xs text-slate-500 mt-1">Top 3 badge earners at year-end win grand prizes of ${safeBonusSettings.annual[0]}, ${safeBonusSettings.annual[1]}, and ${safeBonusSettings.annual[2]}!</p>
+          {/* --- NEW: JANUARY PAYOUT TEXT --- */}
+          <p className="text-xs text-slate-500 mt-1">Top 3 badge earners at year-end win grand prizes of ${safeBonusSettings.annual[0]}, ${safeBonusSettings.annual[1]}, and ${safeBonusSettings.annual[2]}! Awards are issued on the first pay period in January at our annual company dinner.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200"><th className="px-6 py-3 font-semibold">Employee</th><th className="px-6 py-3 font-semibold text-center">Golds (3pt)</th><th className="px-6 py-3 font-semibold text-center">Silvers (2pt)</th><th className="px-6 py-3 font-semibold text-center">Bronzes (1pt)</th><th className="px-6 py-3 font-semibold text-right">Total Score</th></tr>
+              {/* --- NEW: MONTHS WON COLUMN --- */}
+              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200"><th className="px-6 py-3 font-semibold">Employee</th><th className="px-6 py-3 font-semibold text-center">Golds (3pt)</th><th className="px-6 py-3 font-semibold text-center">Silvers (2pt)</th><th className="px-6 py-3 font-semibold text-center">Bronzes (1pt)</th><th className="px-6 py-3 font-semibold">Months Awarded</th><th className="px-6 py-3 font-semibold text-right">Total Score</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {annualStandings.map((s, idx) => (
                 <tr key={s.emp.id || Math.random().toString()} className={idx < 3 ? 'bg-yellow-50/30 hover:bg-yellow-50' : 'hover:bg-slate-50 transition'}>
                   <td className="px-6 py-4 font-bold text-slate-800 flex items-center">{idx === 0 && <Trophy className="h-4 w-4 mr-2 text-yellow-500"/>}{idx === 1 && <Medal className="h-4 w-4 mr-2 text-slate-400"/>}{idx === 2 && <Award className="h-4 w-4 mr-2 text-amber-600"/>}{idx > 2 && <span className="w-6 font-normal text-slate-400 text-xs">{idx+1}.</span>}{String(s.emp.name)}</td>
-                  <td className="px-6 py-4 text-center font-semibold text-yellow-600">{s.gold}</td><td className="px-6 py-4 text-center font-semibold text-slate-500">{s.silver}</td><td className="px-6 py-4 text-center font-semibold text-amber-700">{s.bronze}</td><td className="px-6 py-4 text-right font-black text-slate-800">{s.totalScore} pts</td>
+                  <td className="px-6 py-4 text-center font-semibold text-yellow-600">{s.gold}</td><td className="px-6 py-4 text-center font-semibold text-slate-500">{s.silver}</td><td className="px-6 py-4 text-center font-semibold text-amber-700">{s.bronze}</td>
+                  {/* --- NEW: MONTHS LISTING --- */}
+                  <td className="px-6 py-4 text-xs font-medium text-slate-600 max-w-[150px] truncate" title={s.monthsWon.join(', ')}>{s.monthsWon.join(', ') || '-'}</td>
+                  <td className="px-6 py-4 text-right font-black text-slate-800">{s.totalScore} pts</td>
                 </tr>
               ))}
-              {annualStandings.length === 0 && <tr><td colSpan="5" className="px-6 py-8 text-center text-slate-500">No badges have been awarded yet this year.</td></tr>}
+              {annualStandings.length === 0 && <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500">No badges have been awarded yet this year.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -473,6 +483,9 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   
+  // --- NEW: TEAM FEED PING STATE ---
+  const [hasNewFeed, setHasNewFeed] = useState(false);
+  
   // Time Off Request State
   const [toStartDate, setToStartDate] = useState('');
   const [toEndDate, setToEndDate] = useState('');
@@ -482,6 +495,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeClients = Array.isArray(clients) ? clients : [];
   const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
+  const safeMessages = Array.isArray(messages) ? messages : [];
   
   const liveEmployee = employees.find(e => e && e.id === currentUser.id) || currentUser;
   const myUploads = liveEmployee.uploadedFiles || [];
@@ -506,6 +520,18 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
+
+  // --- NEW: TEAM FEED PING LOGIC ---
+  useEffect(() => {
+    if (activeTab === 'announcements') {
+      localStorage.setItem('gn_feed_last_read', Date.now().toString());
+      setHasNewFeed(false);
+    } else {
+      const lastRead = Number(localStorage.getItem('gn_feed_last_read') || 0);
+      const hasNew = safeMessages.some(m => new Date(m.date).getTime() > lastRead);
+      setHasNewFeed(hasNew);
+    }
+  }, [safeMessages, activeTab]);
 
   // --- TIME OFF BALANCE CALCULATIONS ---
   const currentYear = new Date().getFullYear();
@@ -617,7 +643,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
             const holiday = getHoliday(dateStr);
             const dayShifts = myShifts.filter(s => s && s.date === dateStr);
             
-            // --- NEW: TIME OFF LOGIC ---
             const cellTime = new Date(year, month, day).getTime();
             const dayTimeOff = myTimeOffLogs.filter(log => {
               if (log.status !== 'approved') return false;
@@ -634,7 +659,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
             return (
               <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : ''}`}>
                 
-                {/* --- NEW: HOLIDAY AND PAYDAY HEADER --- */}
                 <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
                   <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
                   <div className="flex flex-col items-end gap-1">
@@ -644,7 +668,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 </div>
 
                 <div className="space-y-1">
-                  {/* --- RENDER TIME OFF BADGES --- */}
                   {dayTimeOff.map(log => {
                     const isSick = log.type === 'sick';
                     const isVacation = log.type === 'vacation';
@@ -772,7 +795,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
               <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>My Schedule</button>
-              {/* TIME OFF TAB BUTTON */}
               <button onClick={() => setActiveTab('timeoff')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'timeoff' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Time Off</button>
               <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Logs & Expenses</button>
               {isBonusActive && (
@@ -780,18 +802,17 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
               )}
               <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'documents' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Documents</button>
               <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
-              <button onClick={() => setActiveTab('announcements')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Team Feed</button>
+              
+              {/* --- NEW: TEAM FEED DOT INDICATOR --- */}
+              <button onClick={() => setActiveTab('announcements')} className={`relative flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
+                Team Feed
+                {hasNewFeed && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-rose-500 rounded-full border-2 border-white shadow-sm"></span>}
+              </button>
             </div>
 
             <div className="p-0">
-              
-              {/* ========================================== */}
-              {/* TIME OFF TAB CONTENT                   */}
-              {/* ========================================== */}
               {activeTab === 'timeoff' && (
                 <div className="p-6 space-y-6">
-                  
-                  {/* Balance Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center">
                       <div className="p-3 rounded-full bg-red-100 text-red-600 mr-4"><Activity className="h-6 w-6"/></div>
@@ -809,7 +830,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                     </div>
                   </div>
 
-                  {/* Request Form */}
                   <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
                     <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center"><CalendarDays className="h-5 w-5 mr-2 text-teal-600"/> Request Time Off</h3>
                     <form onSubmit={handleTimeOffSubmit} className="space-y-4">
@@ -843,7 +863,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                     </form>
                   </div>
 
-                  {/* Request History */}
                   <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
                     <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center"><Clock className="h-5 w-5 mr-2 text-teal-600"/> My Time Off History</h3>
                     <div className="space-y-3 max-h-[300px] overflow-y-auto">
@@ -880,13 +899,13 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                                 ) : (
                                   <span className="flex items-center text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full"><Clock className="h-3.5 w-3.5 mr-1" /> Pending</span>
                                 )}
-                              </div>                            </div>
+                              </div>                            
+                            </div>
                           )
                         })
                       )}
                     </div>
                   </div>
-
                 </div>
               )}
 

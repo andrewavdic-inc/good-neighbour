@@ -161,7 +161,7 @@ function AdminDashboard({
   payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
   onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, 
   onRemoveEmployee, onAddClient, onRemoveClient, onApproveTimeOff, onRejectTimeOff, onClientFileUpload,
-  onAddClientExpense // NEW PROP PASSED DOWN
+  onAddClientExpense, onEmployeeFileUpload
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -333,9 +333,8 @@ function AdminDashboard({
 
   const renderAdminTab = () => {
     switch (activeAdminTab) {
-      case 'employees': return <EmployeeManager employees={safeEmployees} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
+      case 'employees': return <EmployeeManager employees={safeEmployees} shifts={safeShifts} payPeriodStart={payPeriodStart} onEmployeeFileUpload={onEmployeeFileUpload} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
-      // NEW PROP CONNECTED HERE:
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} onAddClientExpense={onAddClientExpense} />;      
       case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
       case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
@@ -788,7 +787,6 @@ export default function App() {
             onAddClient={(d) => runMutation('gn_clients', d.id, 'set', d)} 
             onRemoveClient={(id) => runMutation('gn_clients', id, 'delete')} 
             updateClient={async (id, d, file) => {
-              // Now fully supports permanent avatar uploading!
               const existingClient = clients.find(c => c.id === id);
               let url = d.photoUrl || existingClient?.photoUrl || '';
               if (file) {
@@ -798,23 +796,30 @@ export default function App() {
               runMutation('gn_clients', id, 'update', { ...d, photoUrl: url });
             }} 
             onClientFileUpload={async (clientId, file) => {
-              // New Document Hub handler for clients
               if (!file) return;
               const url = await handleFileUpload(file, 'documents');
               if (!url) return;
-
               const existingClient = clients.find(c => c.id === clientId);
               const currentUploads = existingClient?.uploadedFiles || [];
               const newFileRecord = { name: file.name, url: url, date: new Date().toISOString() };
-              
               runMutation('gn_clients', clientId, 'update', { uploadedFiles: [...currentUploads, newFileRecord] });
             }}
+            
+            // --- NEW: PASSED DOWN FOR SECURE ADMIN-TO-EMPLOYEE DOCUMENTS ---
+            onEmployeeFileUpload={async (employeeId, file) => {
+              if (!file) return;
+              const url = await handleFileUpload(file, 'documents');
+              if (!url) return;
+              const existingEmp = employees.find(e => e.id === employeeId);
+              const currentUploads = existingEmp?.uploadedFiles || [];
+              const newFileRecord = { name: file.name, url: url, date: new Date().toISOString() };
+              runMutation('gn_employees', employeeId, 'update', { uploadedFiles: [...currentUploads, newFileRecord] });
+            }}
+
             expenses={expenses} 
             onUpdateExpense={(id, s) => runMutation('gn_expenses', id, 'update', { status: s })} 
             clientExpenses={clientExpenses} 
             onUpdateClientExpense={(id, s) => runMutation('gn_clientExpenses', id, 'update', { status: s })} 
-            
-            // --- NEW: Added Top-Up Mutation for Admin Use ---
             onAddClientExpense={async (d, file) => {
               let url = d.receiptUrl || '';
               if (file) url = await handleFileUpload(file, 'receipts');
@@ -824,8 +829,6 @@ export default function App() {
             paystubs={paystubs} 
             timeOffLogs={timeOffLogs} 
             onAddTimeOffLog={(d) => runMutation('gn_timeOffLogs', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })} 
-            
-            // SOFT DELETE PRESERVATION
             onRemoveTimeOffLog={(id) => runMutation('gn_timeOffLogs', id, 'update', { status: 'cancelled' })} 
             
             documents={documents} 

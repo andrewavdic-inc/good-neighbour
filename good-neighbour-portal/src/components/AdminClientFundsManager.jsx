@@ -74,7 +74,6 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
     e.preventDefault();
     if(!topUpAmount || !topUpModal) return;
 
-    // A top-up acts as a negative expense (a credit) to the ledger
     const amount = -Math.abs(Number(topUpAmount));
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -113,6 +112,51 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
     document.body.removeChild(link);
   };
 
+  // --- NEW: INDIVIDUAL ITEMIZED RECEIPT EXPORTER ---
+  const exportClientItemizedCSV = (client, e) => {
+    e.stopPropagation();
+    
+    const headers = ['Date', 'Transaction Type', 'Staff Member', 'Description', 'Amount ($)'];
+    
+    const rows = client.transactions.map(tx => {
+      const emp = safeEmployees.find(e => e.id === tx.employeeId);
+      const empName = emp?.name || (tx.employeeId === 'admin' ? 'Admin' : 'Unknown Staff');
+      const dateStr = tx.date ? parseLocal(tx.date).toLocaleDateString() : 'Unknown';
+      
+      let txType = '';
+      if (tx.type === 'mileage') txType = 'Mileage';
+      else if (tx.type === 'oop' && (tx.cost || 0) < 0) txType = 'Account Top-Up (Credit)';
+      else txType = 'Out of Pocket Purchase';
+
+      const description = tx.type === 'mileage' ? `${tx.kilometers}km: ${tx.description || ''}` : (tx.description || '');
+      const amount = (tx.cost || 0).toFixed(2);
+
+      return [
+        `"${dateStr}"`,
+        `"${txType}"`,
+        `"${empName}"`,
+        `"${description.replace(/"/g, '""')}"`, // Sanitize quotes for CSV
+        amount
+      ];
+    });
+
+    // Add a summary row at the bottom
+    rows.push(['', '', '', '', '']); // Blank spacer row
+    rows.push(['', '', '', '"Monthly Limit:"', (client.monthlyAllowance || 0).toFixed(2)]);
+    rows.push(['', '', '', '"Total Spent:"', client.totalSpent.toFixed(2)]);
+    rows.push(['', '', '', '"Remaining Balance:"', client.remaining.toFixed(2)]);
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Itemized_Receipt_${client.name.replace(/\s+/g, '_')}_${selectedMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -122,7 +166,7 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
           <button onClick={exportToCSV} className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-slate-800 text-white px-3 py-1.5 rounded hover:bg-slate-700 transition shadow-sm text-sm font-medium">
-            <Download className="h-4 w-4" /> <span>Export CSV</span>
+            <Download className="h-4 w-4" /> <span>Export Master Ledger CSV</span>
           </button>
           <div className="flex items-center space-x-3 w-full sm:w-auto">
             <label className="text-sm font-medium text-slate-600 whitespace-nowrap">Billing Month:</label>
@@ -195,9 +239,23 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
                   {expandedClientId === client.id && (
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <td colSpan="6" className="px-6 py-4">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Itemized Deductions & Credits ({selectedMonth})</h4>
+                        
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Itemized Deductions & Credits ({selectedMonth})</h4>
+                          
+                          {/* NEW EXPORT RECEIPT BUTTON */}
+                          {client.transactions.length > 0 && (
+                            <button 
+                              onClick={(e) => exportClientItemizedCSV(client, e)}
+                              className="flex items-center text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-3 py-1.5 rounded transition shadow-sm"
+                            >
+                              <Download className="h-3.5 w-3.5 mr-1.5" /> Export Itemized Receipt
+                            </button>
+                          )}
+                        </div>
+
                         {client.transactions.length === 0 ? (
-                          <div className="text-sm text-slate-500 italic">No approved transactions for this month.</div>
+                          <div className="text-sm text-slate-500 italic py-2">No approved transactions for this month.</div>
                         ) : (
                           <div className="space-y-2">
                             {client.transactions.map((tx, idx) => {

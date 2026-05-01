@@ -24,37 +24,37 @@ const parseLocalSafe = (dateStr) => {
     }
     const fallback = new Date(str);
     return isNaN(fallback.getTime()) ? new Date() : fallback;
-  } catch (e) { return new Date(); }
+  } catch (e) { 
+    return new Date(); 
+  }
 };
 
 const safeSortByDateDesc = (arr) => {
   if (!arr || !Array.isArray(arr)) return [];
-  try {
-    return [...arr].filter(Boolean).sort((a, b) => {
-      const dA = parseLocalSafe(a.date).getTime();
-      const dB = parseLocalSafe(b.date).getTime();
-      return dB - dA;
-    });
-  } catch (e) { return []; }
+  try { 
+    return [...arr].filter(Boolean).sort((a, b) => parseLocalSafe(b.date).getTime() - parseLocalSafe(a.date).getTime()); 
+  } catch (e) { 
+    return []; 
+  }
 };
 
 const isBiweeklyPayday = (currentDateStr, startDateStr) => {
   if (!startDateStr || !currentDateStr) return false;
   const [sY, sM, sD] = String(startDateStr).split('-').map(Number);
   const [cY, cM, cD] = String(currentDateStr).split('-').map(Number);
-  if(isNaN(sY) || isNaN(cY)) return false;
+  if(isNaN(sY) || isNaN(cY)) return false; 
   const diffDays = (Date.UTC(cY, cM - 1, cD) - Date.UTC(sY, sM - 1, sD)) / 86400000;
   return diffDays > 0 && diffDays % 14 === 0;
 };
 
 const getPayPeriodBounds = (anchorDateStr) => {
-  const now = new Date();
-  const anchor = parseLocalSafe(anchorDateStr);
+  const now = new Date(); 
+  const anchor = parseLocalSafe(anchorDateStr); 
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (today < anchor) return { start: anchor, end: new Date(anchor.getTime() + 13 * 86400000) };
-  const diffDays = Math.floor((today - anchor) / 86400000);
+  const diffDays = Math.floor((today - anchor) / 86400000); 
   const cycles = Math.floor(diffDays / 14);
-  const start = new Date(anchor.getTime() + cycles * 14 * 86400000);
+  const start = new Date(anchor.getTime() + cycles * 14 * 86400000); 
   return { start, end: new Date(start.getTime() + 13 * 86400000) };
 };
 
@@ -68,45 +68,66 @@ const safeShiftsSort = (arr) => {
 };
 
 const getHoliday = (dateStr) => {
-  const holidays = {
-    '2026-01-01': { name: 'New Year\'s Day' }, '2026-02-16': { name: 'Family Day' }, '2026-04-03': { name: 'Good Friday' },
-    '2026-05-18': { name: 'Victoria Day' }, '2026-07-01': { name: 'Canada Day' }, '2026-08-03': { name: 'Civic Holiday' },
-    '2026-09-07': { name: 'Labour Day' }, '2026-10-12': { name: 'Thanksgiving Day' }, '2026-12-25': { name: 'Christmas Day' }, '2026-12-26': { name: 'Boxing Day' }
+  const holidays = { 
+    '2026-01-01': { name: 'New Year\'s Day' }, 
+    '2026-02-16': { name: 'Family Day' }, 
+    '2026-04-03': { name: 'Good Friday' }, 
+    '2026-05-18': { name: 'Victoria Day' }, 
+    '2026-07-01': { name: 'Canada Day' }, 
+    '2026-08-03': { name: 'Civic Holiday' }, 
+    '2026-09-07': { name: 'Labour Day' }, 
+    '2026-10-12': { name: 'Thanksgiving Day' }, 
+    '2026-12-25': { name: 'Christmas Day' }, 
+    '2026-12-26': { name: 'Boxing Day' } 
   };
   return holidays[String(dateStr)] || null;
 };
 
 const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses) => {
   if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, total: 0 };
+  
   const empShifts = shifts.filter(s => {
     if (!s || s.employeeId !== emp.id || !s.date || !s.endTime) return false;
     const shiftDate = new Date(`${s.date}T${s.endTime}`);
-    if (isNaN(shiftDate.getTime())) return false;
+    if (isNaN(shiftDate.getTime())) return false; 
     return shiftDate >= start && shiftDate <= end && shiftDate <= new Date();
   });
-  let shiftEarnings = 0; let totalHours = 0;
-  const isHourly = emp.payType === 'hourly';
-  empShifts.forEach(s => {
-    const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number);
-    const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number);
-    if(!isNaN(sH) && !isNaN(eH)) { let h = (eH + eM/60) - (sH + sM/60); if (h < 0) h += 24; totalHours += h; }
-  });
-  shiftEarnings = isHourly ? (totalHours * (Number(emp.hourlyWage) || 22.5)) : (empShifts.length * (Number(emp.perVisitRate) || 45));
+  
+  let shiftEarnings = 0; 
+  let totalHours = 0;
+  
+  if (emp.payType === 'salary') {
+    shiftEarnings = (Number(emp.annualSalary) || 0) / 12; // Approximation for leaderboard
+  } else if (emp.payType === 'hourly') {
+    empShifts.forEach(s => {
+      const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
+      const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number);
+      if(!isNaN(sH) && !isNaN(eH)) { 
+        let h = (eH + eM/60) - (sH + sM/60); 
+        if (h < 0) h += 24; 
+        totalHours += h; 
+      }
+    });
+    shiftEarnings = totalHours * (Number(emp.hourlyWage) || 22.5);
+  } else { 
+    shiftEarnings = empShifts.length * (Number(emp.perVisitRate) || 45); 
+  }
+  
   const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
   const oop = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  
   return { shiftCount: empShifts.length, totalHours, shiftEarnings, kmEarnings, oop, total: shiftEarnings + kmEarnings + oop };
 };
 
 const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees) => {
   if(!Array.isArray(employees)) return [];
-  const start = new Date(year, month, 1);
+  const start = new Date(year, month, 1); 
   const end = new Date(year, month + 1, 0, 23, 59, 59);
-  let results = employees.map(emp => {
-    const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses);
-    return { emp, ...data };
+  let results = employees.map(emp => { 
+    const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses); 
+    return { emp, ...data }; 
   });
-  results = results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total);
-  return results.slice(0, 3);
+  return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total).slice(0, 3);
 };
 
 // ==========================================
@@ -116,32 +137,42 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
   const now = new Date();
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   const currentLeaderboard = useMemo(() => getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, employees), [shifts, expenses, clientExpenses, employees, now]);
-  
-  // --- NEW: ADDED MONTH TRACKING ---
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  
   const annualStandings = useMemo(() => {
-    if(!Array.isArray(employees)) return [];
+    if(!Array.isArray(employees)) return []; 
     const scores = {}; 
-    employees.forEach(e => { if(e && e.id) scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, totalScore: 0, monthsWon: [] }; });
+    employees.forEach(e => { 
+      if(e && e.id) scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, totalScore: 0, monthsWon: [] }; 
+    });
     
     for (let m = 0; m <= now.getMonth(); m++) {
       const lb = getMonthlyLeaderboard(now.getFullYear(), m, shifts, expenses, clientExpenses, employees);
-      if (lb[0] && scores[lb[0].emp.id]) { scores[lb[0].emp.id].gold++; scores[lb[0].emp.id].totalScore += 3; scores[lb[0].emp.id].monthsWon.push(monthNames[m]); }
-      if (lb[1] && scores[lb[1].emp.id]) { scores[lb[1].emp.id].silver++; scores[lb[1].emp.id].totalScore += 2; scores[lb[1].emp.id].monthsWon.push(monthNames[m]); }
-      if (lb[2] && scores[lb[2].emp.id]) { scores[lb[2].emp.id].bronze++; scores[lb[2].emp.id].totalScore += 1; scores[lb[2].emp.id].monthsWon.push(monthNames[m]); }
+      if (lb[0] && scores[lb[0].emp.id]) { 
+        scores[lb[0].emp.id].gold++; 
+        scores[lb[0].emp.id].totalScore += 3; 
+        scores[lb[0].emp.id].monthsWon.push(monthNames[m]); 
+      }
+      if (lb[1] && scores[lb[1].emp.id]) { 
+        scores[lb[1].emp.id].silver++; 
+        scores[lb[1].emp.id].totalScore += 2; 
+        scores[lb[1].emp.id].monthsWon.push(monthNames[m]); 
+      }
+      if (lb[2] && scores[lb[2].emp.id]) { 
+        scores[lb[2].emp.id].bronze++; 
+        scores[lb[2].emp.id].totalScore += 1; 
+        scores[lb[2].emp.id].monthsWon.push(monthNames[m]); 
+      }
     }
     return Object.values(scores).filter(s => s.totalScore > 0).sort((a, b) => b.totalScore - a.totalScore);
   }, [shifts, expenses, clientExpenses, employees, now]);
 
-  if (!isBonusActive) {
-    return (
-      <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-slate-200">
-        <Award className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-        <h3 className="text-lg font-semibold text-slate-600">Bonus System Inactive</h3>
-        <p className="text-sm text-slate-500 mt-1">The Performance Bonus System is currently disabled by the Administrator.</p>
-      </div>
-    );
-  }
+  if (!isBonusActive) return (
+    <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-slate-200">
+      <Award className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+      <h3 className="text-lg font-semibold text-slate-600">Bonus System Inactive</h3>
+    </div>
+  );
 
   const badgeIcons = [<Trophy className="h-10 w-10 mb-3" />, <Medal className="h-10 w-10 mb-3" />, <Award className="h-10 w-10 mb-3" />];
   const colors = ["bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 border-yellow-400", "bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 border-slate-400", "bg-gradient-to-br from-amber-600 to-orange-800 text-white border-amber-700"];
@@ -150,47 +181,54 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>
-        <h2 className="text-2xl font-bold mb-2 relative z-10 flex items-center"><Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> {String(now.toLocaleString('default', { month: 'long' }))} Leaderboard</h2>
+        <h2 className="text-2xl font-bold mb-2 relative z-10 flex items-center">
+          <Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> {String(now.toLocaleString('default', { month: 'long' }))} Leaderboard
+        </h2>
         <p className="text-teal-100 mb-6 relative z-10 text-sm">Top 3 earners with 10+ shifts qualify for monthly cash bonuses!</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
           {currentLeaderboard.map((winner, index) => (
-            <div key={winner.emp.id || Math.random().toString()} className={`${colors[index]} rounded-xl p-4 shadow-md flex flex-col items-center text-center transform hover:-translate-y-1 transition duration-300`}>
-              {badgeIcons[index]}<div className="font-bold text-lg leading-tight">{String(winner.emp.name || 'Unknown')}</div>
+            <div key={winner.emp.id} className={`${colors[index]} rounded-xl p-4 shadow-md flex flex-col items-center text-center transform hover:-translate-y-1 transition duration-300`}>
+              {badgeIcons[index]}
+              <div className="font-bold text-lg leading-tight">{String(winner.emp.name || 'Unknown')}</div>
               <div className="text-sm font-semibold opacity-90 mb-3">{index + 1}{index===0?'st':index===1?'nd':'rd'} Place</div>
               <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm flex items-center">+${Number(safeBonusSettings.monthly[index] || 0).toFixed(0)} Bonus</div>
             </div>
           ))}
-          {currentLeaderboard.length === 0 && (
-            <div className="col-span-3 text-center py-8 bg-black/10 rounded-lg text-sm border border-white/20 backdrop-blur-sm">
-              <p className="font-semibold text-lg mb-1">The race is on!</p>
-              <p className="opacity-90">No employees have completed the 10 shifts required to qualify for the leaderboard yet.</p>
-            </div>
-          )}
         </div>
       </div>
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
           <h2 className="text-lg font-semibold text-slate-800 flex items-center"><Trophy className="h-5 w-5 mr-2 text-yellow-500" /> Annual Trophy Standings</h2>
-          {/* --- NEW: JANUARY PAYOUT TEXT --- */}
-          <p className="text-xs text-slate-500 mt-1">Top 3 badge earners at year-end win grand prizes of ${safeBonusSettings.annual[0]}, ${safeBonusSettings.annual[1]}, and ${safeBonusSettings.annual[2]}! Awards are issued on the first pay period in January at our annual company dinner.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              {/* --- NEW: MONTHS WON COLUMN --- */}
-              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200"><th className="px-6 py-3 font-semibold">Employee</th><th className="px-6 py-3 font-semibold text-center">Golds (3pt)</th><th className="px-6 py-3 font-semibold text-center">Silvers (2pt)</th><th className="px-6 py-3 font-semibold text-center">Bronzes (1pt)</th><th className="px-6 py-3 font-semibold">Months Awarded</th><th className="px-6 py-3 font-semibold text-right">Total Score</th></tr>
+              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                <th className="px-6 py-3 font-semibold">Employee</th>
+                <th className="px-6 py-3 font-semibold text-center">Golds (3pt)</th>
+                <th className="px-6 py-3 font-semibold text-center">Silvers (2pt)</th>
+                <th className="px-6 py-3 font-semibold text-center">Bronzes (1pt)</th>
+                <th className="px-6 py-3 font-semibold">Months Awarded</th>
+                <th className="px-6 py-3 font-semibold text-right">Total Score</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {annualStandings.map((s, idx) => (
-                <tr key={s.emp.id || Math.random().toString()} className={idx < 3 ? 'bg-yellow-50/30 hover:bg-yellow-50' : 'hover:bg-slate-50 transition'}>
-                  <td className="px-6 py-4 font-bold text-slate-800 flex items-center">{idx === 0 && <Trophy className="h-4 w-4 mr-2 text-yellow-500"/>}{idx === 1 && <Medal className="h-4 w-4 mr-2 text-slate-400"/>}{idx === 2 && <Award className="h-4 w-4 mr-2 text-amber-600"/>}{idx > 2 && <span className="w-6 font-normal text-slate-400 text-xs">{idx+1}.</span>}{String(s.emp.name)}</td>
-                  <td className="px-6 py-4 text-center font-semibold text-yellow-600">{s.gold}</td><td className="px-6 py-4 text-center font-semibold text-slate-500">{s.silver}</td><td className="px-6 py-4 text-center font-semibold text-amber-700">{s.bronze}</td>
-                  {/* --- NEW: MONTHS LISTING --- */}
+                <tr key={s.emp.id} className={idx < 3 ? 'bg-yellow-50/30 hover:bg-yellow-50' : 'hover:bg-slate-50 transition'}>
+                  <td className="px-6 py-4 font-bold text-slate-800 flex items-center">
+                    {idx === 0 && <Trophy className="h-4 w-4 mr-2 text-yellow-500"/>}
+                    {idx === 1 && <Medal className="h-4 w-4 mr-2 text-slate-400"/>}
+                    {idx === 2 && <Award className="h-4 w-4 mr-2 text-amber-600"/>}
+                    {idx > 2 && <span className="w-6 font-normal text-slate-400 text-xs">{idx+1}.</span>}
+                    {String(s.emp.name)}
+                  </td>
+                  <td className="px-6 py-4 text-center font-semibold text-yellow-600">{s.gold}</td>
+                  <td className="px-6 py-4 text-center font-semibold text-slate-500">{s.silver}</td>
+                  <td className="px-6 py-4 text-center font-semibold text-amber-700">{s.bronze}</td>
                   <td className="px-6 py-4 text-xs font-medium text-slate-600 max-w-[150px] truncate" title={s.monthsWon.join(', ')}>{s.monthsWon.join(', ') || '-'}</td>
                   <td className="px-6 py-4 text-right font-black text-slate-800">{s.totalScore} pts</td>
                 </tr>
               ))}
-              {annualStandings.length === 0 && <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500">No badges have been awarded yet this year.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -200,58 +238,83 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
 }
 
 export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart, isBonusActive, employees, bonusSettings }) {
-  const now = new Date();
+  const now = new Date(); 
   const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   
   const completedShifts = (Array.isArray(shifts) ? shifts : []).filter(s => {
     if (!s || s.employeeId !== currentUser.id || !s.date || !s.endTime) return false;
-    const shiftEnd = new Date(`${s.date}T${s.endTime}`);
-    if (isNaN(shiftEnd.getTime())) return false;
+    const shiftEnd = new Date(`${s.date}T${s.endTime}`); 
     return shiftEnd <= now && parseLocalSafe(s.date) >= periodBounds.start && parseLocalSafe(s.date) <= periodBounds.end;
   });
 
   let shiftEarnings = 0;
-  if (currentUser.payType === 'hourly') {
-    let hrs = 0;
-    completedShifts.forEach(s => {
-      const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number);
-      const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number);
-      if(!isNaN(sH) && !isNaN(eH)) { let h = (eH + eM/60) - (sH + sM/60); if (h < 0) h += 24; hrs += h; }
+  if (currentUser.payType === 'salary') {
+    shiftEarnings = (Number(currentUser.annualSalary) || 0) / 26; // Bi-weekly salary split
+  } else if (currentUser.payType === 'hourly') {
+    let hrs = 0; 
+    completedShifts.forEach(s => { 
+      const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
+      const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number); 
+      if(!isNaN(sH) && !isNaN(eH)) { 
+        let h = (eH + eM/60) - (sH + sM/60); 
+        if (h < 0) h += 24; 
+        hrs += h; 
+      } 
     });
     shiftEarnings = hrs * (Number(currentUser.hourlyWage) || 22.50);
-  } else {
-    shiftEarnings = completedShifts.length * (Number(currentUser.perVisitRate) || 45);
+  } else { 
+    shiftEarnings = completedShifts.length * (Number(currentUser.perVisitRate) || 45); 
   }
 
-  const myPeriodExp = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
-  const kmEarnings = myPeriodExp.reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
-
-  const myPeriodCE = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
-  const oopEarnings = myPeriodCE.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
+  const oopEarnings = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
   let bonusEarnings = 0;
   if (isBonusActive && Array.isArray(employees)) {
     const lb = getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, employees);
-    if (lb[0]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[0] || 0);
-    else if (lb[1]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[1] || 0);
+    if (lb[0]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[0] || 0); 
+    else if (lb[1]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[1] || 0); 
     else if (lb[2]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[2] || 0);
   }
-
   const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden mb-6 mt-6">
       <div className="absolute -right-4 -bottom-4 opacity-10"><TrendingUp size={150} /></div>
       <div className="relative z-10">
-        <h3 className="text-slate-300 font-medium text-sm flex items-center mb-1"><Activity className="h-4 w-4 mr-1.5 text-emerald-400" /> Live Pay Tracker</h3>
-        <div className="text-xs text-slate-400 mb-6">Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}</div>
-        <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">${totalEarnings.toFixed(2)}</div>
+        <h3 className="text-slate-300 font-medium text-sm flex items-center mb-1">
+          <Activity className="h-4 w-4 mr-1.5 text-emerald-400" /> Live Pay Tracker
+        </h3>
+        <div className="text-xs text-slate-400 mb-6">
+          Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}
+        </div>
+        <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">
+          ${totalEarnings.toFixed(2)}
+        </div>
         <div className="space-y-3">
-          <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span className="text-sm text-slate-300">Completed Shifts ({completedShifts.length})</span><span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span></div>
-          <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span className="text-sm text-slate-300">Approved Mileage</span><span className="font-semibold text-white">${kmEarnings.toFixed(2)}</span></div>
-          <div className="flex justify-between items-center bg-white/5 p-2 rounded"><span className="text-sm text-slate-300">Approved Expenses</span><span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span></div>
-          {isBonusActive && bonusEarnings > 0 && (<div className="flex justify-between items-center bg-yellow-500/20 border border-yellow-500/30 p-2 rounded mt-2"><span className="text-sm text-yellow-300 flex items-center"><Star className="h-3 w-3 mr-1" fill="currentColor"/> Projected Bonus</span><span className="font-bold text-yellow-400">+${bonusEarnings.toFixed(2)}</span></div>)}
+          <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+            <span className="text-sm text-slate-300">
+              {currentUser.payType === 'salary' ? 'Base Salary (Bi-weekly)' : `Completed Shifts (${completedShifts.length})`}
+            </span>
+            <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+            <span className="text-sm text-slate-300">Approved Mileage</span>
+            <span className="font-semibold text-white">${kmEarnings.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+            <span className="text-sm text-slate-300">Approved Expenses</span>
+            <span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span>
+          </div>
+          {isBonusActive && bonusEarnings > 0 && (
+            <div className="flex justify-between items-center bg-yellow-500/20 border border-yellow-500/30 p-2 rounded mt-2">
+              <span className="text-sm text-yellow-300 flex items-center">
+                <Star className="h-3 w-3 mr-1" fill="currentColor"/> Projected Bonus
+              </span>
+              <span className="font-bold text-yellow-400">+${bonusEarnings.toFixed(2)}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -259,218 +322,190 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
 }
 
 export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense, getClientRemainingBalance }) {
-  const [date, setDate] = useState(''); const [clientId, setClientId] = useState(''); const [kilometers, setKilometers] = useState(''); const [description, setDescription] = useState('');
+  const [date, setDate] = useState(''); 
+  const [clientId, setClientId] = useState(''); 
+  const [kilometers, setKilometers] = useState(''); 
+  const [description, setDescription] = useState('');
   const [filterMonth, setFilterMonth] = useState(''); 
   
-  const safeExpenses = Array.isArray(myExpenses) ? myExpenses : []; const safeClients = Array.isArray(clients) ? clients : [];
-  const handleSubmit = (e) => { e.preventDefault(); if (!date || !clientId || !kilometers) return; if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description }); setDate(''); setClientId(''); setKilometers(''); setDescription(''); };
-
-  const displayExpenses = safeSortByDateDesc(safeExpenses).filter(exp => {
-    if (!filterMonth) return true;
-    return exp.date && exp.date.startsWith(filterMonth);
+  const safeExpenses = Array.isArray(myExpenses) ? myExpenses : []; 
+  const safeClients = Array.isArray(clients) ? clients : [];
+  
+  const handleSubmit = (e) => { 
+    e.preventDefault(); 
+    if (!date || !clientId || !kilometers) return; 
+    if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description }); 
+    setDate(''); setClientId(''); setKilometers(''); setDescription(''); 
+  };
+  
+  const displayExpenses = safeSortByDateDesc(safeExpenses).filter(exp => { 
+    if (!filterMonth) return true; 
+    return exp.date && exp.date.startsWith(filterMonth); 
   });
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-800 flex items-center"><Car className="h-5 w-5 mr-2 text-teal-600" /> Mileage Log</h2></div>
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-slate-800 flex items-center"><Car className="h-5 w-5 mr-2 text-teal-600" /> Mileage Log</h2>
+      </div>
       <div className="p-6 border-b border-slate-200 bg-slate-50/50">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required /></div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Date *</label>
+              <input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required />
+            </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
               <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
                 <option value="" disabled>Select client</option>
                 {safeClients.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}
-                  </option>
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label><input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" placeholder="e.g. Park trip" /></div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label>
+              <input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Description</label>
+              <input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" placeholder="e.g. Park trip" />
+            </div>
           </div>
-          <div className="bg-amber-50 border border-amber-100 rounded p-2 text-amber-800 text-[10px] font-medium leading-tight mt-3">* Keep travel within 15km (max approx $10). Mileage is only covered when traveling <strong>with</strong> the client.</div>
-          <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center"><Plus className="h-4 w-4 mr-1"/> Submit Log</button>
+          <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center">
+            <Plus className="h-4 w-4 mr-1"/> Submit Log
+          </button>
         </form>
       </div>
-      
-      <div className="flex items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Log History</span>
-        <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition">
-          <Filter className="h-3 w-3 mr-1.5 text-slate-400" />
-          <input 
-            type="month" 
-            value={filterMonth} 
-            onChange={(e) => setFilterMonth(e.target.value)} 
-            className="text-xs py-1 border-none focus:outline-none text-slate-600 bg-transparent w-32" 
-            title="Filter by Month" 
-          />
-        </div>
-      </div>
-      
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {displayExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No mileage logs found for this period.</div> :
-          displayExpenses.map(exp => {
-            if(!exp) return null; const d = parseLocalSafe(exp.date); const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString(); const clientName = safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown Client';
-            return (
-              <div key={exp.id || `exp_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-                <div><div className="font-semibold text-sm text-slate-800">{dateStr}</div><div className="text-xs text-slate-500 mt-0.5">{String(exp.kilometers || 0)} km &bull; {clientName}</div></div>
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{String(exp.status || 'pending')}</span>
-              </div>
-            )
-          })
-        }
+        {displayExpenses.map(exp => (
+          <div key={exp.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
+            <div>
+              <div className="font-semibold text-sm text-slate-800">{parseLocalSafe(exp.date).toLocaleDateString()}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{exp.kilometers} km &bull; {safeClients.find(c => c.id === exp.clientId)?.name}</div>
+            </div>
+            <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense, getClientRemainingBalance }) {
+export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense }) {
   const [date, setDate] = useState(''); 
   const [clientId, setClientId] = useState(''); 
   const [amount, setAmount] = useState(''); 
   const [description, setDescription] = useState(''); 
-  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptFile, setReceiptFile] = useState(null); 
   const [isUploading, setIsUploading] = useState(false);
-  const [filterMonth, setFilterMonth] = useState(''); 
   
-  const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : []; 
-  const safeClients = Array.isArray(clients) ? clients : [];
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!date || !amount || !clientId) return;
-    
-    setIsUploading(true);
-
+  const handleSubmit = async (e) => { 
+    e.preventDefault(); 
+    if (!date || !amount || !clientId) return; 
+    setIsUploading(true); 
     if(onAddClientExpense) { 
-      await onAddClientExpense({ 
-        date, 
-        clientId, 
-        amount: Number(amount), 
-        description, 
-        receiptDetails: receiptFile ? receiptFile.name : '' 
-      }, receiptFile); 
-    }
-    
-    setDate(''); setClientId(''); setAmount(''); setDescription(''); setReceiptFile(null);
-    setIsUploading(false);
+      await onAddClientExpense({ date, clientId, amount: Number(amount), description }, receiptFile); 
+    } 
+    setDate(''); setClientId(''); setAmount(''); setDescription(''); setReceiptFile(null); setIsUploading(false); 
   };
-
-  const displayExpenses = safeSortByDateDesc(safeClientExpenses).filter(exp => {
-    if (!filterMonth) return true;
-    return exp.date && exp.date.startsWith(filterMonth);
-  });
-
+  
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-800 flex items-center"><Receipt className="h-5 w-5 mr-2 text-teal-600" /> Client Expenses</h2></div>
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-slate-800 flex items-center"><Receipt className="h-5 w-5 mr-2 text-teal-600" /> Client Expenses</h2>
+      </div>
       <div className="p-6 border-b border-slate-200 bg-slate-50/50">
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Date *</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required disabled={isUploading} /></div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Date *</label>
+              <input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white" required disabled={isUploading} />
+            </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
-              <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required disabled={isUploading}>
+              <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white" required disabled={isUploading}>
                 <option value="" disabled>Select Client</option>
-                {safeClients.map(c => (<option key={c.id} value={c.id}>{c.name} {getClientRemainingBalance ? `($${getClientRemainingBalance(c.id).toFixed(2)} limit)` : ''}</option>))}
+                {clients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label><input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required disabled={isUploading} /></div>
-            <div><label className="block text-xs font-medium text-slate-700 mb-1">Item Description</label><input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" placeholder="e.g. Lunch" disabled={isUploading} /></div>
-          </div>
-          <div className="mt-3">
-            <label className="block text-xs font-medium text-slate-700 mb-1">Upload Receipt</label>
-            <div className={`mt-1 flex justify-center px-4 py-2 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('receipt-upload').click()}>
-              <div className="text-center flex items-center space-x-2"><ImageIcon className="h-4 w-4 text-slate-400" /><span className="text-xs font-medium text-teal-600 truncate max-w-[150px]">{receiptFile ? receiptFile.name : 'Click to attach receipt'}</span></div>
-              <input id="receipt-upload" type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => setReceiptFile(e.target.files[0])} disabled={isUploading} />
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Amount ($) *</label>
+              <input type="number" min="0.01" step="0.01" value={amount} onChange={(e)=>setAmount(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white" required disabled={isUploading} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Description</label>
+              <input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white" disabled={isUploading} />
             </div>
           </div>
-          <button type="submit" disabled={isUploading || !amount || !clientId || !date} className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 disabled:bg-slate-400 transition text-sm flex items-center justify-center">
-            {isUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : <><Plus className="h-4 w-4 mr-1"/> Submit Expense</>}
+          <button type="submit" disabled={isUploading} className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 disabled:bg-slate-400 transition text-sm flex items-center justify-center">
+            Submit
           </button>
         </form>
-      </div>
-
-      <div className="flex items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Log History</span>
-        <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition">
-          <Filter className="h-3 w-3 mr-1.5 text-slate-400" />
-          <input 
-            type="month" 
-            value={filterMonth} 
-            onChange={(e) => setFilterMonth(e.target.value)} 
-            className="text-xs py-1 border-none focus:outline-none text-slate-600 bg-transparent w-32" 
-            title="Filter by Month" 
-          />
-        </div>
-      </div>
-
-      <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {displayExpenses.length === 0 ? <div className="text-center text-sm text-slate-500 py-4">No expenses logged for this period.</div> :
-          displayExpenses.map(exp => {
-            if(!exp) return null; const d = parseLocalSafe(exp.date); const dateStr = isNaN(d.getTime()) ? 'Unknown Date' : d.toLocaleDateString(); const clientName = safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown Client';
-            return (
-              <div key={exp.id || `ce_${Math.random()}`} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-                <div><div className="font-semibold text-sm text-slate-800">{dateStr}</div><div className="text-xs text-slate-500 mt-0.5">${Number(exp.amount || 0).toFixed(2)} &bull; {clientName}</div></div>
-                <div className="flex items-center space-x-2">
-                  {exp.receiptUrl && (
-                    <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:bg-teal-100 p-1 rounded" title="View Receipt">
-                      <FileText className="h-4 w-4" />
-                    </a>
-                  )}
-                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{String(exp.status || 'pending')}</span>
-                </div>
-              </div>
-            )
-          })
-        }
       </div>
     </div>
   );
 }
 
+// --- NEW: UPDATED PAYSTUB MANAGER WITH TARGET _BLANK AND YEAR SORTING ---
 export function EmployeePaystubs({ myPaystubs = [] }) {
   const safePaystubs = Array.isArray(myPaystubs) ? myPaystubs : [];
   
+  const availableYears = useMemo(() => {
+    const years = safePaystubs.map(p => p.date ? parseLocalSafe(p.date).getFullYear() : new Date().getFullYear());
+    return [...new Set(years)].sort((a,b) => b - a);
+  }, [safePaystubs]);
+
+  const [selectedYear, setSelectedYear] = useState(availableYears[0]?.toString() || new Date().getFullYear().toString());
+
+  const filteredStubs = safePaystubs.filter(ps => {
+    if (!ps.date) return false;
+    return parseLocalSafe(ps.date).getFullYear().toString() === selectedYear;
+  });
+  
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
-        <FileText className="h-5 w-5 mr-2 text-teal-600" />
-        <h2 className="text-lg font-semibold text-slate-800">My Paystubs</h2>
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+          <FileText className="h-5 w-5 mr-2 text-teal-600" /> My Paystubs
+        </h2>
+        <div className="flex items-center space-x-2">
+          <Filter className="h-4 w-4 text-slate-400" />
+          <select value={selectedYear} onChange={(e) => setSelectedYear(e.target.value)} className="border border-slate-300 rounded text-sm px-2 py-1 text-slate-700">
+            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
       </div>
       <div className="p-6">
-        {safePaystubs.length === 0 ? <div className="text-center text-slate-500 py-4">No paystubs available.</div> :
+        {filteredStubs.length === 0 ? (
+          <div className="text-center text-slate-500 py-4">No paystubs found for {selectedYear}.</div>
+        ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {[...safePaystubs].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(ps => {
-              if(!ps) return null;
-              return (
-                <div key={ps.id || Math.random()} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
-                  <FileText className="h-8 w-8 text-teal-600 mr-3 opacity-70 group-hover:opacity-100 transition shrink-0" />
-                  <div className="flex-1 overflow-hidden pr-2">
-                    <div className="font-semibold text-slate-800 text-sm">{ps.date ? parseLocalSafe(ps.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown Date'}</div>
-                    <div className="text-xs text-slate-500 truncate w-full" title={String(ps.fileName || '')}>{String(ps.fileName || 'Unnamed File')}</div>
-                  </div>
-                  <a 
-                    href={ps.fileUrl || '#'} 
-                    download={ps.fileName}
-                    onClick={(e) => { if(!ps.fileUrl) { e.preventDefault(); alert("Simulation Mode: Normally this would download the file to your device."); } }}
-                    className="text-teal-600 hover:bg-teal-50 p-2 rounded transition inline-flex shrink-0 ml-auto group-hover:text-teal-800" 
-                    title="Download Paystub"
-                  >
-                    <Download className="h-5 w-5" />
-                  </a>
+            {filteredStubs.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(ps => (
+              <div key={ps.id} className="flex items-center p-4 border border-slate-200 rounded-lg hover:border-teal-400 transition cursor-pointer group bg-slate-50">
+                <FileText className="h-8 w-8 text-teal-600 mr-3 opacity-70 group-hover:opacity-100 transition shrink-0" />
+                <div className="flex-1 overflow-hidden pr-2">
+                  <div className="font-semibold text-slate-800 text-sm">{parseLocalSafe(ps.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
+                  <div className="text-xs text-slate-500 truncate w-full" title={ps.fileName}>{ps.fileName}</div>
                 </div>
-              );
-            })}
+                {/* SAFELY OPENS IN NEW TAB */}
+                <a 
+                  href={ps.fileUrl || '#'} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-teal-600 hover:bg-teal-50 p-2 rounded transition inline-flex shrink-0 ml-auto"
+                >
+                  <Download className="h-5 w-5" />
+                </a>
+              </div>
+            ))}
           </div>
-        }
+        )}
       </div>
     </div>
   );
@@ -480,261 +515,92 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   
-  // --- NEW: TEAM FEED PING STATE ---
+  // Notification States
   const [hasNewFeed, setHasNewFeed] = useState(false);
+  const [hasNewSchedule, setHasNewSchedule] = useState(false);
   
-  // Time Off Request State
-  const [toStartDate, setToStartDate] = useState('');
-  const [toEndDate, setToEndDate] = useState('');
-  const [toType, setToType] = useState('sick');
+  const [toStartDate, setToStartDate] = useState(''); 
+  const [toEndDate, setToEndDate] = useState(''); 
+  const [toType, setToType] = useState('sick'); 
   const [toNote, setToNote] = useState('');
 
   const safeShifts = Array.isArray(shifts) ? shifts : [];
-  const safeClients = Array.isArray(clients) ? clients : [];
   const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
   const safeMessages = Array.isArray(messages) ? messages : [];
   
   const liveEmployee = employees.find(e => e && e.id === currentUser.id) || currentUser;
-  const myUploads = liveEmployee.uploadedFiles || [];
-  
   const myShifts = safeShifts.filter(s => s && s.employeeId === currentUser.id);
-  const myExpenses = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id);
-  const myClientExpenses = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id);
-  const myPaystubs = (Array.isArray(paystubs) ? paystubs : []).filter(p => p && p.employeeId === currentUser.id);
-  const myTimeOffLogs = safeTimeOffLogs.filter(l => l && l.employeeId === currentUser.id);
   const openShifts = safeShifts.filter(s => s && s.employeeId === 'unassigned');
   
   const now = new Date();
   const upcomingShifts = safeShiftsSort(myShifts.filter(s => s && s.date && s.endTime && new Date(`${s.date}T${s.endTime}`) > now));
   const nextShift = upcomingShifts[0];
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = new Date(year, month, 1).getDay(); 
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
-
-  // --- NEW: TEAM FEED PING LOGIC ---
+  // Feed Ping Logic
   useEffect(() => {
-    if (activeTab === 'announcements') {
-      localStorage.setItem('gn_feed_last_read', Date.now().toString());
-      setHasNewFeed(false);
-    } else {
-      const lastRead = Number(localStorage.getItem('gn_feed_last_read') || 0);
-      const hasNew = safeMessages.some(m => new Date(m.date).getTime() > lastRead);
-      setHasNewFeed(hasNew);
+    if (activeTab === 'announcements') { 
+      localStorage.setItem('gn_feed_last_read', Date.now().toString()); 
+      setHasNewFeed(false); 
+    } else { 
+      const lastRead = Number(localStorage.getItem('gn_feed_last_read') || 0); 
+      setHasNewFeed(safeMessages.some(m => new Date(m.date).getTime() > lastRead)); 
     }
   }, [safeMessages, activeTab]);
 
-  // --- TIME OFF BALANCE CALCULATIONS ---
-  const currentYear = new Date().getFullYear();
-  const currentYearLogs = myTimeOffLogs.filter(l => l.startDate && parseLocalSafe(l.startDate).getFullYear() === currentYear);
-  
-  let usedSick = 0; let usedVacation = 0;
-  let pendingSick = 0; let pendingVacation = 0;
-
-  currentYearLogs.forEach(log => {
-    const start = parseLocalSafe(log.startDate);
-    const end = parseLocalSafe(log.endDate);
-    const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-    
-    if (log.status === 'approved') {
-      if (log.type === 'sick') usedSick += diffDays;
-      if (log.type === 'vacation') usedVacation += diffDays;
-    } else if (log.status === 'pending') {
-      if (log.type === 'sick') pendingSick += diffDays;
-      if (log.type === 'vacation') pendingVacation += diffDays;
+  // Schedule Ping Logic
+  useEffect(() => {
+    if (activeTab === 'schedule' || activeTab === 'timeoff') { 
+      localStorage.setItem('gn_schedule_hash', myShifts.length.toString() + safeTimeOffLogs.length.toString()); 
+      setHasNewSchedule(false); 
+    } else { 
+      const lastHash = localStorage.getItem('gn_schedule_hash'); 
+      const currentHash = myShifts.length.toString() + safeTimeOffLogs.length.toString();
+      if (lastHash && lastHash !== currentHash) setHasNewSchedule(true);
     }
-  });
+  }, [myShifts.length, safeTimeOffLogs.length, activeTab]);
 
-  const allowedSick = currentUser.timeOffBalances?.sick || 0;
-  const allowedVacation = currentUser.timeOffBalances?.vacation || 0;
-  const remainingSick = allowedSick - usedSick - pendingSick;
-  const remainingVacation = allowedVacation - usedVacation - pendingVacation;
-
-  const calculateRequestedDays = (startStr, endStr) => {
-    if (!startStr || !endStr) return 0;
-    const start = parseLocalSafe(startStr);
-    const end = parseLocalSafe(endStr);
-    if (end < start) return 0;
-    return Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-  };
-
-  const handleTimeOffSubmit = (e) => {
-    e.preventDefault();
-    const requestedDays = calculateRequestedDays(toStartDate, toEndDate);
-    
-    if (requestedDays <= 0) {
-      alert('End date must be the same or after the start date.');
-      return;
-    }
-    
-    if (toType === 'sick' && requestedDays > remainingSick) {
-      alert(`You only have ${remainingSick} sick days remaining. You cannot request ${requestedDays}.`);
-      return;
-    }
-    
-    if (toType === 'vacation' && requestedDays > remainingVacation) {
-      alert(`You only have ${remainingVacation} vacation days remaining. You cannot request ${requestedDays}.`);
-      return;
-    }
-
+  const handleTimeOffSubmit = (e) => { 
+    e.preventDefault(); 
     if (onAddTimeOff) {
-      onAddTimeOff({
-        id: `to_${Date.now()}`,
-        employeeId: currentUser.id,
-        startDate: toStartDate,
-        endDate: toEndDate,
-        type: toType,
-        note: toNote
-      });
+      onAddTimeOff({ 
+        id: `to_${Date.now()}`, 
+        employeeId: currentUser.id, 
+        startDate: toStartDate, 
+        endDate: toEndDate, 
+        type: toType, 
+        note: toNote 
+      }); 
     }
-
-    setToStartDate('');
-    setToEndDate('');
-    setToNote('');
+    setToStartDate(''); setToEndDate(''); setToNote(''); 
   };
 
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (file && onUpdateProfile) {
-      setIsUploadingPhoto(true);
-      await onUpdateProfile(currentUser.id, {}, file);
-      setIsUploadingPhoto(false);
+  // --- NEW: AUTOMATED SHIFT CANCELLATION REQUEST ---
+  const handleRequestCancellation = (shift) => {
+    const client = clients.find(c => c.id === shift.clientId);
+    if(window.confirm(`Are you sure you want to request cancellation for your shift with ${client?.name} on ${parseLocalSafe(shift.date).toLocaleDateString()}?`)) {
+      onSendMessage(`🚨 CANCELLATION REQUEST: I need to cancel my shift with ${client?.name} on ${parseLocalSafe(shift.date).toLocaleDateString()} from ${shift.startTime}-${shift.endTime}. Please remove me from this shift and reassign it.`, currentUser.id);
+      alert("Your cancellation request has been posted to the Team Feed for an Administrator to approve.");
     }
   };
-
-  const handleDocumentUpload = async (e) => {
-    const file = e.target.files[0];
-    if (file && onEmployeeFileUpload) {
-      setIsUploadingDoc(true);
-      await onEmployeeFileUpload(currentUser.id, file);
-      setIsUploadingDoc(false);
-    }
-  };
-
-  const renderSchedule = () => {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{monthNames[month]} {year}</h2>
-          <div className="flex space-x-2">
-            <button onClick={prevMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
-            <button onClick={nextMonth} className="p-1.5 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
-          </div>
-        </div>
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-            <div key={day} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">{day}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
-          {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[100px] opacity-50 p-2"></div>))}
-          {daysArray.map(day => {
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
-            const holiday = getHoliday(dateStr);
-            const dayShifts = myShifts.filter(s => s && s.date === dateStr);
-            
-            const cellTime = new Date(year, month, day).getTime();
-            const dayTimeOff = myTimeOffLogs.filter(log => {
-              if (log.status !== 'approved') return false;
-              if (!log.startDate || !log.endDate) return false;
-              
-              const start = parseLocalSafe(log.startDate);
-              const end = parseLocalSafe(log.endDate);
-              const sTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
-              const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
-              
-              return cellTime >= sTime && cellTime <= eTime;
-            });
-            
-            return (
-              <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : ''}`}>
-                
-                <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
-                  <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
-                  <div className="flex flex-col items-end gap-1">
-                    {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
-                    {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  {dayTimeOff.map(log => {
-                    const isSick = log.type === 'sick';
-                    const isVacation = log.type === 'vacation';
-                    return (
-                      <div key={`to_${log.id}`} className={`text-xs p-1.5 rounded relative border shadow-sm mb-1 ${isSick ? 'bg-red-50 text-red-800 border-red-200' : isVacation ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-slate-50 text-slate-800 border-slate-200'}`} title={`${isSick ? 'Sick Leave' : isVacation ? 'Vacation' : 'Unpaid Time Off'}`}>
-                        <div className="font-semibold truncate flex items-center">
-                          {isSick ? <Activity className="h-3 w-3 mr-1" /> : isVacation ? <Sun className="h-3 w-3 mr-1" /> : <CalendarDays className="h-3 w-3 mr-1" />}
-                          {isSick ? 'Sick Day' : isVacation ? 'Vacation' : 'Unpaid Leave'}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {dayShifts.map(shift => {
-                    const client = clients.find(c => c && c.id === shift.clientId);
-                    return (
-                      <div 
-                        key={shift.id} 
-                        onClick={() => setSelectedClient(client)}
-                        className="text-xs p-1.5 rounded bg-teal-100 text-teal-800 border border-teal-200 cursor-pointer hover:bg-teal-200 transition shadow-sm"
-                      >
-                        <div className="font-semibold truncate flex items-center">
-                          <Heart className="h-2.5 w-2.5 mr-1 shrink-0 text-teal-600" />
-                          {client?.name?.split(' ')[0] || 'Unknown'}
-                        </div>
-                        <div className="text-[10px] mt-0.5 opacity-90 flex items-center">
-                          <Clock className="h-2.5 w-2.5 mr-1 shrink-0" />
-                          {shift.startTime}-{shift.endTime}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-6">
         <div className="md:w-1/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
-            <div className="relative mb-4 group">
-              <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 shadow-sm overflow-hidden relative">
-                {isUploadingPhoto ? (
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                ) : liveEmployee.photoUrl && !liveEmployee.photoUrl.includes('dicebear') ? (
-                  <img src={liveEmployee.photoUrl} alt="Avatar" className="h-full w-full object-cover bg-white" />
-                ) : (
-                  <User className="h-10 w-10" />
-                )}
-              </div>
-              <label htmlFor="profile-upload" className={`absolute bottom-0 right-0 bg-teal-600 p-1.5 rounded-full text-white shadow-md transition ${isUploadingPhoto ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-teal-700 opacity-80 group-hover:opacity-100'}`}>
-                <Camera className="h-4 w-4" />
-                <input disabled={isUploadingPhoto} id="profile-upload" type="file" accept="image/*" className="sr-only" onChange={handlePhotoUpload} />
-              </label>
+            <div className="h-24 w-24 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 border-4 border-teal-50 overflow-hidden mb-4">
+              {liveEmployee.photoUrl && !liveEmployee.photoUrl.includes('dicebear') ? (
+                <img src={liveEmployee.photoUrl} alt="Avatar" className="h-full w-full object-cover" />
+              ) : (
+                <User className="h-10 w-10" />
+              )}
             </div>
-
             <h2 className="text-xl font-bold text-slate-800">{String(currentUser.name)}</h2>
             <div className="flex flex-col mt-2 gap-1 items-center">
               <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">{String(currentUser.role)}</span>
               <span className="text-xs font-semibold text-slate-500">
-                {currentUser.payType === 'hourly' ? `$${currentUser.hourlyWage || 22.50}/hr` : `$${currentUser.perVisitRate || 45}/visit`}
+                {currentUser.payType === 'salary' ? 'Salaried' : currentUser.payType === 'hourly' ? `$${currentUser.hourlyWage || 22.50}/hr` : `$${currentUser.perVisitRate || 45}/visit`}
               </span>
             </div>
           </div>
@@ -745,48 +611,30 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
             expenses={expenses} 
             clientExpenses={clientExpenses} 
             payPeriodStart={payPeriodStart} 
-            isBonusActive={isBonusActive}
-            employees={employees}
-            bonusSettings={bonusSettings}
+            isBonusActive={isBonusActive} 
+            employees={employees} 
+            bonusSettings={bonusSettings} 
           />
-
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
-              <Clock className="h-5 w-5 mr-2 text-teal-600" />
-              <h2 className="text-lg font-semibold text-slate-800">Next Shift</h2>
-            </div>
-            <div className="p-6">
-              {nextShift ? (
-                <div className="space-y-4">
-                  <div className="flex items-center text-slate-700">
-                    <CalendarDays className="h-5 w-5 mr-3 text-slate-400" />
-                    <span className="font-medium">{parseLocalSafe(nextShift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-                  </div>
-                  <div className="flex items-center text-slate-700">
-                    <Clock className="h-5 w-5 mr-3 text-slate-400" />
-                    <span className="font-medium">{nextShift.startTime} - {nextShift.endTime}</span>
-                  </div>
-                  <div className="flex items-center text-slate-700">
-                    <Heart className="h-5 w-5 mr-3 text-slate-400" />
-                    <span className="font-medium">{safeClients.find(c => c && c.id === nextShift.clientId)?.name || 'Unknown Client'}</span>
-                  </div>
-                  <button onClick={() => setSelectedClient(safeClients.find(c => c && c.id === nextShift.clientId))} className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded transition text-sm flex items-center justify-center">
-                    <Info className="h-4 w-4 mr-2" /> View Client Plan
-                  </button>
-                </div>
-              ) : (
-                <div className="text-center text-slate-500 py-4">No upcoming shifts scheduled.</div>
-              )}
-            </div>
-          </div>
-
-          {openShifts.length > 0 && (
-            <div className="bg-amber-50 rounded-xl shadow-sm border border-amber-200 p-4">
-              <div className="flex items-center text-amber-800 font-bold mb-2">
-                <AlertCircle className="h-5 w-5 mr-2" /> Open Shifts Available!
+          
+          {nextShift && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
+                <Clock className="h-5 w-5 mr-2 text-teal-600" />
+                <h2 className="text-lg font-semibold text-slate-800">Next Shift</h2>
               </div>
-              <p className="text-sm text-amber-700 mb-3">There are {openShifts.length} shift(s) that need coverage.</p>
-              <button onClick={() => setActiveTab('open-shifts')} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 rounded transition text-sm">View Open Shifts</button>
+              <div className="p-6 space-y-4 text-slate-700">
+                <div className="flex items-center">
+                  <CalendarDays className="h-5 w-5 mr-3 text-slate-400" />
+                  <span className="font-medium">{parseLocalSafe(nextShift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+                </div>
+                <div className="flex items-center">
+                  <Clock className="h-5 w-5 mr-3 text-slate-400" />
+                  <span className="font-medium">{nextShift.startTime} - {nextShift.endTime}</span>
+                </div>
+                <button onClick={() => setSelectedClient(clients.find(c => c && c.id === nextShift.clientId))} className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded transition text-sm flex items-center justify-center">
+                  <Info className="h-4 w-4 mr-2" /> View Client Plan
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -794,44 +642,33 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
         <div className="md:w-2/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
-              <button onClick={() => setActiveTab('schedule')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>My Schedule</button>
-              <button onClick={() => setActiveTab('timeoff')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'timeoff' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Time Off</button>
-              <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Logs & Expenses</button>
-              {isBonusActive && (
-                <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Awards</button>
-              )}
-              <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'documents' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Documents</button>
-              <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>Paystubs</button>
+              {/* SCHEDULE PING DOT */}
+              <button onClick={() => setActiveTab('schedule')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
+                My Schedule {hasNewSchedule && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-white"></span>}
+              </button>
+              <button onClick={() => setActiveTab('timeoff')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'timeoff' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
+                Time Off
+              </button>
+              <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
+                Logs & Expenses
+              </button>
+              <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
+                Paystubs
+              </button>
               
-              {/* --- NEW: TEAM FEED DOT INDICATOR --- */}
-              <button onClick={() => setActiveTab('announcements')} className={`relative flex-1 py-3 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}>
-                Team Feed
-                {hasNewFeed && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-rose-500 rounded-full border-2 border-white shadow-sm"></span>}
+              {/* FEED PING DOT */}
+              <button onClick={() => setActiveTab('announcements')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
+                Team Feed {hasNewFeed && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-rose-500 rounded-full border-2 border-white"></span>}
               </button>
             </div>
 
             <div className="p-0">
               {activeTab === 'timeoff' && (
                 <div className="p-6 space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center">
-                      <div className="p-3 rounded-full bg-red-100 text-red-600 mr-4"><Activity className="h-6 w-6"/></div>
-                      <div>
-                        <div className="text-sm font-bold text-slate-500 uppercase tracking-wider">Sick Days Remaining</div>
-                        <div className="text-2xl font-black text-slate-800">{remainingSick} <span className="text-sm font-medium text-slate-400">/ {allowedSick}</span></div>
-                      </div>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center">
-                      <div className="p-3 rounded-full bg-blue-100 text-blue-600 mr-4"><Sun className="h-6 w-6"/></div>
-                      <div>
-                        <div className="text-sm font-bold text-slate-500 uppercase tracking-wider">Vacation Days Remaining</div>
-                        <div className="text-2xl font-black text-slate-800">{remainingVacation} <span className="text-sm font-medium text-slate-400">/ {allowedVacation}</span></div>
-                      </div>
-                    </div>
-                  </div>
-
                   <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center"><CalendarDays className="h-5 w-5 mr-2 text-teal-600"/> Request Time Off</h3>
+                    <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                      <CalendarDays className="h-5 w-5 mr-2 text-teal-600"/> Request Time Off
+                    </h3>
                     <form onSubmit={handleTimeOffSubmit} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -843,141 +680,46 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                           <input type="date" value={toEndDate} onChange={(e) => setToEndDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" required />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">Leave Type *</label>
-                          <select value={toType} onChange={(e) => setToType(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm font-semibold text-slate-700" required>
-                            <option value="sick">Sick Leave</option>
-                            <option value="vacation">Paid Vacation</option>
-                            <option value="unpaid">Unpaid Leave</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-1">Note to Admin</label>
-                          <input type="text" value={toNote} onChange={(e) => setToNote(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" placeholder="Optional context" />
-                        </div>
-                      </div>
-                      <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-semibold py-2.5 rounded-md hover:bg-teal-700 transition flex items-center justify-center">
-                        <Plus className="h-4 w-4 mr-2"/> Submit Request for Approval
+                      <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-semibold py-2.5 rounded-md hover:bg-teal-700 flex items-center justify-center">
+                        <Plus className="h-4 w-4 mr-2"/> Submit Request
                       </button>
                     </form>
-                  </div>
-
-                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center"><Clock className="h-5 w-5 mr-2 text-teal-600"/> My Time Off History</h3>
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                      {myTimeOffLogs.length === 0 ? (
-                        <div className="text-center py-6 text-slate-500 text-sm border border-dashed border-slate-200 rounded-lg">No time off requests found.</div>
-                      ) : (
-                        myTimeOffLogs.sort((a,b) => new Date(b.dateSubmitted) - new Date(a.dateSubmitted)).map(req => {
-                          const isSick = req.type === 'sick';
-                          const start = parseLocalSafe(req.startDate);
-                          const end = parseLocalSafe(req.endDate);
-                          return (
-                            <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-slate-200 rounded-lg bg-slate-50 hover:bg-white transition gap-3">
-                              <div className="flex items-center space-x-3">
-                                <div className={`p-2 rounded-full shrink-0 ${isSick ? 'bg-red-100 text-red-600' : req.type === 'vacation' ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-600'}`}>
-                                  {isSick ? <Activity className="h-4 w-4" /> : req.type === 'vacation' ? <Sun className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
-                                </div>
-                                <div>
-                                  <div className="font-bold text-slate-800 text-sm">
-                                    {start.toLocaleDateString()} <span className="text-slate-400 font-normal mx-1">to</span> {end.toLocaleDateString()}
-                                  </div>
-                                  <div className="text-xs text-slate-500 mt-0.5">
-                                    {req.type === 'sick' ? 'Sick Leave' : req.type === 'vacation' ? 'Vacation' : 'Unpaid Leave'}
-                                    {req.note && <span className="italic ml-2">"{req.note}"</span>}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex items-center sm:justify-end">
-                                {req.status === 'approved' ? (
-                                  <span className="flex items-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full"><CheckCircle className="h-3.5 w-3.5 mr-1" /> Approved</span>
-                                ) : req.status === 'rejected' ? (
-                                  <span className="flex items-center text-xs font-bold text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full"><XCircle className="h-3.5 w-3.5 mr-1" /> Denied</span>
-                                ) : req.status === 'cancelled' ? (
-                                  <span className="flex items-center text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-1 rounded-full"><Trash2 className="h-3.5 w-3.5 mr-1" /> Cancelled</span>
-                                ) : (
-                                  <span className="flex items-center text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full"><Clock className="h-3.5 w-3.5 mr-1" /> Pending</span>
-                                )}
-                              </div>                            
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
                   </div>
                 </div>
               )}
 
               {activeTab === 'schedule' && (
-                <div className="flex flex-col">
-                  <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-end">
-                    <div className="flex bg-slate-200 p-1 rounded-lg w-fit">
-                      <button onClick={() => setScheduleView('list')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'list' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>List View</button>
-                      <button onClick={() => setScheduleView('calendar')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'calendar' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Calendar</button>
-                    </div>
-                  </div>
-                  
-                  {scheduleView === 'list' ? (
-                    <div className="divide-y divide-slate-100 border rounded-xl overflow-hidden m-6">
-                      {upcomingShifts.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500">You have no upcoming shifts.</div>
-                      ) : (
-                        upcomingShifts.map(shift => {
-                          if(!shift) return null;
-                          const client = safeClients.find(c => c && c.id === shift.clientId);
-                          const d = parseLocalSafe(shift.date);
-                          const isInvalid = isNaN(d.getTime());
-                          return (
-                            <div key={shift.id || Math.random()} className="p-4 hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                              <div className="flex items-start space-x-4">
-                                <div className="bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px]">
-                                  <div className="text-xs font-bold text-teal-600 uppercase">{!isInvalid ? d.toLocaleDateString('en-US', { month: 'short' }) : ''}</div>
-                                  <div className="text-xl font-extrabold text-teal-800">{!isInvalid ? d.getDate() : ''}</div>
-                                </div>
-                                <div>
-                                  <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
-                                  <div className="text-sm text-slate-600 flex items-center mt-1">
-                                    <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
-                                  </div>
+                <div className="p-6">
+                  <div className="divide-y divide-slate-100 border rounded-xl overflow-hidden">
+                    {upcomingShifts.length === 0 ? (
+                      <div className="p-8 text-center text-slate-500">You have no upcoming shifts.</div>
+                    ) : (
+                      upcomingShifts.map(shift => {
+                        const client = clients.find(c => c.id === shift.clientId);
+                        const d = parseLocalSafe(shift.date);
+                        return (
+                          <div key={shift.id} className="p-4 hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-start space-x-4">
+                              <div className="bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px]">
+                                <div className="text-xs font-bold text-teal-600 uppercase">{d.toLocaleDateString('en-US', { month: 'short' })}</div>
+                                <div className="text-xl font-extrabold text-teal-800">{d.getDate()}</div>
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
+                                <div className="text-sm text-slate-600 flex items-center mt-1">
+                                  <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
                                 </div>
                               </div>
-                              <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
+                            </div>
+                            <div className="flex flex-col space-y-2 w-full sm:w-auto">
+                              <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 bg-white hover:bg-teal-50 px-3 py-1.5 rounded transition text-center w-full">
                                 Care Plan
                               </button>
+                              {/* NEW: CANCELLATION REQUEST BUTTON */}
+                              <button onClick={() => handleRequestCancellation(shift)} className="text-xs font-medium text-slate-400 hover:text-red-500 hover:underline text-center w-full">
+                                Request Cancellation
+                              </button>
                             </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  ) : (
-                    renderSchedule()
-                  )}
-                </div>
-              )}
-
-              {activeTab === 'open-shifts' && (
-                <div className="bg-amber-50/30 p-4">
-                  <h3 className="font-bold text-amber-800 mb-4 flex items-center"><AlertCircle className="h-5 w-5 mr-2"/> Shifts Needing Coverage</h3>
-                  <div className="space-y-3">
-                    {openShifts.length === 0 ? (
-                      <p className="text-sm text-slate-500 text-center py-4">No open shifts at this time.</p>
-                    ) : (
-                      openShifts.map(shift => {
-                        if(!shift) return null;
-                        const client = safeClients.find(c => c && c.id === shift.clientId);
-                        return (
-                          <div key={shift.id || Math.random()} className="bg-white border border-amber-200 rounded-lg p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
-                            <div>
-                              <div className="font-bold text-slate-800">{shift.date ? parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : ''}</div>
-                              <div className="text-sm text-slate-600 mt-1">{shift.startTime} - {shift.endTime} &bull; {client?.name}</div>
-                            </div>
-                            <button 
-                              onClick={() => { if(onPickupShift) onPickupShift(shift.id, currentUser.id); }}
-                              className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded transition w-full sm:w-auto"
-                            >
-                              Pick Up Shift
-                            </button>
                           </div>
                         )
                       })
@@ -986,85 +728,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                 </div>
               )}
 
-              {activeTab === 'expenses' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
-                  <EmployeeMileageLog 
-                    myExpenses={myExpenses} 
-                    clients={safeClients} 
-                    onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
-                    getClientRemainingBalance={getClientRemainingBalance}
-                  />
-                  <EmployeeClientExpenseLog 
-                    myClientExpenses={myClientExpenses} 
-                    clients={safeClients} 
-                    onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
-                    getClientRemainingBalance={getClientRemainingBalance}
-                  />
-                </div>
-              )}
-
-              {activeTab === 'awards' && isBonusActive && (
-                <div className="p-6">
-                  <AwardsLeaderboard 
-                    employees={employees} 
-                    shifts={shifts} 
-                    expenses={expenses} 
-                    clientExpenses={clientExpenses} 
-                    isBonusActive={isBonusActive} 
-                    bonusSettings={bonusSettings}
-                  />
-                </div>
-              )}
-
-              {activeTab === 'documents' && (
-                <div className="p-6 space-y-6">
-                  <DocumentManager documents={documents} isAdmin={false} />
-                  
-                  {/* PERSONAL UPLOADS MODULE */}
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-                      <h2 className="text-lg font-semibold text-slate-800 flex items-center"><FileText className="h-5 w-5 mr-2 text-teal-600" /> My Personal Uploads</h2>
-                    </div>
-                    <div className="p-6">
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Securely send a document to the Administrator</label>
-                        <div className="flex items-center justify-center w-full">
-                          <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-lg bg-slate-50 transition ${isUploadingDoc ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-100 cursor-pointer'}`}>
-                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                              {isUploadingDoc ? <Loader2 className="w-8 h-8 mb-3 text-teal-600 animate-spin" /> : <Upload className="w-8 h-8 mb-3 text-slate-400" />}
-                              <p className="mb-2 text-sm text-slate-500">{isUploadingDoc ? <span className="font-semibold text-teal-600">Uploading securely...</span> : <><span className="font-semibold text-teal-600">Click to upload</span> or drag and drop</>}</p>
-                              <p className="text-xs text-slate-500">PDF, JPG, or PNG</p>
-                            </div>
-                            <input type="file" className="hidden" disabled={isUploadingDoc} onChange={handleDocumentUpload} />
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {myUploads.length === 0 ? (
-                          <div className="text-center py-4 text-sm text-slate-500">You haven't uploaded any personal files yet.</div>
-                        ) : (
-                          myUploads.map((file, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-3 bg-white hover:bg-teal-50 transition border border-slate-200 rounded-md">
-                              <div className="flex items-center overflow-hidden pr-4">
-                                <FileText className="h-6 w-6 mr-3 text-teal-600 shrink-0" />
-                                <div className="truncate">
-                                  <div className="text-sm font-semibold text-slate-800 truncate" title={file.name}>{file.name}</div>
-                                  <div className="text-xs text-slate-500 mt-0.5">{new Date(file.date).toLocaleDateString()}</div>
-                                </div>
-                              </div>
-                              <a href={file.url} target="_blank" rel="noopener noreferrer" className="bg-white border border-teal-200 text-teal-700 hover:bg-teal-600 hover:text-white px-3 py-1.5 rounded transition text-xs font-semibold shadow-sm shrink-0">View</a>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
-
               {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />}
             </div>
           </div>

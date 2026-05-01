@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Coins, Award, Trophy, Medal, Download } from 'lucide-react';
+import { Coins, Award, Trophy, Medal, Download, ShieldAlert } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
 export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], payPeriodStart, isBonusActive, bonusSettings }) {
@@ -38,10 +38,8 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   
   // Calculate Monthly Leaderboard
   const getMonthlyLeaderboard = () => {
-    const year = currentPeriodEnd.getFullYear();
-    const month = currentPeriodEnd.getMonth();
-    const mStart = new Date(year, month, 1);
-    const mEnd = new Date(year, month + 1, 0, 23, 59, 59);
+    const mStart = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), 1);
+    const mEnd = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth() + 1, 0, 23, 59, 59);
     
     let results = safeEmps.map(emp => {
       const empShifts = safeShifts.filter(s => {
@@ -51,7 +49,9 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       });
       
       let sEarn = 0;
-      if (emp.payType === 'hourly') {
+      if (emp.payType === 'salary') {
+         sEarn = (Number(emp.annualSalary) || 0) / 12; // Approximation for leaderboard sorting
+      } else if (emp.payType === 'hourly') {
         let hrs = 0;
         empShifts.forEach(s => {
           const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
@@ -80,6 +80,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
 
     return safeEmps.map(emp => {
       if(!emp) return null;
+      
       const empShifts = safeShifts.filter(s => {
         if(!s || !s.date) return false;
         const d = parseLocal(s.date);
@@ -88,21 +89,22 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                d >= currentPeriodStart && d <= currentPeriodEnd;
       });
       
-      const isHourly = emp.payType === 'hourly';
-      let totalHours = 0;
-      
-      empShifts.forEach(s => {
-        const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
-        const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
-        let hours = (eH + eM/60) - (sH + sM/60);
-        if (hours < 0) hours += 24; 
-        totalHours += hours;
-      });
-
       let shiftEarnings = 0;
       let displayRate = '';
+      let totalHours = 0;
       
-      if (isHourly) {
+      // --- NEW SALARY LOGIC ---
+      if (emp.payType === 'salary') {
+        shiftEarnings = (Number(emp.annualSalary) || 0) / 26; // Bi-weekly salary split
+        displayRate = `Salary: $${(Number(emp.annualSalary)||0).toLocaleString()}/yr`;
+      } else if (emp.payType === 'hourly') {
+        empShifts.forEach(s => {
+          const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
+          const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
+          let hours = (eH + eM/60) - (sH + sM/60);
+          if (hours < 0) hours += 24; 
+          totalHours += hours;
+        });
         const hourlyWage = Number(emp.hourlyWage) || 22.50;
         shiftEarnings = totalHours * hourlyWage;
         displayRate = `${totalHours.toFixed(1)} hrs @ $${hourlyWage.toFixed(2)}/hr`;
@@ -144,7 +146,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         ...emp,
         shiftCount: empShifts.length,
         totalHours,
-        isHourly,
         displayRate,
         shiftEarnings,
         totalKms,
@@ -158,7 +159,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
 
   // --- NATIVE CSV EXPORT LOGIC ---
   const exportToCSV = () => {
-    const headers = ['Employee', 'Role', 'Shift Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)'];
+    const headers = ['Employee', 'Role', 'Base Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)'];
     if (isBonusActive) headers.push('Bonuses ($)');
     headers.push('Total Due ($)');
 
@@ -200,7 +201,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         </div>
         
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full lg:w-auto">
-          {/* NEW EXPORT BUTTON */}
           <button onClick={exportToCSV} className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-slate-800 text-white px-3 py-1.5 rounded hover:bg-slate-700 transition shadow-sm text-sm font-medium">
             <Download className="h-4 w-4" /> <span>Export CSV</span>
           </button>
@@ -238,7 +238,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           <thead>
             <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
               <th className="px-6 py-3 font-medium">Employee</th>
-              <th className="px-6 py-3 font-medium">Shift Earnings</th>
+              <th className="px-6 py-3 font-medium">Base Earnings</th>
               <th className="px-6 py-3 font-medium">Mileage</th>
               <th className="px-6 py-3 font-medium">Out-of-Pocket</th>
               {isBonusActive && <th className="px-6 py-3 font-medium text-amber-600">Bonuses</th>}

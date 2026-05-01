@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, ShieldAlert, Loader2, FileText, Upload, Archive, RefreshCcw } from 'lucide-react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, Loader2, FileText, Upload, Archive, RefreshCcw, Lock } from 'lucide-react';
 import { getPayPeriodBounds, parseLocal } from '../utils';
 
 const ONTARIO_REQUIREMENTS = [
@@ -15,7 +15,7 @@ const ONTARIO_REQUIREMENTS = [
   { key: 'references', label: 'Professional References' }
 ];
 
-function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload }) {
+function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload, isMasterAdmin }) {
   const [formData, setFormData] = useState({
     name: employee?.name || '',
     username: employee?.username || '',
@@ -27,6 +27,7 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload }) 
     payType: employee?.payType || 'per_visit',
     hourlyWage: employee?.hourlyWage || 22.50,
     perVisitRate: employee?.perVisitRate || 45,
+    annualSalary: employee?.annualSalary || 45000,
     hireDate: employee?.hireDate || new Date().toISOString().split('T')[0],
     emergencyContactName: employee?.emergencyContactName || '',
     emergencyContactPhone: employee?.emergencyContactPhone || '',
@@ -95,8 +96,9 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload }) 
     const updatedData = { 
       ...formData, 
       payType: formData.payType || 'per_visit',
-      hourlyWage: Number(formData.hourlyWage) || 22.50,
-      perVisitRate: Number(formData.perVisitRate) || 45
+      hourlyWage: Number(formData.hourlyWage) || 0,
+      perVisitRate: Number(formData.perVisitRate) || 0,
+      annualSalary: Number(formData.annualSalary) || 0
     };
     
     if (onSave && employee?.id) {
@@ -177,23 +179,43 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload }) 
                       <input type="date" disabled={isUploading} value={formData.hireDate} onChange={(e) => handleChange('hireDate', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-white">
-                    <div className="col-span-3">
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
-                      <select disabled={isUploading} value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-teal-50">
-                        <option value="per_visit">Per Visit Rate</option>
-                        <option value="hourly">Hourly Rate</option>
-                      </select>
+
+                  {/* RESTRICTED WAGE SECTION */}
+                  {isMasterAdmin ? (
+                    <div className="grid grid-cols-3 gap-3 border border-slate-200 p-3 rounded-md bg-white">
+                      <div className="col-span-3">
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
+                        <select disabled={isUploading} value={formData.payType} onChange={(e) => handleChange('payType', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-teal-50">
+                          <option value="per_visit">Per Visit Rate</option>
+                          <option value="hourly">Hourly Rate</option>
+                          <option value="salary">Annual Salary</option>
+                        </select>
+                      </div>
+                      
+                      {formData.payType === 'salary' ? (
+                        <div className="col-span-3">
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Annual Salary ($)</label>
+                          <input type="number" min="0" step="100" disabled={isUploading} value={formData.annualSalary} onChange={(e) => handleChange('annualSalary', e.target.value)} className="w-full px-3 py-2 border border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" required />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="col-span-3 sm:col-span-1.5">
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit Rate ($)</label>
+                            <input type="number" min="0" step="1" disabled={isUploading} value={formData.perVisitRate} onChange={(e) => handleChange('perVisitRate', e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`} required />
+                          </div>
+                          <div className="col-span-3 sm:col-span-1.5">
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Hourly Wage ($)</label>
+                            <input type="number" min="0" step="0.50" disabled={isUploading} value={formData.hourlyWage} onChange={(e) => handleChange('hourlyWage', e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`} required />
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="col-span-3 sm:col-span-1.5">
-                      <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit Rate ($)</label>
-                      <input type="number" min="0" step="1" disabled={isUploading} value={formData.perVisitRate} onChange={(e) => handleChange('perVisitRate', e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`} required />
+                  ) : (
+                    <div className="border border-slate-200 p-4 rounded-md bg-slate-50 flex items-center justify-center text-slate-500 text-sm italic">
+                      <Lock className="h-4 w-4 mr-2"/> Pay structure is restricted to Master Admin.
                     </div>
-                    <div className="col-span-3 sm:col-span-1.5">
-                      <label className="block text-xs font-medium text-slate-700 mb-1">Hourly Wage ($)</label>
-                      <input type="number" min="0" step="0.50" disabled={isUploading} value={formData.hourlyWage} onChange={(e) => handleChange('hourlyWage', e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${formData.payType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-slate-50'}`} required />
-                    </div>
-                  </div>
+                  )}
+
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Update Photo (Optional)</label>
                     <div className={`mt-1 flex justify-center px-4 py-3 border-2 border-slate-300 border-dashed rounded-md transition bg-white ${isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isUploading && document.getElementById('edit-emp-photo-upload').click()}>
@@ -444,6 +466,7 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
   const [newPayType, setNewPayType] = useState('per_visit');
   const [newHourlyWage, setNewHourlyWage] = useState('22.50');
   const [newPerVisitRate, setNewPerVisitRate] = useState('45');
+  const [newAnnualSalary, setNewAnnualSalary] = useState('45000');
   const [newHireDate, setNewHireDate] = useState(new Date().toISOString().split('T')[0]);
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -453,8 +476,10 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
   const [searchTerm, setSearchTerm] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   
-  // NEW: Toggle to view Active vs Deactivated employees
   const [employeeStatusView, setEmployeeStatusView] = useState('active'); 
+
+  // SECURITY CHECK
+  const isMasterAdmin = currentUser?.role === 'Master Admin' || currentUser?.id === 'admin1';
 
   const safeEmployees = Array.isArray(employees) ? employees : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
@@ -483,6 +508,7 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
       payType: newPayType,
       hourlyWage: Number(newHourlyWage) || 22.50,
       perVisitRate: Number(newPerVisitRate) || 45,
+      annualSalary: Number(newAnnualSalary) || 45000,
       hireDate: newHireDate,
       phone: newPhone,
       email: newEmail,
@@ -490,7 +516,7 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
       requirements: {},
       timeOffBalances: { sick: 5, vacation: 10 },
       availability: newAvailability,
-      isActive: true // NEW: Default to active
+      isActive: true
     };
     
     if (onAddEmployee) {
@@ -498,8 +524,8 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
     }
     
     setNewName(''); setNewUsername(''); setNewPassword(''); setNewPayType('per_visit'); setNewHourlyWage('22.50');
-    setNewPerVisitRate('45'); setNewHireDate(new Date().toISOString().split('T')[0]); setNewPhone('');
-    setNewEmail(''); setNewAvailability([]); setNewPhotoFile(null); setIsUploading(false);
+    setNewPerVisitRate('45'); setNewAnnualSalary('45000'); setNewHireDate(new Date().toISOString().split('T')[0]); 
+    setNewPhone(''); setNewEmail(''); setNewAvailability([]); setNewPhotoFile(null); setIsUploading(false);
   };
 
   const toggleNewAvailability = (dayPart) => {
@@ -518,13 +544,11 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
     return issues;
   };
 
-  // NEW: Filter explicitly checks the isActive property
   const filteredEmployees = safeEmployees.filter(emp => {
     if (!emp) return false;
     const nameMatch = (emp.name || '').toLowerCase().includes(searchTerm.toLowerCase());
     const roleMatch = (emp.role || '').toLowerCase().includes(searchTerm.toLowerCase());
     
-    // If emp.isActive is undefined, we assume they are active
     const isStatusMatch = employeeStatusView === 'active' 
       ? emp.isActive !== false 
       : emp.isActive === false;
@@ -555,7 +579,6 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
           </div>
         </div>
 
-        {/* NEW: Tabs for Active/Deactivated */}
         <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide bg-slate-50/50">
           <button 
             onClick={() => setEmployeeStatusView('active')} 
@@ -592,7 +615,6 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
                       <Edit className="h-4 w-4" />
                     </button>
                     
-                    {/* NEW: Safe Soft-Deactivate / Reactivate button */}
                     {emp.id !== 'admin1' && (
                       emp.isActive !== false ? (
                         <button 
@@ -638,8 +660,15 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
                         <span className={`text-xs font-medium px-2 py-0.5 rounded inline-block w-fit ${emp.isActive === false ? 'bg-slate-100 text-slate-500' : 'bg-teal-50 text-teal-700'}`}>{emp.role || 'Staff'}</span>
                         {emp.isActive === false && <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase">Deactivated</span>}
                       </div>
+                      
+                      {/* RESTRICTED WAGE VIEW IN DIRECTORY */}
                       <span className="text-xs font-semibold text-slate-600">
-                        {emp.payType === 'hourly' ? `$${emp.hourlyWage || 22.50}/hr` : `$${emp.perVisitRate || 45}/visit`}
+                        {isMasterAdmin ? (
+                          emp.payType === 'salary' ? `$${(emp.annualSalary||45000).toLocaleString()}/yr` : 
+                          emp.payType === 'hourly' ? `$${emp.hourlyWage || 22.50}/hr` : `$${emp.perVisitRate || 45}/visit`
+                        ) : (
+                          <span className="italic flex items-center"><Lock className="h-3 w-3 mr-1"/> Wage Confidential</span>
+                        )}
                       </span>
                     </div>
                   </div>
@@ -741,21 +770,42 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
               <label className="block text-sm font-medium text-slate-700 mb-1">Hire Date</label>
               <input type="date" disabled={isUploading} value={newHireDate} onChange={(e) => setNewHireDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white" />
             </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
-              <select disabled={isUploading} value={newPayType} onChange={(e) => setNewPayType(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white">
-                <option value="per_visit">Per Visit Rate</option>
-                <option value="hourly">Hourly Rate</option>
-              </select>
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit ($)</label>
-              <input type="number" min="0" step="1" disabled={isUploading} value={newPerVisitRate} onChange={(e) => setNewPerVisitRate(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`} required />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-slate-700 mb-1">Hourly ($)</label>
-              <input type="number" min="0" step="0.50" disabled={isUploading} value={newHourlyWage} onChange={(e) => setNewHourlyWage(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`} required />
-            </div>
+            
+            {/* WAGE SECURE AREA */}
+            {isMasterAdmin ? (
+              <>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Active Pay Structure</label>
+                  <select disabled={isUploading} value={newPayType} onChange={(e) => setNewPayType(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white">
+                    <option value="per_visit">Per Visit Rate</option>
+                    <option value="hourly">Hourly Rate</option>
+                    <option value="salary">Annual Salary</option>
+                  </select>
+                </div>
+                
+                {newPayType === 'salary' ? (
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Annual Salary ($)</label>
+                    <input type="number" min="0" step="100" disabled={isUploading} value={newAnnualSalary} onChange={(e) => setNewAnnualSalary(e.target.value)} className="w-full px-3 py-2 border border-teal-400 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white" required />
+                  </div>
+                ) : (
+                  <>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Per Visit ($)</label>
+                      <input type="number" min="0" step="1" disabled={isUploading} value={newPerVisitRate} onChange={(e) => setNewPerVisitRate(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'per_visit' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`} required />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Hourly ($)</label>
+                      <input type="number" min="0" step="0.50" disabled={isUploading} value={newHourlyWage} onChange={(e) => setNewHourlyWage(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm ${newPayType === 'hourly' ? 'border-teal-400 bg-white' : 'border-slate-200 bg-white/50'}`} required />
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="col-span-2 bg-slate-100 text-slate-500 text-xs p-2 rounded text-center font-medium">
+                <Lock className="h-3 w-3 inline mr-1"/> Wages can only be set by the Master Admin. Default rate applied.
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -807,6 +857,7 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
           employee={editingEmployee} 
           onClose={() => setEditingEmployee(null)} 
           onEmployeeFileUpload={onEmployeeFileUpload}
+          isMasterAdmin={isMasterAdmin}
           onSave={async (id, data, file, certFiles) => {
             if (updateEmployee) await updateEmployee(id, data, file, certFiles);
             setEditingEmployee(null);

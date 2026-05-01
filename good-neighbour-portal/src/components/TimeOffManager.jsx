@@ -55,11 +55,23 @@ export default function TimeOffManager({ employees = [], timeOffLogs = [], onApp
     });
   }, [safeEmployees, safeTimeOffLogs, currentYear]);
 
-  // Separate Queues
-  const pendingRequests = safeTimeOffLogs.filter(l => l.status === 'pending').sort((a,b) => new Date(a.dateSubmitted) - new Date(b.dateSubmitted));
+  // Separate Queues - NOW SORTED BY DATE SUBMITTED (NEWEST FIRST)
+  const pendingRequests = safeTimeOffLogs
+    .filter(l => l.status === 'pending')
+    .sort((a,b) => {
+      const timeA = new Date(a.dateSubmitted || a.startDate || 0).getTime();
+      const timeB = new Date(b.dateSubmitted || b.startDate || 0).getTime();
+      return timeB - timeA;
+    });
   
-  // Combine all non-pending logs for the history view
-  const historyLogs = safeTimeOffLogs.filter(l => l.status !== 'pending').sort((a,b) => new Date(b.startDate) - new Date(a.startDate));
+  // Combine all non-pending logs for the history view - NOW SORTED BY DATE SUBMITTED (NEWEST FIRST)
+  const historyLogs = safeTimeOffLogs
+    .filter(l => l.status !== 'pending')
+    .sort((a,b) => {
+      const timeA = new Date(a.dateSubmitted || a.startDate || 0).getTime();
+      const timeB = new Date(b.dateSubmitted || b.startDate || 0).getTime();
+      return timeB - timeA;
+    });
 
   const displayHistory = historyLogs.filter(log => {
     if (!filterMonth) return true;

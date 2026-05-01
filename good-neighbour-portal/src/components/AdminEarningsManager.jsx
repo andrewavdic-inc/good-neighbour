@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Coins, Award, Trophy, Medal } from 'lucide-react';
+import { Coins, Award, Trophy, Medal, Download } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
 export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], payPeriodStart, isBonusActive, bonusSettings }) {
@@ -156,6 +156,41 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
     }).filter(Boolean).sort((a, b) => b.totalEarnings - a.totalEarnings);
   }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd, isBonusActive, safeBonusSettings]);
 
+  // --- NATIVE CSV EXPORT LOGIC ---
+  const exportToCSV = () => {
+    const headers = ['Employee', 'Role', 'Shift Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)'];
+    if (isBonusActive) headers.push('Bonuses ($)');
+    headers.push('Total Due ($)');
+
+    const rows = employeeEarnings.map(emp => {
+      const row = [
+        `"${emp.name}"`, 
+        `"${emp.role}"`,
+        emp.shiftEarnings.toFixed(2),
+        emp.kmEarnings.toFixed(2),
+        emp.clientExpenseEarnings.toFixed(2)
+      ];
+      if (isBonusActive) row.push(emp.bonusEarnings.toFixed(2));
+      row.push(emp.totalEarnings.toFixed(2));
+      return row;
+    });
+
+    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Create a beautiful, readable filename (e.g. Earnings_April_01_to_April_14.csv)
+    const startDateStr = currentPeriodStart.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).replace(' ', '_');
+    const endDateStr = currentPeriodEnd.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).replace(' ', '_');
+    link.setAttribute('download', `Team_Earnings_${startDateStr}_to_${endDateStr}.csv`);
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
@@ -163,29 +198,37 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           <Coins className="h-5 w-5 mr-2 text-teal-600" />
           <h2 className="text-lg font-semibold text-slate-800">Team Earnings Overview</h2>
         </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full lg:w-auto">
-          <label className="text-sm font-medium text-slate-600 whitespace-nowrap">Pay Period:</label>
-          <div className="flex space-x-2 w-full sm:w-auto">
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="w-1/3 sm:w-auto px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium text-slate-700 shadow-sm"
-            >
-              {availableYears.map(year => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-            <select
-              value={activePeriod.start.getTime().toString()}
-              onChange={(e) => setSelectedPeriodTime(e.target.value)}
-              className="w-2/3 sm:w-auto px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium text-slate-700 shadow-sm"
-            >
-              {filteredPeriods.map((period) => (
-                <option key={period.start.getTime()} value={period.start.getTime().toString()}>
-                  {period.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} &ndash; {period.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {period.isCurrent ? '(Current)' : ''}
-                </option>
-              ))}
-            </select>
+        
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full lg:w-auto">
+          {/* NEW EXPORT BUTTON */}
+          <button onClick={exportToCSV} className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-slate-800 text-white px-3 py-1.5 rounded hover:bg-slate-700 transition shadow-sm text-sm font-medium">
+            <Download className="h-4 w-4" /> <span>Export CSV</span>
+          </button>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
+            <label className="text-sm font-medium text-slate-600 whitespace-nowrap">Pay Period:</label>
+            <div className="flex space-x-2 w-full sm:w-auto">
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="w-1/3 sm:w-auto px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium text-slate-700 shadow-sm"
+              >
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+              <select
+                value={activePeriod.start.getTime().toString()}
+                onChange={(e) => setSelectedPeriodTime(e.target.value)}
+                className="w-2/3 sm:w-auto px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium text-slate-700 shadow-sm"
+              >
+                {filteredPeriods.map((period) => (
+                  <option key={period.start.getTime()} value={period.start.getTime().toString()}>
+                    {period.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} &ndash; {period.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {period.isCurrent ? '(Current)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>

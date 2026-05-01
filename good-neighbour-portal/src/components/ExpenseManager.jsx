@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter } from 'lucide-react';
+import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, Download } from 'lucide-react';
 
 export default function ExpenseManager({ expenses = [], clientExpenses = [], employees = [], clients = [], onUpdateExpense, onUpdateClientExpense }) {
   const [activeTab, setActiveTab] = useState('mileage');
@@ -33,6 +33,48 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
   const filteredMileage = filterData(safeExpenses);
   const filteredOOP = filterData(safeClientExpenses);
 
+  // --- NATIVE CSV EXPORT LOGIC ---
+  const exportToCSV = () => {
+    let headers = [];
+    let rows = [];
+    let filename = '';
+
+    if (activeTab === 'mileage') {
+      headers = ['Date', 'Employee', 'Client', 'Description', 'Kilometers', 'Payout ($)', 'Status'];
+      rows = filteredMileage.map(exp => [
+        exp.date,
+        `"${getEmpName(exp.employeeId)}"`,
+        `"${getClientName(exp.clientId)}"`,
+        `"${exp.description || ''}"`,
+        exp.kilometers,
+        (Number(exp.kilometers) * 0.68).toFixed(2),
+        exp.status
+      ]);
+      filename = `Mileage_Logs${filterMonth ? `_${filterMonth}` : ''}.csv`;
+    } else {
+      headers = ['Date', 'Employee', 'Client', 'Description', 'Amount ($)', 'Status'];
+      rows = filteredOOP.map(exp => [
+        exp.date,
+        `"${getEmpName(exp.employeeId)}"`,
+        `"${getClientName(exp.clientId)}"`,
+        `"${exp.description || ''}"`,
+        Number(exp.amount).toFixed(2),
+        exp.status
+      ]);
+      filename = `Out_of_Pocket_Purchases${filterMonth ? `_${filterMonth}` : ''}.csv`;
+    }
+
+    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const renderStatusBadge = (status) => {
     if (status === 'approved') return <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">Approved</span>;
     if (status === 'rejected') return <span className="px-2.5 py-1 bg-red-100 text-red-800 text-xs font-bold rounded-full">Rejected</span>;
@@ -50,6 +92,11 @@ export default function ExpenseManager({ expenses = [], clientExpenses = [], emp
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+          {/* NEW EXPORT BUTTON */}
+          <button onClick={exportToCSV} className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-slate-800 text-white px-3 py-1.5 rounded hover:bg-slate-700 transition shadow-sm text-sm font-medium">
+            <Download className="h-4 w-4" /> <span>Export CSV</span>
+          </button>
+
           {/* MONTH FILTER */}
           <div className="flex items-center bg-white border border-slate-300 rounded-md px-3 py-1.5 focus-within:ring-1 focus-within:ring-teal-500 focus-within:border-teal-500 transition">
             <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />

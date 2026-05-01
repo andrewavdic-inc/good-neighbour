@@ -1,13 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { Wallet, Car, Receipt } from 'lucide-react';
+import { Wallet, Car, Receipt, Download, Plus } from 'lucide-react';
 import { parseLocal } from '../utils';
 
-export default function AdminClientFundsManager({ clients = [], expenses = [], clientExpenses = [], employees = [] }) {
+export default function AdminClientFundsManager({ clients = [], expenses = [], clientExpenses = [], employees = [], onAddClientExpense }) {
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [expandedClientId, setExpandedClientId] = useState(null);
+  
+  // Top Up Modal State
+  const [topUpModal, setTopUpModal] = useState(null); // Holds the client object when active
+  const [topUpAmount, setTopUpAmount] = useState('');
+  const [topUpNote, setTopUpNote] = useState('');
 
   const safeClients = Array.isArray(clients) ? clients : [];
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
@@ -28,7 +33,7 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
 
   const [yearStr, monthStr] = selectedMonth.split('-');
   const targetYear = parseInt(yearStr, 10);
-  const targetMonth = parseInt(monthStr, 10) - 1; // 0-indexed
+  const targetMonth = parseInt(monthStr, 10) - 1;
 
   const clientFundsData = useMemo(() => {
     return safeClients.map(client => {
@@ -65,6 +70,49 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
     setExpandedClientId(prev => prev === clientId ? null : clientId);
   };
 
+  const handleTopUpSubmit = (e) => {
+    e.preventDefault();
+    if(!topUpAmount || !topUpModal) return;
+
+    // A top-up acts as a negative expense (a credit) to the ledger
+    const amount = -Math.abs(Number(topUpAmount));
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if(onAddClientExpense) {
+       onAddClientExpense({
+         clientId: topUpModal.id,
+         employeeId: 'admin',
+         date: todayStr,
+         amount: amount,
+         description: `[FUNDS TOP-UP]: ${topUpNote}`,
+         status: 'approved'
+       });
+    }
+    setTopUpModal(null);
+    setTopUpAmount('');
+    setTopUpNote('');
+  };
+
+  const exportToCSV = () => {
+    const headers = ['Client Name', 'Monthly Limit ($)', 'Used Mileage ($)', 'Used Out-of-Pocket ($)', 'Remaining Balance ($)'];
+    const rows = clientFundsData.map(c => [
+      `"${c.name}"`, 
+      (c.monthlyAllowance || 0).toFixed(2),
+      c.mileageCost.toFixed(2),
+      c.oopCost.toFixed(2),
+      c.remaining.toFixed(2)
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Client_Funds_Ledger_${selectedMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -72,17 +120,22 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
           <Wallet className="h-5 w-5 mr-2 text-teal-600" />
           <h2 className="text-lg font-semibold text-slate-800">Client Monthly Allowances</h2>
         </div>
-        <div className="flex items-center space-x-3 w-full sm:w-auto">
-          <label className="text-sm font-medium text-slate-600 whitespace-nowrap">Billing Month:</label>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="w-full sm:w-auto px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium text-slate-700 shadow-sm"
-          >
-            {monthOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
+          <button onClick={exportToCSV} className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-slate-800 text-white px-3 py-1.5 rounded hover:bg-slate-700 transition shadow-sm text-sm font-medium">
+            <Download className="h-4 w-4" /> <span>Export CSV</span>
+          </button>
+          <div className="flex items-center space-x-3 w-full sm:w-auto">
+            <label className="text-sm font-medium text-slate-600 whitespace-nowrap">Billing Month:</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="w-full sm:w-auto px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white font-medium text-slate-700 shadow-sm"
+            >
+              {monthOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
       
@@ -124,7 +177,13 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
                     <td className={`px-6 py-4 text-right font-bold text-base ${client.remaining < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
                       ${client.remaining.toFixed(2)}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 text-center space-x-3">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setTopUpModal(client); }}
+                        className="text-amber-600 hover:text-amber-800 text-sm font-bold transition bg-amber-50 px-2 py-1 rounded"
+                      >
+                        Top Up
+                      </button>
                       <button 
                         className="text-teal-600 hover:text-teal-800 text-sm font-medium transition"
                       >
@@ -136,30 +195,31 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
                   {expandedClientId === client.id && (
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <td colSpan="6" className="px-6 py-4">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Itemized Deductions ({selectedMonth})</h4>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Itemized Deductions & Credits ({selectedMonth})</h4>
                         {client.transactions.length === 0 ? (
                           <div className="text-sm text-slate-500 italic">No approved transactions for this month.</div>
                         ) : (
                           <div className="space-y-2">
                             {client.transactions.map((tx, idx) => {
                               const emp = safeEmployees.find(e => e.id === tx.employeeId);
+                              const isCredit = (tx.cost || 0) < 0;
                               return (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-white rounded border border-slate-200 text-sm">
+                                <div key={idx} className={`flex items-center justify-between p-3 bg-white rounded border border-slate-200 text-sm ${isCredit ? 'border-l-4 border-l-amber-500' : ''}`}>
                                   <div className="flex items-center gap-3">
-                                    <div className={`p-1.5 rounded-full ${tx.type === 'mileage' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                                      {tx.type === 'mileage' ? <Car className="h-4 w-4" /> : <Receipt className="h-4 w-4" />}
+                                    <div className={`p-1.5 rounded-full ${tx.type === 'mileage' ? 'bg-blue-100 text-blue-700' : isCredit ? 'bg-amber-100 text-amber-700' : 'bg-purple-100 text-purple-700'}`}>
+                                      {tx.type === 'mileage' ? <Car className="h-4 w-4" /> : isCredit ? <Plus className="h-4 w-4" /> : <Receipt className="h-4 w-4" />}
                                     </div>
                                     <div>
                                       <div className="font-semibold text-slate-700">
-                                        {tx.date ? parseLocal(tx.date).toLocaleDateString() : 'Unknown'} &bull; {emp?.name || 'Unknown Staff'}
+                                        {tx.date ? parseLocal(tx.date).toLocaleDateString() : 'Unknown'} &bull; {emp?.name || 'Admin'}
                                       </div>
                                       <div className="text-xs text-slate-500">
                                         {tx.type === 'mileage' ? `${tx.kilometers}km: ` : ''}{tx.description}
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="font-bold text-slate-700">
-                                    -${(tx.cost || 0).toFixed(2)}
+                                  <div className={`font-bold ${isCredit ? 'text-amber-600' : 'text-slate-700'}`}>
+                                    {isCredit ? '+' : '-'}${Math.abs(tx.cost || 0).toFixed(2)}
                                   </div>
                                 </div>
                               )
@@ -175,6 +235,35 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
           </tbody>
         </table>
       </div>
+
+      {/* TOP UP MODAL */}
+      {topUpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 bg-amber-500 text-white flex justify-between items-center">
+              <h3 className="text-lg font-bold">Top Up: {topUpModal.name}</h3>
+              <button onClick={() => setTopUpModal(null)} className="text-white hover:text-amber-200 transition text-2xl leading-none">&times;</button>
+            </div>
+            <form onSubmit={handleTopUpSubmit} className="p-6 space-y-4">
+              <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded border border-amber-200">
+                A top-up adds authorized funds to this client's balance for the current month by recording a credit in the expense ledger.
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Top-Up Amount ($) *</label>
+                <input type="number" min="0.01" step="0.01" value={topUpAmount} onChange={(e) => setTopUpAmount(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 focus:border-amber-500 text-lg font-bold text-slate-800" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Note / Reason</label>
+                <input type="text" value={topUpNote} onChange={(e) => setTopUpNote(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 focus:border-amber-500 text-sm" placeholder="e.g. Additional pharmacy funds approved by family" />
+              </div>
+              <div className="pt-4 flex justify-end space-x-3">
+                <button type="button" onClick={() => setTopUpModal(null)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-sm font-bold text-white bg-amber-600 rounded-md hover:bg-amber-700 transition">Apply Top-Up</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

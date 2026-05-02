@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, Filter } from 'lucide-react';
-import DocumentManager from './DocumentManager';
+import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter, Info } from 'lucide-react';
 
 // --- DATE HELPER ---
 const parseLocalSafe = (dateStr) => {
@@ -14,7 +13,7 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-// --- NEW STANDARDIZED CATEGORIES ---
+// --- STANDARDIZED CATEGORIES ---
 const EXPENSE_CATEGORIES = [
   "Personnel and Payroll (Salaries, Benefits, Payroll Tax, Education)",
   "General Admin & Office Costs (Office Supplies, Software, Telecomm, Shipping)",
@@ -23,13 +22,13 @@ const EXPENSE_CATEGORIES = [
   "Other (Travel, Meals, Insurance, Bank Fees)"
 ];
 
-const CABINET_DOC_CATEGORIES = [
-  "Legal and Formation Documents",
-  "Financial Records",
-  "Intellectual Property and Proprietary Info",
-  "Operational and Strategic Documents",
-  "Personnel and Employment Records",
-  "Corporate Governance"
+const CABINET_CATEGORIES = [
+  { id: "Legal and Formation Documents", hint: "Articles of Incorporation, Operating Agreements, Shareholder Agreements, Partnership Agreements" },
+  { id: "Financial Records", hint: "Returns and Filings, Statements, Banking, Payroll Records, Transactional" },
+  { id: "Intellectual Property (IP) and Proprietary Information", hint: "Technical Data, Trademarks, Patents, Copyrights, NDA" },
+  { id: "Operational and Strategic Documents", hint: "Minutes, Policies Reports, Analysis, Plans" },
+  { id: "Personnel and Employment Records", hint: "Contracts, Performance Assessments, Payroll Records" },
+  { id: "Corporate Governance", hint: "Stock Ledgers/Ownership Records, Board Resolutions" }
 ];
 
 export default function AdminDesk({ 
@@ -49,12 +48,16 @@ export default function AdminDesk({
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
   const [editingAppt, setEditingAppt] = useState(null);
   
-  // --- Note Form State ---
+  // --- Note Form & Filter State ---
   const [noteType, setNoteType] = useState('text'); 
   const [noteText, setNoteText] = useState('');
   const [noteItems, setNoteItems] = useState([{ id: Date.now().toString(), text: '', isCompleted: false }]);
   const [isUrgent, setIsUrgent] = useState(false);
   const [noteSort, setNoteSort] = useState('asc'); 
+  const [noteFilterMonth, setNoteFilterMonth] = useState(''); 
+
+  // --- Banner Mute State ---
+  const [isBannerMuted, setIsBannerMuted] = useState(false);
 
   // --- Appt Form State ---
   const [apptTitle, setApptTitle] = useState('');
@@ -70,7 +73,7 @@ export default function AdminDesk({
   const [boardFont, setBoardFont] = useState(currentUser.deskBoard?.font || 'font-sans');
   const [boardBg, setBoardBg] = useState(currentUser.deskBoard?.bg || 'bg-white');
 
-  // --- Business Expense Form State ---
+  // --- Business Expense Form & Filter State ---
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
   const [expAmount, setExpAmount] = useState('');
@@ -78,6 +81,8 @@ export default function AdminDesk({
   const [expDescription, setExpDescription] = useState('');
   const [expFile, setExpFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [expFilterCategory, setExpFilterCategory] = useState('All');
+  const [expSort, setExpSort] = useState('desc'); // 'desc' = Newest, 'asc' = Oldest
 
   // --- Bottom Cabinet & Drawer State ---
   const [cabinetTab, setCabinetTab] = useState('expenses');
@@ -86,7 +91,7 @@ export default function AdminDesk({
   
   // --- Cabinet Document State & Filters ---
   const [cabDocTitle, setCabDocTitle] = useState('');
-  const [cabDocCategory, setCabDocCategory] = useState(CABINET_DOC_CATEGORIES[0]);
+  const [cabDocCategory, setCabDocCategory] = useState(CABINET_CATEGORIES[0].id);
   const [cabDocFile, setCabDocFile] = useState(null);
   const [isCabDocUploading, setIsCabDocUploading] = useState(false);
   const [cabFilterCategory, setCabFilterCategory] = useState('All');
@@ -121,24 +126,37 @@ export default function AdminDesk({
   const myDrawerFiles = useMemo(() => adminDrawer.filter(f => f.authorId === currentUser.id), [adminDrawer, currentUser.id]);
   const safeCabinetDocs = Array.isArray(cabinetDocuments) ? cabinetDocuments : [];
 
+  // Sticky Notes Filter & Sort
   const sortedNotes = useMemo(() => {
-    return [...myNotes].sort((a,b) => {
-      const diff = new Date(a.reminderDate) - new Date(b.reminderDate);
-      return noteSort === 'asc' ? diff : -diff;
-    });
-  }, [myNotes, noteSort]);
+    return [...myNotes]
+      .filter(n => !noteFilterMonth || (n.reminderDate && n.reminderDate.startsWith(noteFilterMonth)))
+      .sort((a,b) => {
+        const diff = new Date(a.reminderDate) - new Date(b.reminderDate);
+        return noteSort === 'asc' ? diff : -diff;
+      });
+  }, [myNotes, noteSort, noteFilterMonth]);
 
-  // Filter & Sort Cabinet Documents
+  // Business Expenses Filter & Sort
+  const filteredAndSortedExpenses = useMemo(() => {
+    return businessExpenses
+      .filter(exp => expFilterCategory === 'All' || exp.category === expFilterCategory)
+      .sort((a, b) => {
+        const diff = new Date(b.date) - new Date(a.date);
+        return expSort === 'desc' ? diff : -diff;
+      });
+  }, [businessExpenses, expFilterCategory, expSort]);
+
+  // Cabinet Documents Filter & Sort
   const filteredCabinetDocs = useMemo(() => {
     return safeCabinetDocs.filter(doc => {
       if (cabFilterCategory !== 'All' && doc.category !== cabFilterCategory) return false;
       if (cabFilterMonth && doc.uploadDate && !doc.uploadDate.startsWith(cabFilterMonth)) return false;
       return true;
-    }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate)); // Newest first
+    }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate));
   }, [safeCabinetDocs, cabFilterCategory, cabFilterMonth]);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const urgentAlerts = myNotes.filter(n => n.isUrgent);
+  const urgentAlerts = myNotes.filter(n => n.isUrgent === true);
   const todayAppts = myAppointments.filter(a => a.date === todayStr);
 
   const upcomingItinerary = useMemo(() => {
@@ -249,7 +267,6 @@ export default function AdminDesk({
     setIsBoardEditing(false);
   };
 
-  // Basic list manipulators
   const updateNoteItem = (id, text) => {
     setNoteItems(prev => prev.map(item => item.id === id ? { ...item, text } : item));
     if (text.trim() !== '' && noteItems[noteItems.length - 1].id === id) {
@@ -299,12 +316,12 @@ export default function AdminDesk({
     setIsCabDocUploading(false); 
     setCabDocTitle(''); 
     setCabDocFile(null); 
-    setCabDocCategory(CABINET_DOC_CATEGORIES[0]);
+    setCabDocCategory(CABINET_CATEGORIES[0].id);
   };
 
   const exportBusinessExpenses = () => {
     const headers = ['Date', 'Category', 'Description', 'Amount ($)', 'Logged By'];
-    const rows = businessExpenses.sort((a,b) => new Date(b.date) - new Date(a.date)).map(exp => {
+    const rows = filteredAndSortedExpenses.map(exp => {
       const emp = employees.find(e => e.id === exp.loggedBy);
       return [
         exp.date,
@@ -320,7 +337,7 @@ export default function AdminDesk({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Company_Expenses_${year}_${monthNames[month]}.csv`);
+    link.setAttribute('download', `Company_Expenses_Export_${year}_${monthNames[month]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -329,17 +346,22 @@ export default function AdminDesk({
   return (
     <div className="bg-slate-100 p-6 rounded-2xl border border-slate-300 shadow-inner min-h-[900px] flex flex-col">
       
-      {/* URGENT BANNER */}
-      {(urgentAlerts.length > 0 || todayAppts.length > 0) && (
-        <div className="bg-red-600 text-white p-4 rounded-xl flex items-center justify-between mb-6 shadow-md animate-pulse">
+      {/* URGENT BANNER WITH MUTE */}
+      {(urgentAlerts.length > 0 || todayAppts.length > 0) && !isBannerMuted && (
+        <div className="bg-red-600 text-white p-4 rounded-xl flex items-start sm:items-center justify-between mb-6 shadow-md animate-pulse">
           <div className="flex items-center">
-            <AlertCircle className="h-6 w-6 mr-3" />
+            <AlertCircle className="h-6 w-6 mr-3 shrink-0" />
             <div>
               <div className="font-bold text-lg leading-tight">Requires Attention</div>
               <div className="text-sm text-red-100">You have {urgentAlerts.length} urgent note(s) and {todayAppts.length} appointment(s) today.</div>
             </div>
           </div>
-          <button onClick={() => handleDayClick(new Date().getDate())} className="bg-white text-red-700 hover:bg-red-50 font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm">View Today</button>
+          <div className="flex items-center space-x-3 mt-3 sm:mt-0 ml-4 shrink-0">
+            <button onClick={() => handleDayClick(new Date().getDate())} className="bg-white text-red-700 hover:bg-red-50 font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm whitespace-nowrap">View Today</button>
+            <button onClick={() => setIsBannerMuted(true)} className="text-red-200 hover:text-white transition p-1" title="Dismiss Alert">
+              <XCircle className="h-6 w-6" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -496,24 +518,33 @@ export default function AdminDesk({
           </div>
         </div>
 
-        {/* COL 3: SORTABLE STICKY NOTES */}
+        {/* COL 3: SORTABLE STICKY NOTES WITH MONTH FILTER */}
         <div className="bg-yellow-50 rounded-xl shadow-sm border border-yellow-200 overflow-hidden flex flex-col h-[750px]">
           <div className="px-6 py-4 border-b border-yellow-200 bg-yellow-100/50 flex flex-col space-y-3">
-            <h2 className="text-lg font-semibold text-yellow-800 flex items-center">
-              <FileText className="h-5 w-5 mr-2" /> My Sticky Notes
-            </h2>
-            <div className="flex space-x-2 w-full">
-              <button onClick={() => setNoteSort(s => s === 'asc' ? 'desc' : 'asc')} className="flex-1 text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-2 py-1.5 rounded transition flex items-center justify-center">
-                Sort: {noteSort === 'asc' ? 'Earliest First' : 'Latest First'}
-              </button>
-              <button onClick={() => openNewNoteModal()} className="flex-1 text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-2 py-1.5 rounded transition">
-                + New Note
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-yellow-800 flex items-center"><FileText className="h-5 w-5 mr-2" /> My Sticky Notes</h2>
+              <button onClick={() => openNewNoteModal()} className="text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-3 py-1.5 rounded transition shadow-sm">+ New Note</button>
+            </div>
+            
+            <div className="flex space-x-2 w-full items-center">
+              <div className="flex-1 flex items-center bg-white border border-yellow-300 rounded overflow-hidden shadow-sm">
+                <Filter className="h-3 w-3 text-yellow-600 ml-2 shrink-0" />
+                <input 
+                  type="month" 
+                  value={noteFilterMonth} 
+                  onChange={(e) => setNoteFilterMonth(e.target.value)} 
+                  className="w-full text-xs px-2 py-1.5 text-yellow-800 bg-transparent focus:outline-none" 
+                  title="Filter by Month"
+                />
+              </div>
+              <button onClick={() => setNoteSort(s => s === 'asc' ? 'desc' : 'asc')} className="flex-1 text-xs bg-white border border-yellow-300 hover:bg-yellow-50 text-yellow-800 font-bold px-2 py-1.5 rounded transition flex items-center justify-center shadow-sm">
+                {noteSort === 'asc' ? 'Earliest First' : 'Latest First'}
               </button>
             </div>
           </div>
           <div className="p-4 flex-1 overflow-y-auto space-y-3">
             {sortedNotes.length === 0 ? (
-              <div className="text-center py-8 text-yellow-600/60 text-sm font-medium italic">Click any day on the calendar to add a private note.</div>
+              <div className="text-center py-8 text-yellow-600/60 text-sm font-medium italic">No notes found for this filter.</div>
             ) : (
               sortedNotes.map(note => {
                 const isPast = new Date(note.reminderDate) < new Date(todayStr);
@@ -523,9 +554,7 @@ export default function AdminDesk({
                       <button onClick={() => openEditNoteModal(note)} className="text-slate-400 hover:text-blue-500 p-1"><Edit className="h-4 w-4"/></button>
                       <button onClick={() => onRemoveNote(note.id)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 className="h-4 w-4"/></button>
                     </div>
-                    <div className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center opacity-70">
-                      <CalendarIcon className="h-3 w-3 mr-1" /> {note.reminderDate}
-                    </div>
+                    <div className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center opacity-70"><CalendarIcon className="h-3 w-3 mr-1" /> {note.reminderDate}</div>
                     
                     {note.type === 'list' ? (
                       <div className="space-y-2 mt-2">
@@ -580,30 +609,44 @@ export default function AdminDesk({
           {/* TAB 1: SHARED EXPENSE LEDGER */}
           {cabinetTab === 'expenses' && (
             <div className="flex flex-col h-full">
-              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <h2 className="text-lg font-semibold text-slate-800 flex items-center">
                   <Receipt className="h-5 w-5 mr-2 text-teal-600" />
                   Internal Business Expenses
                 </h2>
-                <div className="flex space-x-2">
-                  <button onClick={exportBusinessExpenses} className="text-xs bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded transition flex items-center">
+                <div className="flex space-x-2 w-full sm:w-auto">
+                  <button onClick={exportBusinessExpenses} className="flex-1 sm:flex-none text-xs bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded transition flex items-center justify-center">
                     <Download className="h-3 w-3 mr-1" /> Export CSV
                   </button>
-                  <button onClick={() => setIsExpenseModalOpen(true)} className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold px-3 py-1.5 rounded transition flex items-center">
+                  <button onClick={() => setIsExpenseModalOpen(true)} className="flex-1 sm:flex-none text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold px-3 py-1.5 rounded transition flex items-center justify-center">
                     <Plus className="h-3 w-3 mr-1" /> Log Bill
                   </button>
                 </div>
               </div>
+
+              {/* NEW EXPENSE FILTER BAR */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
+                <div className="flex items-center space-x-2 w-full sm:w-auto">
+                  <Filter className="h-4 w-4 text-slate-400 shrink-0" />
+                  <select value={expFilterCategory} onChange={e => setExpFilterCategory(e.target.value)} className="text-xs border border-slate-300 rounded px-2 py-1.5 focus:ring-teal-500 bg-white text-slate-700 w-full sm:w-auto font-medium">
+                    <option value="All">All Categories</option>
+                    {EXPENSE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
+                </div>
+                <button onClick={() => setExpSort(s => s === 'desc' ? 'asc' : 'desc')} className="text-xs font-bold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded transition hover:bg-slate-50 w-full sm:w-auto shadow-sm">
+                  Sort: {expSort === 'desc' ? 'Newest First' : 'Oldest First'}
+                </button>
+              </div>
               
               <div className="p-0 flex-1 overflow-y-auto">
                 <div className="divide-y divide-slate-100">
-                  {businessExpenses.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500 text-sm">No business expenses have been logged yet.</div>
+                  {filteredAndSortedExpenses.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 text-sm">No expenses found for this category.</div>
                   ) : (
-                    businessExpenses.sort((a,b) => new Date(b.date) - new Date(a.date)).map(exp => {
+                    filteredAndSortedExpenses.map(exp => {
                       const emp = employees.find(e => e.id === exp.loggedBy);
                       return (
-                        <div key={exp.id} className="p-4 hover:bg-slate-50 transition flex items-center justify-between group">
+                        <div key={exp.id} className="p-4 hover:bg-slate-50 transition flex flex-col md:flex-row md:items-center justify-between group gap-4">
                           <div className="flex items-center space-x-4">
                             <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
                               <Receipt className="h-5 w-5" />
@@ -618,7 +661,7 @@ export default function AdminDesk({
                               {exp.description && <div className="text-xs text-slate-600 italic mt-1">"{exp.description}"</div>}
                             </div>
                           </div>
-                          <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-4 self-end md:self-auto">
                             <div className="text-lg font-black text-slate-800">${Number(exp.amount).toFixed(2)}</div>
                             <div className="flex flex-col space-y-1">
                               {exp.receiptUrl && (
@@ -649,24 +692,31 @@ export default function AdminDesk({
               </div>
               
               <div className="p-6 bg-slate-50/50 border-b border-slate-200">
-                <form onSubmit={handleSaveCabinetDocument} className="flex flex-col lg:flex-row gap-4 items-end">
-                  <div className="w-full lg:w-1/4">
+                <form onSubmit={handleSaveCabinetDocument} className="flex flex-col lg:flex-row gap-4 items-start">
+                  
+                  {/* CATEGORY UPLOAD WITH HELPER TEXT */}
+                  <div className="w-full lg:w-1/3">
                     <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
                     <select 
                       value={cabDocCategory} 
                       onChange={(e) => setCabDocCategory(e.target.value)} 
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" 
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm font-semibold text-slate-700" 
                       required 
                       disabled={isCabDocUploading}
                     >
-                      {CABINET_DOC_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      {CABINET_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.id}</option>)}
                     </select>
+                    <div className="mt-1.5 text-[10px] text-teal-700 italic leading-tight px-1 flex items-start">
+                      <Info className="h-3 w-3 mr-1 shrink-0 mt-0.5" />
+                      <span>{CABINET_CATEGORIES.find(c => c.id === cabDocCategory)?.hint}</span>
+                    </div>
                   </div>
-                  <div className="w-full lg:w-1/4">
+
+                  <div className="w-full lg:w-1/3 pb-[18px]">
                     <label className="block text-sm font-medium text-slate-700 mb-1">Document Title *</label>
                     <input type="text" value={cabDocTitle} onChange={(e) => setCabDocTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" required disabled={isCabDocUploading} placeholder="e.g. 2026 Tax Return" />
                   </div>
-                  <div className="w-full lg:w-1/4">
+                  <div className="w-full lg:w-1/4 pb-[18px]">
                     <label className="block text-sm font-medium text-slate-700 mb-1">File *</label>
                     <div className={`flex justify-center px-4 py-2 border-2 border-slate-300 border-dashed rounded-md bg-white transition ${isCabDocUploading ? 'opacity-50' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isCabDocUploading && document.getElementById('cab-doc-upload').click()}>
                       <div className="text-center text-sm font-medium text-teal-600 truncate">
@@ -675,20 +725,36 @@ export default function AdminDesk({
                       <input id="cab-doc-upload" type="file" accept=".pdf,image/*,.doc,.docx" className="sr-only" onChange={(e) => setCabDocFile(e.target.files[0])} disabled={isCabDocUploading} />
                     </div>
                   </div>
-                  <div className="w-full lg:w-1/4">
-                    <button type="submit" disabled={isCabDocUploading || !cabDocTitle || !cabDocFile} className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white px-4 py-2 rounded-md font-medium flex items-center justify-center transition shadow-sm text-sm">
+                  <div className="w-full lg:w-fit pb-[18px] shrink-0">
+                    <button type="submit" disabled={isCabDocUploading || !cabDocTitle || !cabDocFile} className="w-full lg:w-auto bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white px-4 py-2 rounded-md font-medium flex items-center justify-center transition shadow-sm text-sm">
                       {isCabDocUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : <><Plus className="h-4 w-4 mr-2"/> File Document</>}
                     </button>
                   </div>
                 </form>
               </div>
 
-              {/* CABINET DOCUMENTS FILTER BAR */}
+              {/* CABINET DOCUMENTS FILTER BAR WITH TOOLTIP */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
-                <div className="flex space-x-2 overflow-x-auto scrollbar-hide flex-1 sm:mr-4 py-1">
+                <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide flex-1 sm:mr-4 py-1">
+                  
+                  {/* Tooltip Guide */}
+                  <div className="relative group shrink-0 mr-2">
+                    <Info className="h-4 w-4 text-slate-400 cursor-help" />
+                    <div className="absolute left-0 bottom-6 w-80 p-3 bg-slate-800 text-white text-xs rounded shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 pointer-events-none">
+                      <div className="font-bold mb-2 text-teal-300 border-b border-slate-600 pb-1">Category Guide</div>
+                      <div className="space-y-2">
+                        {CABINET_CATEGORIES.map(cat => (
+                          <div key={`tip_${cat.id}`}>
+                            <span className="font-bold text-slate-100">{cat.id}:</span> <span className="text-slate-400">{cat.hint}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
                   <button onClick={() => setCabFilterCategory('All')} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === 'All' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>All</button>
-                  {CABINET_DOC_CATEGORIES.map(cat => (
-                    <button key={cat} onClick={() => setCabFilterCategory(cat)} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === cat ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>{cat}</button>
+                  {CABINET_CATEGORIES.map(cat => (
+                    <button key={`filter_${cat.id}`} onClick={() => setCabFilterCategory(cat.id)} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === cat.id ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>{cat.id}</button>
                   ))}
                 </div>
                 <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition shrink-0">
@@ -934,7 +1000,7 @@ export default function AdminDesk({
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
-                <select disabled={isUploading} value={expCategory} onChange={(e) => setExpCategory(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm">
+                <select disabled={isUploading} value={expCategory} onChange={(e) => setExpCategory(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm font-medium">
                   {EXPENSE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </div>

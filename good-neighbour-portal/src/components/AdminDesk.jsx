@@ -40,6 +40,9 @@ export default function AdminDesk({
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   
+  // --- Security Check ---
+  const isMasterAdmin = currentUser?.role === 'Master Admin' || currentUser?.id === 'admin1';
+
   // --- Modals State ---
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
@@ -81,7 +84,9 @@ export default function AdminDesk({
   const [expDescription, setExpDescription] = useState('');
   const [expFile, setExpFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  
   const [expFilterCategory, setExpFilterCategory] = useState('All');
+  const [expFilterMonth, setExpFilterMonth] = useState('');
   const [expSort, setExpSort] = useState('desc'); // 'desc' = Newest, 'asc' = Oldest
 
   // --- Bottom Cabinet & Drawer State ---
@@ -140,11 +145,12 @@ export default function AdminDesk({
   const filteredAndSortedExpenses = useMemo(() => {
     return businessExpenses
       .filter(exp => expFilterCategory === 'All' || exp.category === expFilterCategory)
+      .filter(exp => !expFilterMonth || (exp.date && exp.date.startsWith(expFilterMonth)))
       .sort((a, b) => {
         const diff = new Date(b.date) - new Date(a.date);
         return expSort === 'desc' ? diff : -diff;
       });
-  }, [businessExpenses, expFilterCategory, expSort]);
+  }, [businessExpenses, expFilterCategory, expFilterMonth, expSort]);
 
   // Cabinet Documents Filter & Sort
   const filteredCabinetDocs = useMemo(() => {
@@ -152,7 +158,7 @@ export default function AdminDesk({
       if (cabFilterCategory !== 'All' && doc.category !== cabFilterCategory) return false;
       if (cabFilterMonth && doc.uploadDate && !doc.uploadDate.startsWith(cabFilterMonth)) return false;
       return true;
-    }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate));
+    }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate)); // Newest first
   }, [safeCabinetDocs, cabFilterCategory, cabFilterMonth]);
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -267,6 +273,7 @@ export default function AdminDesk({
     setIsBoardEditing(false);
   };
 
+  // Basic list manipulators
   const updateNoteItem = (id, text) => {
     setNoteItems(prev => prev.map(item => item.id === id ? { ...item, text } : item));
     if (text.trim() !== '' && noteItems[noteItems.length - 1].id === id) {
@@ -594,12 +601,14 @@ export default function AdminDesk({
             >
               Company Ledger
             </button>
-            <button 
-              onClick={() => setCabinetTab('documents')} 
-              className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${cabinetTab === 'documents' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              Private Documents
-            </button>
+            {isMasterAdmin && (
+              <button 
+                onClick={() => setCabinetTab('documents')} 
+                className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${cabinetTab === 'documents' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Private Documents
+              </button>
+            )}
           </div>
         </div>
 
@@ -625,15 +634,20 @@ export default function AdminDesk({
               </div>
 
               {/* NEW EXPENSE FILTER BAR */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
-                <div className="flex items-center space-x-2 w-full sm:w-auto">
-                  <Filter className="h-4 w-4 text-slate-400 shrink-0" />
-                  <select value={expFilterCategory} onChange={e => setExpFilterCategory(e.target.value)} className="text-xs border border-slate-300 rounded px-2 py-1.5 focus:ring-teal-500 bg-white text-slate-700 w-full sm:w-auto font-medium">
-                    <option value="All">All Categories</option>
-                    {EXPENSE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full lg:w-auto">
+                  <div className="flex items-center bg-white border border-slate-300 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-teal-500 transition shrink-0">
+                    <Filter className="h-3 w-3 mr-1.5 text-slate-400" />
+                    <input type="month" value={expFilterMonth} onChange={(e) => setExpFilterMonth(e.target.value)} className="text-xs border-none focus:outline-none text-slate-600 bg-transparent w-32" title="Filter by Month" />
+                  </div>
+                  <div className="flex items-center space-x-2 w-full sm:w-auto">
+                    <select value={expFilterCategory} onChange={e => setExpFilterCategory(e.target.value)} className="text-xs border border-slate-300 rounded px-2 py-1.5 focus:ring-teal-500 bg-white text-slate-700 w-full sm:w-auto font-medium">
+                      <option value="All">All Categories</option>
+                      {EXPENSE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <button onClick={() => setExpSort(s => s === 'desc' ? 'asc' : 'desc')} className="text-xs font-bold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded transition hover:bg-slate-50 w-full sm:w-auto shadow-sm">
+                <button onClick={() => setExpSort(s => s === 'desc' ? 'asc' : 'desc')} className="text-xs font-bold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded transition hover:bg-slate-50 w-full lg:w-auto shadow-sm">
                   Sort: {expSort === 'desc' ? 'Newest First' : 'Oldest First'}
                 </button>
               </div>
@@ -641,7 +655,7 @@ export default function AdminDesk({
               <div className="p-0 flex-1 overflow-y-auto">
                 <div className="divide-y divide-slate-100">
                   {filteredAndSortedExpenses.length === 0 ? (
-                    <div className="text-center py-12 text-slate-500 text-sm">No expenses found for this category.</div>
+                    <div className="text-center py-12 text-slate-500 text-sm">No expenses found matching the current filters.</div>
                   ) : (
                     filteredAndSortedExpenses.map(exp => {
                       const emp = employees.find(e => e.id === exp.loggedBy);
@@ -681,8 +695,8 @@ export default function AdminDesk({
             </div>
           )}
 
-          {/* TAB 2: PRIVATE COMPANY DOCUMENTS */}
-          {cabinetTab === 'documents' && (
+          {/* TAB 2: PRIVATE COMPANY DOCUMENTS (MASTER ADMIN ONLY) */}
+          {cabinetTab === 'documents' && isMasterAdmin && (
             <div className="flex flex-col h-full">
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-800 flex items-center">
@@ -704,7 +718,7 @@ export default function AdminDesk({
                       required 
                       disabled={isCabDocUploading}
                     >
-                      {CABINET_CATEGORIES.map(cat => <option key={cat.id} value={cat.id}>{cat.id}</option>)}
+                      {CABINET_CATEGORIES.map(cat => <option key={`up_${cat.id}`} value={cat.id}>{cat.id}</option>)}
                     </select>
                     <div className="mt-1.5 text-[10px] text-teal-700 italic leading-tight px-1 flex items-start">
                       <Info className="h-3 w-3 mr-1 shrink-0 mt-0.5" />
@@ -733,30 +747,35 @@ export default function AdminDesk({
                 </form>
               </div>
 
-              {/* CABINET DOCUMENTS FILTER BAR WITH TOOLTIP */}
+              {/* CABINET DOCUMENTS FILTER BAR WITH FIX FOR CLIPPING */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
-                <div className="flex items-center space-x-2 overflow-x-auto scrollbar-hide flex-1 sm:mr-4 py-1">
+                <div className="flex items-center w-full sm:w-auto">
                   
-                  {/* Tooltip Guide */}
-                  <div className="relative group shrink-0 mr-2">
-                    <Info className="h-4 w-4 text-slate-400 cursor-help" />
-                    <div className="absolute left-0 bottom-6 w-80 p-3 bg-slate-800 text-white text-xs rounded shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 pointer-events-none">
-                      <div className="font-bold mb-2 text-teal-300 border-b border-slate-600 pb-1">Category Guide</div>
-                      <div className="space-y-2">
+                  {/* Tooltip Guide - Moved OUTSIDE of the scrollable container! */}
+                  <div className="relative group shrink-0 mr-3 flex items-center">
+                    <Info className="h-5 w-5 text-slate-500 cursor-help" />
+                    <div className="absolute left-0 top-8 w-80 p-4 bg-slate-800 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                      <div className="font-bold mb-3 text-teal-300 border-b border-slate-600 pb-2 text-sm">Category Guide</div>
+                      <div className="space-y-3">
                         {CABINET_CATEGORIES.map(cat => (
                           <div key={`tip_${cat.id}`}>
-                            <span className="font-bold text-slate-100">{cat.id}:</span> <span className="text-slate-400">{cat.hint}</span>
+                            <span className="font-bold text-slate-100 block mb-0.5">{cat.id}</span>
+                            <span className="text-slate-400 leading-tight block">{cat.hint}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <button onClick={() => setCabFilterCategory('All')} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === 'All' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>All</button>
-                  {CABINET_CATEGORIES.map(cat => (
-                    <button key={`filter_${cat.id}`} onClick={() => setCabFilterCategory(cat.id)} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === cat.id ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>{cat.id}</button>
-                  ))}
+                  {/* Scrollable Tabs */}
+                  <div className="flex space-x-2 overflow-x-auto scrollbar-hide flex-1 py-1">
+                    <button onClick={() => setCabFilterCategory('All')} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === 'All' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>All</button>
+                    {CABINET_CATEGORIES.map(cat => (
+                      <button key={`filter_${cat.id}`} onClick={() => setCabFilterCategory(cat.id)} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === cat.id ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>{cat.id}</button>
+                    ))}
+                  </div>
                 </div>
+
                 <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition shrink-0">
                   <Filter className="h-3 w-3 mr-1.5 text-slate-400" />
                   <input type="month" value={cabFilterMonth} onChange={(e) => setCabFilterMonth(e.target.value)} className="text-xs py-1.5 border-none focus:outline-none text-slate-600 bg-transparent w-32" title="Filter by Month" />

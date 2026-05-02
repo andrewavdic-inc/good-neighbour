@@ -2,6 +2,18 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin } from 'lucide-react';
 import DocumentManager from './DocumentManager';
 
+// --- ADDED MISSING DATE HELPER ---
+const parseLocalSafe = (dateStr) => {
+  if (!dateStr) return new Date();
+  try {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
+    return new Date(y, m - 1, d);
+  } catch (e) {
+    return new Date();
+  }
+};
+
 export default function AdminDesk({ 
   notes = [], businessExpenses = [], currentUser, onAddNote, onUpdateNote, onRemoveNote, 
   onAddBusinessExpense, onRemoveBusinessExpense, employees = [], officeLocation, 
@@ -222,7 +234,13 @@ export default function AdminDesk({
     const headers = ['Date', 'Category', 'Description', 'Amount ($)', 'Logged By'];
     const rows = businessExpenses.sort((a,b) => new Date(b.date) - new Date(a.date)).map(exp => {
       const emp = employees.find(e => e.id === exp.loggedBy);
-      return [exp.date, `"${exp.category}"`, `"${exp.description || ''}"`, Number(exp.amount || 0).toFixed(2), `"${emp?.name || 'Admin'}"`];
+      return [
+        exp.date,
+        `"${exp.category}"`,
+        `"${exp.description || ''}"`,
+        Number(exp.amount || 0).toFixed(2),
+        `"${emp?.name || 'Admin'}"`
+      ];
     });
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -417,7 +435,7 @@ export default function AdminDesk({
                             <button onClick={() => toggleChecklistItem(note.id, item.id, note.items)} className={`mt-0.5 mr-2 shrink-0 ${item.isCompleted ? 'text-teal-600' : 'text-slate-300 hover:text-slate-400'}`}>
                               {item.isCompleted ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                             </button>
-                            <span className={`text-sm ${item.isCompleted ? 'line-through opacity-50' : ''}`}>{item.text}</span>
+                            <span className={`text-sm ${item.isCompleted ? 'line-through opacity-50 text-slate-500' : 'text-slate-800'}`}>{item.text}</span>
                           </div>
                         ))}
                       </div>

@@ -23,7 +23,7 @@ import SettingsManager from './components/SettingsManager';
 import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal';
-import AdminDesk from './components/AdminDesk'; // NEW: Import the Desk
+import AdminDesk from './components/AdminDesk';
 
 // --- PHOTO CLEANER ---
 const getValidPhoto = (url) => {
@@ -151,21 +151,21 @@ function AdminDashboard({
   onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, 
   documents = [], onAddDocument, onRemoveDocument, messages = [], onSendMessage, currentUser, 
   payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
-  onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, 
+  officeLocation, setOfficeLocation, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, 
   onRemoveEmployee, onAddClient, onRemoveClient, onApproveTimeOff, onRejectTimeOff, onClientFileUpload,
-  onAddClientExpense, onEmployeeFileUpload, notes = [], businessExpenses = [], onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense // NEW PROPS
+  onAddClientExpense, onEmployeeFileUpload, notes = [], businessExpenses = [], adminDrawer = [], cabinetDocuments = [],
+  onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense, onAddDrawerFile, onRemoveDrawerFile, onUpdateDeskPicture,
+  onAddCabinetDocument, onRemoveCabinetDocument
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
-  const [activeAdminTab, setActiveAdminTab] = useState('desk'); // Default to the new Desk tab
+  const [activeAdminTab, setActiveAdminTab] = useState('desk');
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [calendarView, setCalendarView] = useState('month'); 
 
-  // Master Admin Check
   const isMasterAdmin = currentUser.role === 'Master Admin' || currentUser.id === 'admin1';
 
-  // Desktop Notifications Check
   const urgentNotes = notes.filter(n => {
     if (n.authorId !== currentUser.id || !n.reminderDate) return false;
     const reminder = parseLocalSafe(n.reminderDate);
@@ -325,7 +325,7 @@ function AdminDashboard({
 
   const renderAdminTab = () => {
     switch (activeAdminTab) {
-      case 'desk': return <AdminDesk notes={notes} businessExpenses={businessExpenses} currentUser={currentUser} onAddNote={onAddNote} onRemoveNote={onRemoveNote} onUpdateNote={onUpdateNote} onAddBusinessExpense={onAddBusinessExpense} onRemoveBusinessExpense={onRemoveBusinessExpense} employees={employees} />;
+      case 'desk': return <AdminDesk notes={notes} businessExpenses={businessExpenses} currentUser={currentUser} onAddNote={onAddNote} onRemoveNote={onRemoveNote} onUpdateNote={onUpdateNote} onAddBusinessExpense={onAddBusinessExpense} onRemoveBusinessExpense={onRemoveBusinessExpense} employees={employees} officeLocation={officeLocation} adminDrawer={adminDrawer} onAddDrawerFile={onAddDrawerFile} onRemoveDrawerFile={onRemoveDrawerFile} cabinetDocuments={cabinetDocuments} onAddCabinetDocument={onAddCabinetDocument} onRemoveCabinetDocument={onRemoveCabinetDocument} onUpdateDeskPicture={onUpdateDeskPicture} />;
       case 'employees': return <EmployeeManager employees={safeEmployees} shifts={safeShifts} payPeriodStart={payPeriodStart} onEmployeeFileUpload={onEmployeeFileUpload} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} onAddClientExpense={onAddClientExpense} />;      
@@ -333,9 +333,9 @@ function AdminDashboard({
       case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
       case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={onApproveTimeOff} onReject={onRejectTimeOff} onRemoveTimeOff={onRemoveTimeOffLog} />;
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
-      case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />;
+      case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; // RESTORED MAIN DOCUMENT TAB
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} /></div>;
-      case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} />;
+      case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
       case 'schedule':
       default: return (
         <div className="space-y-4">
@@ -455,7 +455,7 @@ function AdminDashboard({
     {id: 'earnings', icon: Coins, label: 'Earnings'}, 
     {id: 'timeoff', icon: CalendarDays, label: 'Time Off'}, 
     {id: 'paystubs', icon: FileText, label: 'Paystubs'}, 
-    {id: 'documents', icon: BookOpen, label: 'Documents'}, 
+    {id: 'documents', icon: BookOpen, label: 'Documents'}, // RESTORED MAIN DOCUMENT TAB
     {id: 'announcements', icon: MessageSquare, label: 'Announcements'}
   ];
 
@@ -513,14 +513,17 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [documents, setDocuments] = useState([]);
   
-  // --- NEW DATABASES FOR THE DESK ---
+  // NEW DATABASES FOR THE DESK
   const [notes, setNotes] = useState([]);
   const [businessExpenses, setBusinessExpenses] = useState([]);
+  const [adminDrawer, setAdminDrawer] = useState([]);
+  const [cabinetDocuments, setCabinetDocuments] = useState([]);
 
   // Settings State
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
   const [isBonusActive, setIsBonusActive] = useState(false);
   const [bonusSettings, setBonusSettings] = useState({ monthly: [100, 50, 20], annual: [3000, 2000, 1000] });
+  const [officeLocation, setOfficeLocation] = useState('Port Colborne, ON');
 
   // Setup Firebase Auth
   useEffect(() => {
@@ -560,6 +563,8 @@ export default function App() {
     // NEW DESK LISTENERS
     unsubs.push(onSnapshot(getCol('gn_notes'), snap => setNotes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_businessExpenses'), snap => setBusinessExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_adminDrawer'), snap => setAdminDrawer(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_cabinetDocuments'), snap => setCabinetDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
 
     unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
       if (snap.exists()) {
@@ -567,6 +572,7 @@ export default function App() {
         if (data.payPeriodStart) setPayPeriodStart(data.payPeriodStart);
         if (data.isBonusActive !== undefined) setIsBonusActive(data.isBonusActive);
         if (data.bonusAmounts) setBonusSettings(data.bonusAmounts);
+        if (data.officeLocation) setOfficeLocation(data.officeLocation);
       }
     }, handleError));
 
@@ -603,7 +609,7 @@ export default function App() {
       const foundEmp = safeEmployees.find(e => e && e.email && String(e.email).toLowerCase() === String(secureEmail).toLowerCase());
       
       if (foundEmp) {
-        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, hireDate: foundEmp.hireDate });
+        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, annualSalary: foundEmp.annualSalary, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, deskPictureUrl: foundEmp.deskPictureUrl, hireDate: foundEmp.hireDate });
         setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
       } else { 
         alert("Login successful, but this email is not assigned to an employee profile in the directory. Please contact the administrator."); 
@@ -642,15 +648,21 @@ export default function App() {
 
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
+    
+    // Update local state immediately for UI responsiveness
     if (field === 'payPeriodStart') setPayPeriodStart(value);
     if (field === 'isBonusActive') setIsBonusActive(value);
     if (field === 'bonusAmounts') setBonusSettings(value);
+    if (field === 'officeLocation') setOfficeLocation(value);
     
+    // Save to Firebase
     const payload = { 
       payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, 
       isBonusActive: field === 'isBonusActive' ? value : isBonusActive, 
-      bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings
+      bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings,
+      officeLocation: field === 'officeLocation' ? value : officeLocation
     };
+    
     await setDoc(getDocRef('gn_settings', 'global'), payload, { merge: true });
   };
 
@@ -756,7 +768,6 @@ export default function App() {
                 if (newUrl) url = newUrl;
               }
               
-              // --- AUTO CLEAR SHIFTS ON DEACTIVATION ---
               if (d.isActive === false && existingClient?.isActive !== false) {
                  const now = new Date();
                  const upcoming = shifts.filter(s => s.clientId === id && new Date(`${s.date}T${s.endTime || '23:59'}`) >= now);
@@ -809,12 +820,15 @@ export default function App() {
             setIsBonusActive={(v) => handleSaveSettings('isBonusActive', v)} 
             bonusSettings={bonusSettings} 
             setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
+            
+            // --- RESTORED DOCUMENTS FUNCTIONALITY FOR THE MAIN APP NAV ---
             onAddDocument={async (d, file) => {
               let url = d.fileUrl || '';
               if (file) url = await handleFileUpload(file, 'documents');
               runMutation('gn_documents', d.id || Date.now().toString(), 'set', { ...d, id: d.id || Date.now().toString(), fileUrl: url });
             }}
             onRemoveDocument={(id) => runMutation('gn_documents', id, 'delete')}
+            
             onAddPaystub={async (d, file) => {
               let url = d.fileUrl || '';
               if (file) url = await handleFileUpload(file, 'paystubs');
@@ -846,6 +860,31 @@ export default function App() {
               runMutation('gn_businessExpenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), receiptUrl: url });
             }}
             onRemoveBusinessExpense={(id) => runMutation('gn_businessExpenses', id, 'delete')}
+            
+            // --- NEW: PRIVATE DRAWER, DESK PICTURE & CABINET DOCUMENTS PROPS ---
+            officeLocation={officeLocation}
+            adminDrawer={adminDrawer}
+            onAddDrawerFile={async (d, file) => {
+              let url = d.fileUrl || '';
+              if (file) url = await handleFileUpload(file, 'documents');
+              runMutation('gn_adminDrawer', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
+            }}
+            onRemoveDrawerFile={(id) => runMutation('gn_adminDrawer', id, 'delete')}
+            onUpdateDeskPicture={async (file) => {
+              if (!file) return;
+              const url = await handleFileUpload(file, 'avatars');
+              if (url) {
+                runMutation('gn_employees', currentUser.id, 'update', { deskPictureUrl: url });
+                setCurrentUser(prev => ({ ...prev, deskPictureUrl: url }));
+              }
+            }}
+            cabinetDocuments={cabinetDocuments}
+            onAddCabinetDocument={async (d, file) => {
+              let url = d.fileUrl || '';
+              if (file) url = await handleFileUpload(file, 'documents');
+              runMutation('gn_cabinetDocuments', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
+            }}
+            onRemoveCabinetDocument={(id) => runMutation('gn_cabinetDocuments', id, 'delete')}
           />
         ) : (
           <EmployeeDashboard 

@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Settings, Award, CalendarDays, Trophy, Medal, HardDrive, RefreshCw, Info, Server, Sun } from 'lucide-react';
+import { Settings, Award, CalendarDays, Trophy, Medal, HardDrive, RefreshCw, Info, Server, MapPin } from 'lucide-react';
 import { getStorage, ref, listAll, getMetadata } from 'firebase/storage';
 
-export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings }) {
-  // --- EXISTING BONUS LOGIC ---
+export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, officeLocation, setOfficeLocation }) {
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
 
   const handleUpdateBonus = (category, index, value) => {
@@ -12,20 +11,18 @@ export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isB
     setBonusSettings(updated); 
   };
 
-  // --- NEW STORAGE SCANNER STATE & LOGIC ---
   const [isScanning, setIsScanning] = useState(false);
   const [storageBytes, setStorageBytes] = useState(0);
   const [lastScanTime, setLastScanTime] = useState(null);
 
   const APP_ID = 'good-neighbour-portal';
   const STORAGE_FOLDERS = ['avatars', 'receipts', 'documents', 'certificates', 'paystubs'];
-  const MAX_STORAGE_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB Free Tier Limit
+  const MAX_STORAGE_BYTES = 5 * 1024 * 1024 * 1024; 
 
   const runStorageScanner = async () => {
     setIsScanning(true);
     const storage = getStorage();
     let totalBytes = 0;
-
     try {
       for (const folder of STORAGE_FOLDERS) {
         const folderRef = ref(storage, `${APP_ID}/${folder}`);
@@ -36,7 +33,6 @@ export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isB
             totalBytes += meta.size;
           }
         } catch (folderError) {
-          // Ignore if folder doesn't exist yet
           console.log(`Skipping ${folder} - folder may be empty.`);
         }
       }
@@ -50,37 +46,51 @@ export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isB
     }
   };
 
-  // Math Helpers for Display
   const storageMB = (storageBytes / (1024 * 1024)).toFixed(2);
   const percentUsed = Math.min((storageBytes / MAX_STORAGE_BYTES) * 100, 100).toFixed(1);
   
-  let barColor = 'bg-emerald-500';
-  let textColor = 'text-emerald-700';
+  let barColor = 'bg-emerald-500'; let textColor = 'text-emerald-700';
   if (percentUsed > 75) { barColor = 'bg-amber-500'; textColor = 'text-amber-700'; }
   if (percentUsed > 90) { barColor = 'bg-red-500'; textColor = 'text-red-700'; }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       
-      {/* LEFT COLUMN: Your Existing Settings UI */}
       <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-fit">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
           <Settings className="h-5 w-5 mr-2 text-teal-600" />
           <h2 className="text-lg font-semibold text-slate-800">System Settings</h2>
         </div>
         <div className="p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Pay Period Anchor Date</label>
-            <input 
-              type="date" 
-              value={payPeriodStart} 
-              onChange={(e) => setPayPeriodStart(e.target.value)} 
-              className="w-full max-w-sm px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" 
-            />
-            <p className="text-xs text-slate-500 mt-1">This date is used to calculate bi-weekly pay cycles.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1">Pay Period Anchor Date</label>
+              <input 
+                type="date" 
+                value={payPeriodStart} 
+                onChange={(e) => setPayPeriodStart(e.target.value)} 
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" 
+              />
+              <p className="text-xs text-slate-500 mt-1">Used to calculate bi-weekly pay cycles.</p>
+            </div>
+            
+            {/* NEW: WEATHER / LOCATION SETTING */}
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1 flex items-center">
+                <MapPin className="h-4 w-4 mr-1 text-teal-600"/> Service Area Location
+              </label>
+              <input 
+                type="text" 
+                value={officeLocation || ''} 
+                onChange={(e) => setOfficeLocation(e.target.value)} 
+                placeholder="e.g. Port Colborne, ON"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" 
+              />
+              <p className="text-xs text-slate-500 mt-1">Powers the live clock and weather widget on The Desk.</p>
+            </div>
           </div>
           
-              <div className="border-t border-slate-200 pt-5">
+          <div className="border-t border-slate-200 pt-5">
             <label className="flex items-center space-x-3 cursor-pointer group w-fit">
               <div className="relative flex items-center justify-center">
                 <input type="checkbox" checked={isBonusActive || false} onChange={(e) => setIsBonusActive(e.target.checked)} className="h-5 w-5 rounded border-slate-300 text-teal-600 focus:ring-teal-500 cursor-pointer" />
@@ -138,7 +148,6 @@ export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isB
         </div>
       </div>
 
-      {/* RIGHT COLUMN: The New Storage Monitor */}
       <div className="space-y-6">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-fit">
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -186,7 +195,6 @@ export default function SettingsManager({ payPeriodStart, setPayPeriodStart, isB
           </div>
         </div>
       </div>
-
     </div>
   );
 }

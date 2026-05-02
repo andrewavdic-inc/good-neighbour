@@ -751,10 +751,10 @@ export default function AdminDesk({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
                 <div className="flex items-center w-full sm:w-auto">
                   
-                  {/* Tooltip Guide - Moved OUTSIDE of the scrollable container! */}
+                  {/* Tooltip Guide - FIXED PLACEMENT */}
                   <div className="relative group shrink-0 mr-3 flex items-center">
                     <Info className="h-5 w-5 text-slate-500 cursor-help" />
-                    <div className="absolute left-0 top-8 w-80 p-4 bg-slate-800 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                    <div className="absolute left-0 bottom-full mb-2 w-80 max-h-64 overflow-y-auto p-4 bg-slate-800 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
                       <div className="font-bold mb-3 text-teal-300 border-b border-slate-600 pb-2 text-sm">Category Guide</div>
                       <div className="space-y-3">
                         {CABINET_CATEGORIES.map(cat => (

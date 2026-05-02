@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin } from 'lucide-react';
+import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter } from 'lucide-react';
 import DocumentManager from './DocumentManager';
 
 // --- ADDED MISSING DATE HELPER ---
@@ -31,12 +31,16 @@ export default function AdminDesk({
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
   const [editingAppt, setEditingAppt] = useState(null);
   
-  // --- Note Form State ---
-  const [noteType, setNoteType] = useState('text'); // 'text' or 'list'
+  // --- Note Form & Filter State ---
+  const [noteType, setNoteType] = useState('text'); 
   const [noteText, setNoteText] = useState('');
   const [noteItems, setNoteItems] = useState([{ id: Date.now().toString(), text: '', isCompleted: false }]);
   const [isUrgent, setIsUrgent] = useState(false);
   const [noteSort, setNoteSort] = useState('asc'); 
+  const [noteFilterMonth, setNoteFilterMonth] = useState(''); // NEW: Month Filter
+
+  // --- Banner Mute State ---
+  const [isBannerMuted, setIsBannerMuted] = useState(false); // NEW: Banner Mute
 
   // --- Appt Form State ---
   const [apptTitle, setApptTitle] = useState('');
@@ -98,15 +102,20 @@ export default function AdminDesk({
   const myDrawerFiles = useMemo(() => adminDrawer.filter(f => f.authorId === currentUser.id), [adminDrawer, currentUser.id]);
   const safeCabinetDocs = Array.isArray(cabinetDocuments) ? cabinetDocuments : [];
 
+  // --- NEW: Sticky Notes Logic (Month Filter + Sort) ---
   const sortedNotes = useMemo(() => {
-    return [...myNotes].sort((a,b) => {
-      const diff = new Date(a.reminderDate) - new Date(b.reminderDate);
-      return noteSort === 'asc' ? diff : -diff;
-    });
-  }, [myNotes, noteSort]);
+    return [...myNotes]
+      .filter(n => !noteFilterMonth || (n.reminderDate && n.reminderDate.startsWith(noteFilterMonth)))
+      .sort((a,b) => {
+        const diff = new Date(a.reminderDate) - new Date(b.reminderDate);
+        return noteSort === 'asc' ? diff : -diff;
+      });
+  }, [myNotes, noteSort, noteFilterMonth]);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const urgentAlerts = myNotes.filter(n => n.isUrgent || n.reminderDate === todayStr);
+  
+  // --- BUG FIX: Strict `isUrgent` checking ---
+  const urgentAlerts = myNotes.filter(n => n.isUrgent === true);
   const todayAppts = myAppointments.filter(a => a.date === todayStr);
 
   const upcomingItinerary = useMemo(() => {
@@ -242,27 +251,37 @@ export default function AdminDesk({
         `"${emp?.name || 'Admin'}"`
       ];
     });
+
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a'); link.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
     link.setAttribute('download', `Company_Expenses_${year}_${monthNames[month]}.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
-    <div className="bg-slate-200/50 p-6 rounded-2xl border border-slate-300 shadow-inner min-h-[900px] flex flex-col">
+    <div className="bg-slate-100 p-6 rounded-2xl border border-slate-300 shadow-inner min-h-[900px] flex flex-col">
       
-      {/* URGENT BANNER */}
-      {(urgentAlerts.length > 0 || todayAppts.length > 0) && (
-        <div className="bg-red-600 text-white p-4 rounded-xl flex items-center justify-between mb-6 shadow-md animate-pulse">
+      {/* URGENT BANNER WITH MUTE */}
+      {(urgentAlerts.length > 0 || todayAppts.length > 0) && !isBannerMuted && (
+        <div className="bg-red-600 text-white p-4 rounded-xl flex items-start sm:items-center justify-between mb-6 shadow-md animate-pulse">
           <div className="flex items-center">
-            <AlertCircle className="h-6 w-6 mr-3" />
+            <AlertCircle className="h-6 w-6 mr-3 shrink-0" />
             <div>
               <div className="font-bold text-lg leading-tight">Requires Attention</div>
               <div className="text-sm text-red-100">You have {urgentAlerts.length} urgent note(s) and {todayAppts.length} appointment(s) today.</div>
             </div>
           </div>
-          <button onClick={() => handleDayClick(new Date().getDate())} className="bg-white text-red-700 hover:bg-red-50 font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm">View Today</button>
+          <div className="flex items-center space-x-3 mt-3 sm:mt-0 ml-4 shrink-0">
+            <button onClick={() => handleDayClick(new Date().getDate())} className="bg-white text-red-700 hover:bg-red-50 font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm whitespace-nowrap">View Today</button>
+            <button onClick={() => setIsBannerMuted(true)} className="text-red-200 hover:text-white transition p-1" title="Dismiss Alert">
+              <XCircle className="h-6 w-6" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -405,18 +424,33 @@ export default function AdminDesk({
           </div>
         </div>
 
-        {/* COL 3: SORTABLE STICKY NOTES */}
+        {/* COL 3: SORTABLE STICKY NOTES WITH MONTH FILTER */}
         <div className="bg-yellow-50 rounded-xl shadow-sm border border-yellow-200 overflow-hidden flex flex-col h-[750px]">
           <div className="px-6 py-4 border-b border-yellow-200 bg-yellow-100/50 flex flex-col space-y-3">
-            <h2 className="text-lg font-semibold text-yellow-800 flex items-center"><FileText className="h-5 w-5 mr-2" /> My Sticky Notes</h2>
-            <div className="flex space-x-2 w-full">
-              <button onClick={() => setNoteSort(s => s === 'asc' ? 'desc' : 'asc')} className="flex-1 text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-2 py-1.5 rounded transition flex items-center justify-center">Sort: {noteSort === 'asc' ? 'Earliest First' : 'Latest First'}</button>
-              <button onClick={() => openNewNoteModal()} className="flex-1 text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-2 py-1.5 rounded transition">+ New Note</button>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-yellow-800 flex items-center"><FileText className="h-5 w-5 mr-2" /> My Sticky Notes</h2>
+              <button onClick={() => openNewNoteModal()} className="text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-3 py-1.5 rounded transition shadow-sm">+ New Note</button>
+            </div>
+            
+            <div className="flex space-x-2 w-full items-center">
+              <div className="flex-1 flex items-center bg-white border border-yellow-300 rounded overflow-hidden shadow-sm">
+                <Filter className="h-3 w-3 text-yellow-600 ml-2 shrink-0" />
+                <input 
+                  type="month" 
+                  value={noteFilterMonth} 
+                  onChange={(e) => setNoteFilterMonth(e.target.value)} 
+                  className="w-full text-xs px-2 py-1.5 text-yellow-800 bg-transparent focus:outline-none" 
+                  title="Filter by Month"
+                />
+              </div>
+              <button onClick={() => setNoteSort(s => s === 'asc' ? 'desc' : 'asc')} className="flex-1 text-xs bg-white border border-yellow-300 hover:bg-yellow-50 text-yellow-800 font-bold px-2 py-1.5 rounded transition flex items-center justify-center shadow-sm">
+                {noteSort === 'asc' ? 'Earliest First' : 'Latest First'}
+              </button>
             </div>
           </div>
           <div className="p-4 flex-1 overflow-y-auto space-y-3">
             {sortedNotes.length === 0 ? (
-              <div className="text-center py-8 text-yellow-600/60 text-sm font-medium italic">Click any day on the calendar to add a private note.</div>
+              <div className="text-center py-8 text-yellow-600/60 text-sm font-medium italic">No notes found for this filter.</div>
             ) : (
               sortedNotes.map(note => {
                 const isPast = new Date(note.reminderDate) < new Date(todayStr);
@@ -432,7 +466,7 @@ export default function AdminDesk({
                       <div className="space-y-2 mt-2">
                         {(note.items || []).map(item => (
                           <div key={item.id} className="flex items-start">
-                            <button onClick={() => toggleChecklistItem(note.id, item.id, note.items)} className={`mt-0.5 mr-2 shrink-0 ${item.isCompleted ? 'text-teal-600' : 'text-slate-300 hover:text-slate-400'}`}>
+                            <button onClick={() => toggleChecklistItem(note.id, item.id, note.items)} className={`mt-0.5 mr-2 shrink-0 ${item.isCompleted ? 'text-teal-600' : 'text-slate-400 hover:text-slate-600'}`}>
                               {item.isCompleted ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                             </button>
                             <span className={`text-sm ${item.isCompleted ? 'line-through opacity-50 text-slate-500' : 'text-slate-800'}`}>{item.text}</span>

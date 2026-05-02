@@ -99,7 +99,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
           <h3 className="text-lg font-bold text-slate-800">Assign New Shift</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition text-2xl leading-none">&times;</button>
         </div>
@@ -154,9 +154,9 @@ function AdminDashboard({
   officeLocation, setOfficeLocation, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, 
   onRemoveEmployee, onAddClient, onRemoveClient, onApproveTimeOff, onRejectTimeOff, onClientFileUpload,
   onAddClientExpense, onEmployeeFileUpload, notes = [], businessExpenses = [], adminDrawer = [], cabinetDocuments = [],
-  appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment, // NEW: Appointments
+  appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment,
   onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense, onAddDrawerFile, onRemoveDrawerFile, onUpdateDeskPicture,
-  onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard // NEW: Board Update
+  onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -165,14 +165,16 @@ function AdminDashboard({
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [calendarView, setCalendarView] = useState('month'); 
 
+  // --- NEW: Global Banner Mute State ---
+  const [isDeskPingMuted, setIsDeskPingMuted] = useState(false);
+
   const isMasterAdmin = currentUser.role === 'Master Admin' || currentUser.id === 'admin1';
 
   // Urgent Notification Ping Logic
   const todayStr = new Date().toISOString().split('T')[0];
-  const urgentNotes = notes.filter(n => {
-    if (n.authorId !== currentUser.id) return false;
-    return n.isUrgent || n.reminderDate === todayStr;
-  });
+  
+  // --- BUG FIX: Strict `isUrgent` checking ---
+  const urgentNotes = notes.filter(n => n.authorId === currentUser.id && n.isUrgent === true);
   const todayAppts = appointments.filter(a => a.authorId === currentUser.id && a.date === todayStr);
   const hasUrgentDeskItem = urgentNotes.length > 0 || todayAppts.length > 0;
 
@@ -503,11 +505,16 @@ function AdminDashboard({
         )}
       </div>
 
-      {/* --- PING ALERT FOR THE DESK --- */}
-      {hasUrgentDeskItem && activeAdminTab !== 'desk' && (
-        <div className="bg-red-500 text-white p-3 rounded-lg flex items-center shadow-md animate-pulse cursor-pointer" onClick={() => setActiveAdminTab('desk')}>
-          <AlertCircle className="h-5 w-5 mr-3" />
-          <span className="font-bold text-sm">You have urgent reminders or appointments due today!</span>
+      {/* --- PING ALERT FOR GLOBAL NAV WITH MUTE --- */}
+      {hasUrgentDeskItem && activeAdminTab !== 'desk' && !isDeskPingMuted && (
+        <div className="bg-red-500 text-white p-3 rounded-lg flex items-center justify-between shadow-md animate-pulse mb-4">
+          <div className="flex items-center cursor-pointer flex-1" onClick={() => setActiveAdminTab('desk')}>
+            <AlertCircle className="h-5 w-5 mr-3 shrink-0" />
+            <span className="font-bold text-sm">You have urgent reminders or appointments due today!</span>
+          </div>
+          <button onClick={() => setIsDeskPingMuted(true)} className="text-red-200 hover:text-white p-1 ml-3" title="Dismiss">
+            <XCircle className="h-5 w-5" />
+          </button>
         </div>
       )}
 
@@ -552,7 +559,7 @@ export default function App() {
   const [businessExpenses, setBusinessExpenses] = useState([]);
   const [adminDrawer, setAdminDrawer] = useState([]);
   const [cabinetDocuments, setCabinetDocuments] = useState([]);
-  const [appointments, setAppointments] = useState([]); // NEW
+  const [appointments, setAppointments] = useState([]);
 
   // Settings State
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
@@ -685,13 +692,11 @@ export default function App() {
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
     
-    // Update local state immediately for UI responsiveness
     if (field === 'payPeriodStart') setPayPeriodStart(value);
     if (field === 'isBonusActive') setIsBonusActive(value);
     if (field === 'bonusAmounts') setBonusSettings(value);
     if (field === 'officeLocation') setOfficeLocation(value);
     
-    // Save to Firebase
     const payload = { 
       payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, 
       isBonusActive: field === 'isBonusActive' ? value : isBonusActive, 
@@ -920,7 +925,6 @@ export default function App() {
             }}
             onRemoveCabinetDocument={(id) => runMutation('gn_cabinetDocuments', id, 'delete')}
 
-            // --- NEW: TEXT BOARD & APPOINTMENTS ---
             onUpdateDeskBoard={async (boardData) => {
               if (!currentUser) return;
               runMutation('gn_employees', currentUser.id, 'update', { deskBoard: boardData });

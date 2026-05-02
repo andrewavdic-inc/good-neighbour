@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter } from 'lucide-react';
+import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, Filter } from 'lucide-react';
 import DocumentManager from './DocumentManager';
 
-// --- ADDED MISSING DATE HELPER ---
+// --- DATE HELPER ---
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
   try {
@@ -13,6 +13,24 @@ const parseLocalSafe = (dateStr) => {
     return new Date();
   }
 };
+
+// --- NEW STANDARDIZED CATEGORIES ---
+const EXPENSE_CATEGORIES = [
+  "Personnel and Payroll (Salaries, Benefits, Payroll Tax, Education)",
+  "General Admin & Office Costs (Office Supplies, Software, Telecomm, Shipping)",
+  "Occupancy and Facilities (Rent, Utilities, Maintenance)",
+  "Professional Services (Legal & Accounting Fees, Licenses and Dues)",
+  "Other (Travel, Meals, Insurance, Bank Fees)"
+];
+
+const CABINET_DOC_CATEGORIES = [
+  "Legal and Formation Documents",
+  "Financial Records",
+  "Intellectual Property and Proprietary Info",
+  "Operational and Strategic Documents",
+  "Personnel and Employment Records",
+  "Corporate Governance"
+];
 
 export default function AdminDesk({ 
   notes = [], businessExpenses = [], currentUser, onAddNote, onUpdateNote, onRemoveNote, 
@@ -31,16 +49,12 @@ export default function AdminDesk({
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
   const [editingAppt, setEditingAppt] = useState(null);
   
-  // --- Note Form & Filter State ---
+  // --- Note Form State ---
   const [noteType, setNoteType] = useState('text'); 
   const [noteText, setNoteText] = useState('');
   const [noteItems, setNoteItems] = useState([{ id: Date.now().toString(), text: '', isCompleted: false }]);
   const [isUrgent, setIsUrgent] = useState(false);
   const [noteSort, setNoteSort] = useState('asc'); 
-  const [noteFilterMonth, setNoteFilterMonth] = useState(''); // NEW: Month Filter
-
-  // --- Banner Mute State ---
-  const [isBannerMuted, setIsBannerMuted] = useState(false); // NEW: Banner Mute
 
   // --- Appt Form State ---
   const [apptTitle, setApptTitle] = useState('');
@@ -60,18 +74,23 @@ export default function AdminDesk({
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
   const [expAmount, setExpAmount] = useState('');
-  const [expCategory, setExpCategory] = useState('Office Supplies');
+  const [expCategory, setExpCategory] = useState(EXPENSE_CATEGORIES[0]);
   const [expDescription, setExpDescription] = useState('');
   const [expFile, setExpFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
   // --- Bottom Cabinet & Drawer State ---
   const [cabinetTab, setCabinetTab] = useState('expenses');
-  const [cabDocTitle, setCabDocTitle] = useState('');
-  const [cabDocFile, setCabDocFile] = useState(null);
-  const [isCabDocUploading, setIsCabDocUploading] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isDrawerUploading, setIsDrawerUploading] = useState(false);
+  
+  // --- Cabinet Document State & Filters ---
+  const [cabDocTitle, setCabDocTitle] = useState('');
+  const [cabDocCategory, setCabDocCategory] = useState(CABINET_DOC_CATEGORIES[0]);
+  const [cabDocFile, setCabDocFile] = useState(null);
+  const [isCabDocUploading, setIsCabDocUploading] = useState(false);
+  const [cabFilterCategory, setCabFilterCategory] = useState('All');
+  const [cabFilterMonth, setCabFilterMonth] = useState('');
 
   // --- Widget State ---
   const [time, setTime] = useState(new Date());
@@ -102,20 +121,24 @@ export default function AdminDesk({
   const myDrawerFiles = useMemo(() => adminDrawer.filter(f => f.authorId === currentUser.id), [adminDrawer, currentUser.id]);
   const safeCabinetDocs = Array.isArray(cabinetDocuments) ? cabinetDocuments : [];
 
-  // --- NEW: Sticky Notes Logic (Month Filter + Sort) ---
   const sortedNotes = useMemo(() => {
-    return [...myNotes]
-      .filter(n => !noteFilterMonth || (n.reminderDate && n.reminderDate.startsWith(noteFilterMonth)))
-      .sort((a,b) => {
-        const diff = new Date(a.reminderDate) - new Date(b.reminderDate);
-        return noteSort === 'asc' ? diff : -diff;
-      });
-  }, [myNotes, noteSort, noteFilterMonth]);
+    return [...myNotes].sort((a,b) => {
+      const diff = new Date(a.reminderDate) - new Date(b.reminderDate);
+      return noteSort === 'asc' ? diff : -diff;
+    });
+  }, [myNotes, noteSort]);
+
+  // Filter & Sort Cabinet Documents
+  const filteredCabinetDocs = useMemo(() => {
+    return safeCabinetDocs.filter(doc => {
+      if (cabFilterCategory !== 'All' && doc.category !== cabFilterCategory) return false;
+      if (cabFilterMonth && doc.uploadDate && !doc.uploadDate.startsWith(cabFilterMonth)) return false;
+      return true;
+    }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate)); // Newest first
+  }, [safeCabinetDocs, cabFilterCategory, cabFilterMonth]);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  
-  // --- BUG FIX: Strict `isUrgent` checking ---
-  const urgentAlerts = myNotes.filter(n => n.isUrgent === true);
+  const urgentAlerts = myNotes.filter(n => n.isUrgent);
   const todayAppts = myAppointments.filter(a => a.date === todayStr);
 
   const upcomingItinerary = useMemo(() => {
@@ -235,9 +258,49 @@ export default function AdminDesk({
   };
   const removeNoteItem = (id) => setNoteItems(prev => prev.filter(item => item.id !== id));
 
-  const handleSaveExpense = async (e) => { e.preventDefault(); if (!expAmount || !expDate) return; setIsUploading(true); await onAddBusinessExpense({ date: expDate, amount: Number(expAmount), category: expCategory, description: expDescription, loggedBy: currentUser.id }, expFile); setIsUploading(false); setIsExpenseModalOpen(false); setExpAmount(''); setExpDescription(''); setExpFile(null); };
-  const handleSaveDrawerFile = async (e) => { const file = e.target.files[0]; if (!file) return; setIsDrawerUploading(true); await onAddDrawerFile({ authorId: currentUser.id, fileName: file.name, uploadDate: new Date().toISOString() }, file); setIsDrawerUploading(false); };
-  const handleSaveCabinetDocument = async (e) => { e.preventDefault(); if (!cabDocTitle || !cabDocFile) return; setIsCabDocUploading(true); await onAddCabinetDocument({ title: cabDocTitle, fileName: cabDocFile.name, uploadDate: new Date().toISOString() }, cabDocFile); setIsCabDocUploading(false); setCabDocTitle(''); setCabDocFile(null); };
+  const handleSaveExpense = async (e) => { 
+    e.preventDefault(); 
+    if (!expAmount || !expDate) return; 
+    setIsUploading(true); 
+    await onAddBusinessExpense({ 
+      date: expDate, 
+      amount: Number(expAmount), 
+      category: expCategory, 
+      description: expDescription, 
+      loggedBy: currentUser.id 
+    }, expFile); 
+    setIsUploading(false); 
+    setIsExpenseModalOpen(false); 
+    setExpAmount(''); setExpDescription(''); setExpFile(null); 
+  };
+
+  const handleSaveDrawerFile = async (e) => { 
+    const file = e.target.files[0]; 
+    if (!file) return; 
+    setIsDrawerUploading(true); 
+    await onAddDrawerFile({ 
+      authorId: currentUser.id, 
+      fileName: file.name, 
+      uploadDate: new Date().toISOString() 
+    }, file); 
+    setIsDrawerUploading(false); 
+  };
+
+  const handleSaveCabinetDocument = async (e) => { 
+    e.preventDefault(); 
+    if (!cabDocTitle || !cabDocFile || !cabDocCategory) return; 
+    setIsCabDocUploading(true); 
+    await onAddCabinetDocument({ 
+      title: cabDocTitle, 
+      category: cabDocCategory,
+      fileName: cabDocFile.name, 
+      uploadDate: new Date().toISOString() 
+    }, cabDocFile); 
+    setIsCabDocUploading(false); 
+    setCabDocTitle(''); 
+    setCabDocFile(null); 
+    setCabDocCategory(CABINET_DOC_CATEGORIES[0]);
+  };
 
   const exportBusinessExpenses = () => {
     const headers = ['Date', 'Category', 'Description', 'Amount ($)', 'Logged By'];
@@ -266,22 +329,17 @@ export default function AdminDesk({
   return (
     <div className="bg-slate-100 p-6 rounded-2xl border border-slate-300 shadow-inner min-h-[900px] flex flex-col">
       
-      {/* URGENT BANNER WITH MUTE */}
-      {(urgentAlerts.length > 0 || todayAppts.length > 0) && !isBannerMuted && (
-        <div className="bg-red-600 text-white p-4 rounded-xl flex items-start sm:items-center justify-between mb-6 shadow-md animate-pulse">
+      {/* URGENT BANNER */}
+      {(urgentAlerts.length > 0 || todayAppts.length > 0) && (
+        <div className="bg-red-600 text-white p-4 rounded-xl flex items-center justify-between mb-6 shadow-md animate-pulse">
           <div className="flex items-center">
-            <AlertCircle className="h-6 w-6 mr-3 shrink-0" />
+            <AlertCircle className="h-6 w-6 mr-3" />
             <div>
               <div className="font-bold text-lg leading-tight">Requires Attention</div>
               <div className="text-sm text-red-100">You have {urgentAlerts.length} urgent note(s) and {todayAppts.length} appointment(s) today.</div>
             </div>
           </div>
-          <div className="flex items-center space-x-3 mt-3 sm:mt-0 ml-4 shrink-0">
-            <button onClick={() => handleDayClick(new Date().getDate())} className="bg-white text-red-700 hover:bg-red-50 font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm whitespace-nowrap">View Today</button>
-            <button onClick={() => setIsBannerMuted(true)} className="text-red-200 hover:text-white transition p-1" title="Dismiss Alert">
-              <XCircle className="h-6 w-6" />
-            </button>
-          </div>
+          <button onClick={() => handleDayClick(new Date().getDate())} className="bg-white text-red-700 hover:bg-red-50 font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm">View Today</button>
         </div>
       )}
 
@@ -291,10 +349,15 @@ export default function AdminDesk({
         {/* COL 1: WIDGET, BOARD, PICTURE, & DRAWER */}
         <div className="flex flex-col space-y-6">
           
+          {/* Live Clock & Weather Widget */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col items-center justify-center relative overflow-hidden">
             <div className="absolute -right-4 -bottom-4 opacity-5"><CloudSun size={120}/></div>
-            <div className="text-3xl font-black text-slate-800 tracking-tighter mb-1 relative z-10">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-            <div className="text-sm font-bold text-teal-600 mb-4 relative z-10 uppercase tracking-widest">{time.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+            <div className="text-3xl font-black text-slate-800 tracking-tighter mb-1 relative z-10">
+              {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <div className="text-sm font-bold text-teal-600 mb-4 relative z-10 uppercase tracking-widest">
+              {time.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+            </div>
             <div className="flex items-center space-x-3 bg-slate-50 px-4 py-2 rounded-lg border border-slate-100 w-full justify-center relative z-10">
               <span className="text-2xl">{weather.icon}</span>
               <div>
@@ -304,6 +367,7 @@ export default function AdminDesk({
             </div>
           </div>
 
+          {/* Text Board */}
           <div 
             onClick={() => !isBoardEditing && setIsBoardEditing(true)} 
             className={`min-h-[120px] rounded-lg shadow-sm border-4 border-slate-300 p-4 flex items-center justify-center text-center cursor-pointer transition ${isBoardEditing ? 'bg-slate-50' : currentUser.deskBoard?.bg || 'bg-white'}`}
@@ -335,6 +399,7 @@ export default function AdminDesk({
             )}
           </div>
 
+          {/* Framed Picture */}
           <div className="relative group w-full h-56 bg-white border-8 border-white shadow-lg rounded-sm overflow-hidden flex items-center justify-center bg-slate-100 cursor-pointer transition transform hover:scale-[1.02]">
             {currentUser.deskPictureUrl ? (
               <img src={currentUser.deskPictureUrl} alt="Desk Frame" className="w-full h-full object-cover" />
@@ -350,6 +415,7 @@ export default function AdminDesk({
             <input type="file" accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={(e) => onUpdateDeskPicture(e.target.files[0])} />
           </div>
 
+          {/* Private Drawer Button */}
           <button onClick={() => setIsDrawerOpen(true)} className="w-full flex items-center justify-center p-5 bg-slate-800 text-white rounded-xl shadow-md hover:bg-slate-700 transition group mt-auto">
             <FolderLock className="h-7 w-7 mr-3 group-hover:scale-110 transition-transform text-amber-400" />
             <div className="text-left">
@@ -363,16 +429,22 @@ export default function AdminDesk({
         <div className="flex flex-col space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-fit flex flex-col">
             <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" /> Private Planner</h2>
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+                <CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />
+                Private Planner
+              </h2>
               <div className="flex space-x-2">
                 <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="p-1 rounded hover:bg-slate-200 transition"><ChevronLeft className="h-5 w-5 text-slate-600" /></button>
                 <span className="text-sm font-bold text-slate-700 w-24 text-center">{monthNames[month]} {year}</span>
                 <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="p-1 rounded hover:bg-slate-200 transition"><ChevronRight className="h-5 w-5 text-slate-600" /></button>
               </div>
             </div>
+            
             <div className="p-4">
               <div className="grid grid-cols-7 mb-2">
-                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (<div key={day} className="text-center text-xs font-semibold text-slate-400 uppercase">{day}</div>))}
+                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                  <div key={day} className="text-center text-xs font-semibold text-slate-400 uppercase">{day}</div>
+                ))}
               </div>
               <div className="grid grid-cols-7 gap-1">
                 {blanksArray.map(blank => <div key={`blank-${blank}`} className="h-10 rounded"></div>)}
@@ -424,33 +496,24 @@ export default function AdminDesk({
           </div>
         </div>
 
-        {/* COL 3: SORTABLE STICKY NOTES WITH MONTH FILTER */}
+        {/* COL 3: SORTABLE STICKY NOTES */}
         <div className="bg-yellow-50 rounded-xl shadow-sm border border-yellow-200 overflow-hidden flex flex-col h-[750px]">
           <div className="px-6 py-4 border-b border-yellow-200 bg-yellow-100/50 flex flex-col space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-yellow-800 flex items-center"><FileText className="h-5 w-5 mr-2" /> My Sticky Notes</h2>
-              <button onClick={() => openNewNoteModal()} className="text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-3 py-1.5 rounded transition shadow-sm">+ New Note</button>
-            </div>
-            
-            <div className="flex space-x-2 w-full items-center">
-              <div className="flex-1 flex items-center bg-white border border-yellow-300 rounded overflow-hidden shadow-sm">
-                <Filter className="h-3 w-3 text-yellow-600 ml-2 shrink-0" />
-                <input 
-                  type="month" 
-                  value={noteFilterMonth} 
-                  onChange={(e) => setNoteFilterMonth(e.target.value)} 
-                  className="w-full text-xs px-2 py-1.5 text-yellow-800 bg-transparent focus:outline-none" 
-                  title="Filter by Month"
-                />
-              </div>
-              <button onClick={() => setNoteSort(s => s === 'asc' ? 'desc' : 'asc')} className="flex-1 text-xs bg-white border border-yellow-300 hover:bg-yellow-50 text-yellow-800 font-bold px-2 py-1.5 rounded transition flex items-center justify-center shadow-sm">
-                {noteSort === 'asc' ? 'Earliest First' : 'Latest First'}
+            <h2 className="text-lg font-semibold text-yellow-800 flex items-center">
+              <FileText className="h-5 w-5 mr-2" /> My Sticky Notes
+            </h2>
+            <div className="flex space-x-2 w-full">
+              <button onClick={() => setNoteSort(s => s === 'asc' ? 'desc' : 'asc')} className="flex-1 text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-2 py-1.5 rounded transition flex items-center justify-center">
+                Sort: {noteSort === 'asc' ? 'Earliest First' : 'Latest First'}
+              </button>
+              <button onClick={() => openNewNoteModal()} className="flex-1 text-xs bg-yellow-200 hover:bg-yellow-300 text-yellow-800 font-bold px-2 py-1.5 rounded transition">
+                + New Note
               </button>
             </div>
           </div>
           <div className="p-4 flex-1 overflow-y-auto space-y-3">
             {sortedNotes.length === 0 ? (
-              <div className="text-center py-8 text-yellow-600/60 text-sm font-medium italic">No notes found for this filter.</div>
+              <div className="text-center py-8 text-yellow-600/60 text-sm font-medium italic">Click any day on the calendar to add a private note.</div>
             ) : (
               sortedNotes.map(note => {
                 const isPast = new Date(note.reminderDate) < new Date(todayStr);
@@ -460,7 +523,9 @@ export default function AdminDesk({
                       <button onClick={() => openEditNoteModal(note)} className="text-slate-400 hover:text-blue-500 p-1"><Edit className="h-4 w-4"/></button>
                       <button onClick={() => onRemoveNote(note.id)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 className="h-4 w-4"/></button>
                     </div>
-                    <div className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center opacity-70"><CalendarIcon className="h-3 w-3 mr-1" /> {note.reminderDate}</div>
+                    <div className="text-xs font-bold uppercase tracking-wider mb-2 flex items-center opacity-70">
+                      <CalendarIcon className="h-3 w-3 mr-1" /> {note.reminderDate}
+                    </div>
                     
                     {note.type === 'list' ? (
                       <div className="space-y-2 mt-2">
@@ -486,88 +551,189 @@ export default function AdminDesk({
 
       {/* --- BOTTOM SECTION: THE FILING CABINET --- */}
       <div className="mt-8 border-t-4 border-slate-800 pt-8 flex-1 flex flex-col">
+        
+        {/* Cabinet Header & Tabs */}
         <div className="flex flex-col sm:flex-row items-end justify-between mb-4 gap-4">
-          <div className="flex items-center text-2xl font-black text-slate-800 shrink-0"><Archive className="h-8 w-8 mr-3 text-slate-800" /> The Filing Cabinet</div>
+          <div className="flex items-center text-2xl font-black text-slate-800 shrink-0">
+            <Archive className="h-8 w-8 mr-3 text-slate-800" />
+            The Filing Cabinet
+          </div>
           <div className="flex space-x-2 bg-slate-200 p-1 rounded-lg w-full sm:w-auto overflow-x-auto scrollbar-hide">
-            <button onClick={() => setCabinetTab('expenses')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${cabinetTab === 'expenses' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Company Ledger</button>
-            <button onClick={() => setCabinetTab('documents')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${cabinetTab === 'documents' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Private Documents</button>
+            <button 
+              onClick={() => setCabinetTab('expenses')} 
+              className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${cabinetTab === 'expenses' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Company Ledger
+            </button>
+            <button 
+              onClick={() => setCabinetTab('documents')} 
+              className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${cabinetTab === 'documents' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Private Documents
+            </button>
           </div>
         </div>
 
+        {/* Cabinet Content */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex-1 overflow-hidden min-h-[500px]">
+          
+          {/* TAB 1: SHARED EXPENSE LEDGER */}
           {cabinetTab === 'expenses' && (
             <div className="flex flex-col h-full">
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-800 flex items-center"><Receipt className="h-5 w-5 mr-2 text-teal-600" /> Internal Business Expenses</h2>
+                <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+                  <Receipt className="h-5 w-5 mr-2 text-teal-600" />
+                  Internal Business Expenses
+                </h2>
                 <div className="flex space-x-2">
-                  <button onClick={exportBusinessExpenses} className="text-xs bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded transition flex items-center"><Download className="h-3 w-3 mr-1" /> Export CSV</button>
-                  <button onClick={() => setIsExpenseModalOpen(true)} className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold px-3 py-1.5 rounded transition flex items-center"><Plus className="h-3 w-3 mr-1" /> Log Bill</button>
+                  <button onClick={exportBusinessExpenses} className="text-xs bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded transition flex items-center">
+                    <Download className="h-3 w-3 mr-1" /> Export CSV
+                  </button>
+                  <button onClick={() => setIsExpenseModalOpen(true)} className="text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold px-3 py-1.5 rounded transition flex items-center">
+                    <Plus className="h-3 w-3 mr-1" /> Log Bill
+                  </button>
                 </div>
               </div>
+              
               <div className="p-0 flex-1 overflow-y-auto">
                 <div className="divide-y divide-slate-100">
-                  {businessExpenses.length === 0 ? <div className="text-center py-12 text-slate-500 text-sm">No business expenses have been logged yet.</div> :
+                  {businessExpenses.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 text-sm">No business expenses have been logged yet.</div>
+                  ) : (
                     businessExpenses.sort((a,b) => new Date(b.date) - new Date(a.date)).map(exp => {
                       const emp = employees.find(e => e.id === exp.loggedBy);
                       return (
                         <div key={exp.id} className="p-4 hover:bg-slate-50 transition flex items-center justify-between group">
                           <div className="flex items-center space-x-4">
-                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0"><Receipt className="h-5 w-5" /></div>
+                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+                              <Receipt className="h-5 w-5" />
+                            </div>
                             <div>
-                              <div className="font-bold text-slate-800 flex items-center text-sm">{exp.category}</div>
-                              <div className="text-xs text-slate-500 mt-1">{exp.date} &bull; Logged by {emp?.name || 'Admin'}</div>
+                              <div className="font-bold text-slate-800 flex items-center text-sm">
+                                {exp.category}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                {exp.date} &bull; Logged by {emp?.name || 'Admin'}
+                              </div>
                               {exp.description && <div className="text-xs text-slate-600 italic mt-1">"{exp.description}"</div>}
                             </div>
                           </div>
                           <div className="flex items-center space-x-4">
                             <div className="text-lg font-black text-slate-800">${Number(exp.amount).toFixed(2)}</div>
                             <div className="flex flex-col space-y-1">
-                              {exp.receiptUrl && <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs bg-teal-50 text-teal-700 hover:bg-teal-100 px-2 py-1 rounded font-semibold text-center transition border border-teal-200">Receipt</a>}
+                              {exp.receiptUrl && (
+                                <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-xs bg-teal-50 text-teal-700 hover:bg-teal-100 px-2 py-1 rounded font-semibold text-center transition border border-teal-200">
+                                  Receipt
+                                </a>
+                              )}
                               <button onClick={() => { if(window.confirm('Delete this expense?')) onRemoveBusinessExpense(exp.id); }} className="text-xs text-slate-400 hover:text-red-600 transition text-right">Delete</button>
                             </div>
                           </div>
                         </div>
                       )
                     })
-                  }
+                  )}
                 </div>
               </div>
             </div>
           )}
 
+          {/* TAB 2: PRIVATE COMPANY DOCUMENTS */}
           {cabinetTab === 'documents' && (
             <div className="flex flex-col h-full">
-              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-800 flex items-center"><Folder className="h-5 w-5 mr-2 text-teal-600" /> Private Company Documents</h2></div>
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-800 flex items-center">
+                  <Folder className="h-5 w-5 mr-2 text-teal-600" />
+                  Private Company Documents
+                </h2>
+              </div>
+              
               <div className="p-6 bg-slate-50/50 border-b border-slate-200">
-                <form onSubmit={handleSaveCabinetDocument} className="flex flex-col sm:flex-row gap-4 items-end">
-                  <div className="w-full sm:w-1/3"><label className="block text-sm font-medium text-slate-700 mb-1">Document Title *</label><input type="text" value={cabDocTitle} onChange={(e) => setCabDocTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" required disabled={isCabDocUploading} placeholder="e.g. 2026 Tax Return" /></div>
-                  <div className="w-full sm:w-1/3">
+                <form onSubmit={handleSaveCabinetDocument} className="flex flex-col lg:flex-row gap-4 items-end">
+                  <div className="w-full lg:w-1/4">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
+                    <select 
+                      value={cabDocCategory} 
+                      onChange={(e) => setCabDocCategory(e.target.value)} 
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" 
+                      required 
+                      disabled={isCabDocUploading}
+                    >
+                      {CABINET_DOC_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-full lg:w-1/4">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Document Title *</label>
+                    <input type="text" value={cabDocTitle} onChange={(e) => setCabDocTitle(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm" required disabled={isCabDocUploading} placeholder="e.g. 2026 Tax Return" />
+                  </div>
+                  <div className="w-full lg:w-1/4">
                     <label className="block text-sm font-medium text-slate-700 mb-1">File *</label>
                     <div className={`flex justify-center px-4 py-2 border-2 border-slate-300 border-dashed rounded-md bg-white transition ${isCabDocUploading ? 'opacity-50' : 'hover:bg-slate-50 cursor-pointer'}`} onClick={() => !isCabDocUploading && document.getElementById('cab-doc-upload').click()}>
-                      <div className="text-center text-sm font-medium text-teal-600 truncate">{cabDocFile ? cabDocFile.name : 'Select File'}</div>
+                      <div className="text-center text-sm font-medium text-teal-600 truncate">
+                        {cabDocFile ? cabDocFile.name : 'Select File'}
+                      </div>
                       <input id="cab-doc-upload" type="file" accept=".pdf,image/*,.doc,.docx" className="sr-only" onChange={(e) => setCabDocFile(e.target.files[0])} disabled={isCabDocUploading} />
                     </div>
                   </div>
-                  <div className="w-full sm:w-1/3"><button type="submit" disabled={isCabDocUploading || !cabDocTitle || !cabDocFile} className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white px-4 py-2 rounded-md font-medium flex items-center justify-center transition shadow-sm text-sm">{isCabDocUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : <><Plus className="h-4 w-4 mr-2"/> File Document</>}</button></div>
+                  <div className="w-full lg:w-1/4">
+                    <button type="submit" disabled={isCabDocUploading || !cabDocTitle || !cabDocFile} className="w-full bg-teal-600 hover:bg-teal-700 disabled:bg-slate-400 text-white px-4 py-2 rounded-md font-medium flex items-center justify-center transition shadow-sm text-sm">
+                      {isCabDocUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : <><Plus className="h-4 w-4 mr-2"/> File Document</>}
+                    </button>
+                  </div>
                 </form>
               </div>
+
+              {/* CABINET DOCUMENTS FILTER BAR */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
+                <div className="flex space-x-2 overflow-x-auto scrollbar-hide flex-1 sm:mr-4 py-1">
+                  <button onClick={() => setCabFilterCategory('All')} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === 'All' ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>All</button>
+                  {CABINET_DOC_CATEGORIES.map(cat => (
+                    <button key={cat} onClick={() => setCabFilterCategory(cat)} className={`text-xs font-bold px-3 py-1.5 rounded-full transition whitespace-nowrap ${cabFilterCategory === cat ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'}`}>{cat}</button>
+                  ))}
+                </div>
+                <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition shrink-0">
+                  <Filter className="h-3 w-3 mr-1.5 text-slate-400" />
+                  <input type="month" value={cabFilterMonth} onChange={(e) => setCabFilterMonth(e.target.value)} className="text-xs py-1.5 border-none focus:outline-none text-slate-600 bg-transparent w-32" title="Filter by Month" />
+                </div>
+              </div>
+
               <div className="p-6 bg-white flex-1 overflow-y-auto">
-                {safeCabinetDocs.length === 0 ? <div className="text-center text-slate-500 py-8">The filing cabinet is empty.</div> :
+                {filteredCabinetDocs.length === 0 ? (
+                  <div className="text-center text-slate-500 py-8">No documents found matching the current filters.</div>
+                ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {safeCabinetDocs.sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate)).map(doc => (
+                    {filteredCabinetDocs.map(doc => (
                       <div key={doc.id} className="border border-slate-200 rounded-xl p-4 flex items-center justify-between hover:shadow-md transition bg-slate-50 group">
-                        <div className="flex items-center space-x-4 overflow-hidden pr-4"><div className="p-3 bg-teal-100 text-teal-700 rounded-lg shrink-0"><BookOpen className="h-6 w-6" /></div><div className="truncate"><h3 className="font-bold text-slate-800 truncate leading-tight">{doc.title}</h3><p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold">{doc.fileName} &bull; {new Date(doc.uploadDate).toLocaleDateString()}</p></div></div>
+                        <div className="flex items-center space-x-4 overflow-hidden pr-4">
+                          <div className="p-3 bg-teal-100 text-teal-700 rounded-lg shrink-0">
+                            <BookOpen className="h-6 w-6" />
+                          </div>
+                          <div className="truncate">
+                            <div className="flex items-center mb-0.5">
+                              <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded truncate max-w-[200px]">{doc.category || 'Uncategorized'}</span>
+                            </div>
+                            <h3 className="font-bold text-slate-800 truncate leading-tight mt-1">{doc.title}</h3>
+                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold">
+                              {doc.fileName} &bull; {new Date(doc.uploadDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
                         <div className="flex items-center space-x-1 shrink-0">
-                          <a href={doc.fileUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:bg-teal-50 p-2 rounded transition inline-flex" title="Download/View"><Download className="h-5 w-5" /></a>
-                          <button onClick={() => { if(window.confirm(`Delete "${doc.title}" permanently?`)) onRemoveCabinetDocument(doc.id); }} className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded transition ml-1" title="Delete"><Trash2 className="h-5 w-5" /></button>
+                          <a href={doc.fileUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:bg-teal-50 p-2 rounded transition inline-flex" title="Download/View">
+                            <Download className="h-5 w-5" />
+                          </a>
+                          <button onClick={() => { if(window.confirm(`Delete "${doc.title}" permanently?`)) onRemoveCabinetDocument(doc.id); }} className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded transition ml-1" title="Delete">
+                            <Trash2 className="h-5 w-5" />
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                }
+                )}
               </div>
             </div>
           )}
+
         </div>
       </div>
 
@@ -769,11 +935,7 @@ export default function AdminDesk({
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
                 <select disabled={isUploading} value={expCategory} onChange={(e) => setExpCategory(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm">
-                  <option>Software Subscriptions</option>
-                  <option>Office Supplies</option>
-                  <option>Marketing & Advertising</option>
-                  <option>Insurance</option>
-                  <option>Other</option>
+                  {EXPENSE_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
               </div>
               <div>

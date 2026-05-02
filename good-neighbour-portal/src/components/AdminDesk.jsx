@@ -101,6 +101,7 @@ export default function AdminDesk({
   const [isCabDocUploading, setIsCabDocUploading] = useState(false);
   const [cabFilterCategory, setCabFilterCategory] = useState('All');
   const [cabFilterMonth, setCabFilterMonth] = useState('');
+  const [isCategoryGuideOpen, setIsCategoryGuideOpen] = useState(false);
 
   // --- Widget State ---
   const [time, setTime] = useState(new Date());
@@ -747,24 +748,38 @@ export default function AdminDesk({
                 </form>
               </div>
 
-              {/* CABINET DOCUMENTS FILTER BAR WITH FIX FOR CLIPPING */}
+              {/* CABINET DOCUMENTS FILTER BAR WITH CLICKABLE GUIDE */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
                 <div className="flex items-center w-full sm:w-auto">
                   
-                  {/* Tooltip Guide - FIXED PLACEMENT */}
-                  <div className="relative group shrink-0 mr-3 flex items-center">
-                    <Info className="h-5 w-5 text-slate-500 cursor-help" />
-                    <div className="absolute left-0 bottom-full mb-2 w-80 max-h-64 overflow-y-auto p-4 bg-slate-800 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
-                      <div className="font-bold mb-3 text-teal-300 border-b border-slate-600 pb-2 text-sm">Category Guide</div>
-                      <div className="space-y-3">
-                        {CABINET_CATEGORIES.map(cat => (
-                          <div key={`tip_${cat.id}`}>
-                            <span className="font-bold text-slate-100 block mb-0.5">{cat.id}</span>
-                            <span className="text-slate-400 leading-tight block">{cat.hint}</span>
-                          </div>
-                        ))}
+                  {/* Tooltip Guide - CLICK TOGGLE */}
+                  <div className="relative shrink-0 mr-3 flex items-center">
+                    <button 
+                      onClick={() => setIsCategoryGuideOpen(!isCategoryGuideOpen)} 
+                      className={`p-1 rounded-full transition ${isCategoryGuideOpen ? 'bg-slate-200 text-teal-700' : 'text-slate-500 hover:bg-slate-200'}`}
+                      title="Category Guide"
+                    >
+                      <Info className="h-5 w-5 cursor-pointer" />
+                    </button>
+                    
+                    {isCategoryGuideOpen && (
+                      <div className="absolute left-0 bottom-full mb-2 w-80 max-h-64 overflow-y-auto p-4 bg-slate-800 text-white text-xs rounded-lg shadow-xl z-50">
+                        <div className="flex justify-between items-center mb-3 border-b border-slate-600 pb-2">
+                          <div className="font-bold text-teal-300 text-sm">Category Guide</div>
+                          <button onClick={() => setIsCategoryGuideOpen(false)} className="text-slate-400 hover:text-white transition">
+                            <XCircle className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="space-y-3">
+                          {CABINET_CATEGORIES.map(cat => (
+                            <div key={`tip_${cat.id}`}>
+                              <span className="font-bold text-slate-100 block mb-0.5">{cat.id}</span>
+                              <span className="text-slate-400 leading-tight block">{cat.hint}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Scrollable Tabs */}

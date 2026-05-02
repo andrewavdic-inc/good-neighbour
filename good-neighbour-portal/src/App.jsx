@@ -99,7 +99,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
           <h3 className="text-lg font-bold text-slate-800">Assign New Shift</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition text-2xl leading-none">&times;</button>
         </div>
@@ -154,8 +154,9 @@ function AdminDashboard({
   officeLocation, setOfficeLocation, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, 
   onRemoveEmployee, onAddClient, onRemoveClient, onApproveTimeOff, onRejectTimeOff, onClientFileUpload,
   onAddClientExpense, onEmployeeFileUpload, notes = [], businessExpenses = [], adminDrawer = [], cabinetDocuments = [],
+  appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment, // NEW: Appointments
   onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense, onAddDrawerFile, onRemoveDrawerFile, onUpdateDeskPicture,
-  onAddCabinetDocument, onRemoveCabinetDocument
+  onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard // NEW: Board Update
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -166,13 +167,14 @@ function AdminDashboard({
 
   const isMasterAdmin = currentUser.role === 'Master Admin' || currentUser.id === 'admin1';
 
+  // Urgent Notification Ping Logic
+  const todayStr = new Date().toISOString().split('T')[0];
   const urgentNotes = notes.filter(n => {
-    if (n.authorId !== currentUser.id || !n.reminderDate) return false;
-    const reminder = parseLocalSafe(n.reminderDate);
-    const today = new Date();
-    return reminder.getDate() === today.getDate() && reminder.getMonth() === today.getMonth() && reminder.getFullYear() === today.getFullYear();
+    if (n.authorId !== currentUser.id) return false;
+    return n.isUrgent || n.reminderDate === todayStr;
   });
-  const hasUrgentDeskItem = urgentNotes.length > 0;
+  const todayAppts = appointments.filter(a => a.authorId === currentUser.id && a.date === todayStr);
+  const hasUrgentDeskItem = urgentNotes.length > 0 || todayAppts.length > 0;
 
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
@@ -325,7 +327,31 @@ function AdminDashboard({
 
   const renderAdminTab = () => {
     switch (activeAdminTab) {
-      case 'desk': return <AdminDesk notes={notes} businessExpenses={businessExpenses} currentUser={currentUser} onAddNote={onAddNote} onRemoveNote={onRemoveNote} onUpdateNote={onUpdateNote} onAddBusinessExpense={onAddBusinessExpense} onRemoveBusinessExpense={onRemoveBusinessExpense} employees={employees} officeLocation={officeLocation} adminDrawer={adminDrawer} onAddDrawerFile={onAddDrawerFile} onRemoveDrawerFile={onRemoveDrawerFile} cabinetDocuments={cabinetDocuments} onAddCabinetDocument={onAddCabinetDocument} onRemoveCabinetDocument={onRemoveCabinetDocument} onUpdateDeskPicture={onUpdateDeskPicture} />;
+      case 'desk': 
+        return <AdminDesk 
+                 notes={notes} 
+                 businessExpenses={businessExpenses} 
+                 currentUser={currentUser} 
+                 onAddNote={onAddNote} 
+                 onRemoveNote={onRemoveNote} 
+                 onUpdateNote={onUpdateNote} 
+                 onAddBusinessExpense={onAddBusinessExpense} 
+                 onRemoveBusinessExpense={onRemoveBusinessExpense} 
+                 employees={employees} 
+                 officeLocation={officeLocation} 
+                 adminDrawer={adminDrawer} 
+                 onAddDrawerFile={onAddDrawerFile} 
+                 onRemoveDrawerFile={onRemoveDrawerFile} 
+                 cabinetDocuments={cabinetDocuments} 
+                 onAddCabinetDocument={onAddCabinetDocument} 
+                 onRemoveCabinetDocument={onRemoveCabinetDocument} 
+                 onUpdateDeskPicture={onUpdateDeskPicture} 
+                 onUpdateDeskBoard={onUpdateDeskBoard}
+                 appointments={appointments}
+                 onAddAppointment={onAddAppointment}
+                 onUpdateAppointment={onUpdateAppointment}
+                 onRemoveAppointment={onRemoveAppointment}
+               />;
       case 'employees': return <EmployeeManager employees={safeEmployees} shifts={safeShifts} payPeriodStart={payPeriodStart} onEmployeeFileUpload={onEmployeeFileUpload} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} onAddClientExpense={onAddClientExpense} />;      
@@ -333,7 +359,7 @@ function AdminDashboard({
       case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
       case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={onApproveTimeOff} onReject={onRejectTimeOff} onRemoveTimeOff={onRemoveTimeOffLog} />;
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
-      case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; // RESTORED MAIN DOCUMENT TAB
+      case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} /></div>;
       case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
       case 'schedule':
@@ -455,7 +481,7 @@ function AdminDashboard({
     {id: 'earnings', icon: Coins, label: 'Earnings'}, 
     {id: 'timeoff', icon: CalendarDays, label: 'Time Off'}, 
     {id: 'paystubs', icon: FileText, label: 'Paystubs'}, 
-    {id: 'documents', icon: BookOpen, label: 'Documents'}, // RESTORED MAIN DOCUMENT TAB
+    {id: 'documents', icon: BookOpen, label: 'Documents'}, 
     {id: 'announcements', icon: MessageSquare, label: 'Announcements'}
   ];
 
@@ -476,6 +502,14 @@ function AdminDashboard({
           </button>
         )}
       </div>
+
+      {/* --- PING ALERT FOR THE DESK --- */}
+      {hasUrgentDeskItem && activeAdminTab !== 'desk' && (
+        <div className="bg-red-500 text-white p-3 rounded-lg flex items-center shadow-md animate-pulse cursor-pointer" onClick={() => setActiveAdminTab('desk')}>
+          <AlertCircle className="h-5 w-5 mr-3" />
+          <span className="font-bold text-sm">You have urgent reminders or appointments due today!</span>
+        </div>
+      )}
 
       <div className="flex space-x-4 border-b border-slate-200 overflow-x-auto scrollbar-hide pb-2">
         {tabs.map(tab => (
@@ -513,11 +547,12 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [documents, setDocuments] = useState([]);
   
-  // NEW DATABASES FOR THE DESK
+  // DATABASES FOR THE DESK
   const [notes, setNotes] = useState([]);
   const [businessExpenses, setBusinessExpenses] = useState([]);
   const [adminDrawer, setAdminDrawer] = useState([]);
   const [cabinetDocuments, setCabinetDocuments] = useState([]);
+  const [appointments, setAppointments] = useState([]); // NEW
 
   // Settings State
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
@@ -560,11 +595,12 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_documents'), snap => setDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
-    // NEW DESK LISTENERS
+    // DESK LISTENERS
     unsubs.push(onSnapshot(getCol('gn_notes'), snap => setNotes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_businessExpenses'), snap => setBusinessExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_adminDrawer'), snap => setAdminDrawer(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_cabinetDocuments'), snap => setCabinetDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_appointments'), snap => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
 
     unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
       if (snap.exists()) {
@@ -609,7 +645,7 @@ export default function App() {
       const foundEmp = safeEmployees.find(e => e && e.email && String(e.email).toLowerCase() === String(secureEmail).toLowerCase());
       
       if (foundEmp) {
-        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, annualSalary: foundEmp.annualSalary, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, deskPictureUrl: foundEmp.deskPictureUrl, hireDate: foundEmp.hireDate });
+        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, annualSalary: foundEmp.annualSalary, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, deskPictureUrl: foundEmp.deskPictureUrl, deskBoard: foundEmp.deskBoard, hireDate: foundEmp.hireDate });
         setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
       } else { 
         alert("Login successful, but this email is not assigned to an employee profile in the directory. Please contact the administrator."); 
@@ -821,7 +857,6 @@ export default function App() {
             bonusSettings={bonusSettings} 
             setBonusSettings={(v) => handleSaveSettings('bonusAmounts', v)} 
             
-            // --- RESTORED DOCUMENTS FUNCTIONALITY FOR THE MAIN APP NAV ---
             onAddDocument={async (d, file) => {
               let url = d.fileUrl || '';
               if (file) url = await handleFileUpload(file, 'documents');
@@ -861,7 +896,6 @@ export default function App() {
             }}
             onRemoveBusinessExpense={(id) => runMutation('gn_businessExpenses', id, 'delete')}
             
-            // --- NEW: PRIVATE DRAWER, DESK PICTURE & CABINET DOCUMENTS PROPS ---
             officeLocation={officeLocation}
             adminDrawer={adminDrawer}
             onAddDrawerFile={async (d, file) => {
@@ -885,6 +919,17 @@ export default function App() {
               runMutation('gn_cabinetDocuments', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
             }}
             onRemoveCabinetDocument={(id) => runMutation('gn_cabinetDocuments', id, 'delete')}
+
+            // --- NEW: TEXT BOARD & APPOINTMENTS ---
+            onUpdateDeskBoard={async (boardData) => {
+              if (!currentUser) return;
+              runMutation('gn_employees', currentUser.id, 'update', { deskBoard: boardData });
+              setCurrentUser(prev => ({ ...prev, deskBoard: boardData }));
+            }}
+            appointments={appointments}
+            onAddAppointment={(data) => runMutation('gn_appointments', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })}
+            onUpdateAppointment={(id, data) => runMutation('gn_appointments', id, 'update', data)}
+            onRemoveAppointment={(id) => runMutation('gn_appointments', id, 'delete')}
           />
         ) : (
           <EmployeeDashboard 

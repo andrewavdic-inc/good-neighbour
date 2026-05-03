@@ -157,7 +157,7 @@ function AdminDashboard({
   appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment,
   onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense, onAddDrawerFile, onRemoveDrawerFile, onUpdateDeskPicture,
   onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard,
-  onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel // NEW CANCEL MUTATIONS
+  onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -167,8 +167,17 @@ function AdminDashboard({
   const [calendarView, setCalendarView] = useState('month'); 
 
   const [isDeskPingMuted, setIsDeskPingMuted] = useState(false);
+  
+  // --- NEW: Admin Smart Notification State ---
+  const [adminScheduleUpdates, setAdminScheduleUpdates] = useState([]);
+  const [showAdminUpdateBanner, setShowAdminUpdateBanner] = useState(false);
 
   const isMasterAdmin = currentUser.role === 'Master Admin' || currentUser.id === 'admin1';
+
+  // --- Scoped Data ---
+  const safeEmployees = Array.isArray(employees) ? employees.filter(Boolean) : [];
+  const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
+  const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
 
   // --- Ping Logic ---
   const todayStr = new Date().toISOString().split('T')[0];
@@ -176,9 +185,47 @@ function AdminDashboard({
   const todayAppts = appointments.filter(a => a.authorId === currentUser.id && a.date === todayStr);
   const hasUrgentDeskItem = urgentNotes.length > 0 || todayAppts.length > 0;
 
-  // --- NEW: Pending Cancellations Tracker ---
-  const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
+  // Pending Cancellations Tracker
   const pendingCancellations = safeShifts.filter(s => s.cancelRequest?.pending === true);
+
+  // --- NEW: Admin Smart Schedule Tracker (For Picked Up Shifts) ---
+  useEffect(() => {
+    const saved = localStorage.getItem('gn_admin_shift_snapshot');
+    if (saved) {
+      const snapshot = JSON.parse(saved);
+      const changes = [];
+      
+      safeShifts.forEach(liveShift => {
+        const snapShift = snapshot.find(s => s.id === liveShift.id);
+        // Check if shift was unassigned in memory, but now has an employee ID
+        if (snapShift && snapShift.employeeId === 'unassigned' && liveShift.employeeId !== 'unassigned') {
+          const emp = safeEmployees.find(e => e.id === liveShift.employeeId);
+          const client = safeClients.find(c => c.id === liveShift.clientId);
+          const dateStr = parseLocalSafe(liveShift.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          changes.push(`🟢 CLAIMED: ${emp?.name || 'An employee'} picked up the open shift with ${client?.name || 'Unknown'} on ${dateStr}`);
+        }
+      });
+
+      if (changes.length > 0) {
+        setAdminScheduleUpdates(changes);
+        setShowAdminUpdateBanner(true);
+      } else {
+        setAdminScheduleUpdates([]);
+        setShowAdminUpdateBanner(false);
+      }
+    } else {
+      // First load, save baseline snapshot
+      const snapshot = safeShifts.map(s => ({ id: s.id, employeeId: s.employeeId }));
+      localStorage.setItem('gn_admin_shift_snapshot', JSON.stringify(snapshot));
+    }
+  }, [safeShifts, safeEmployees, safeClients]);
+
+  const acknowledgeAdminScheduleUpdates = () => {
+    setAdminScheduleUpdates([]);
+    setShowAdminUpdateBanner(false);
+    const snapshot = safeShifts.map(s => ({ id: s.id, employeeId: s.employeeId }));
+    localStorage.setItem('gn_admin_shift_snapshot', JSON.stringify(snapshot));
+  };
 
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
@@ -234,9 +281,6 @@ function AdminDashboard({
     d.setDate(startOfWeek.getDate() + i);
     return d;
   });
-
-  const safeEmployees = Array.isArray(employees) ? employees.filter(Boolean) : [];
-  const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
   
   const filteredShifts = safeShifts.filter(s => {
     if (!s) return false;
@@ -261,6 +305,7 @@ function AdminDashboard({
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
+    const isToday = dateStr === todayStr; // --- NEW: EXACT DATE CHECK ---
     
     const dayShifts = filteredShifts
       .filter(s => s && s.date === dateStr)
@@ -280,10 +325,11 @@ function AdminDashboard({
     });
     
     return (
-      <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'}`}>
+      <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'} ${isToday ? 'border-2 border-teal-500 shadow-sm z-10' : ''}`}>
         <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
-          <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{d.getDate()}</span>
+          <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : isToday ? 'text-teal-700 font-bold' : 'text-slate-600'}`}>{d.getDate()}</span>
           <div className="flex flex-col items-end gap-1">
+            {isToday && (<span className="text-[9px] font-bold bg-teal-500 text-white px-1.5 py-0.5 rounded shadow-sm">TODAY</span>)}
             {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
             {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
           </div>
@@ -316,12 +362,6 @@ function AdminDashboard({
                 <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{empNameDisplay}</div>
                 <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{clientNameDisplay}</span></div>
                 <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
-                
-                {/* Visual Indicator if a cancellation is pending */}
-                {shift.cancelRequest?.pending && (
-                  <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse"></div>
-                )}
-
                 <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
                   {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
                   <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
@@ -375,9 +415,9 @@ function AdminDashboard({
       default: return (
         <div className="space-y-4">
           
-          {/* --- NEW: HIGH PRIORITY CANCELLATION BANNER --- */}
+          {/* --- HIGH PRIORITY CANCELLATION BANNER --- */}
           {pendingCancellations.length > 0 && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-6 shadow-sm">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 shadow-sm mb-4">
               <h3 className="font-bold text-red-800 flex items-center mb-4 text-lg">
                 <AlertCircle className="h-6 w-6 mr-2" /> Pending Cancellation Requests ({pendingCancellations.length})
               </h3>
@@ -407,6 +447,29 @@ function AdminDashboard({
                   )
                 })}
               </div>
+            </div>
+          )}
+
+          {/* --- NEW: ADMIN EXPLICIT ACKNOWLEDGEMENT BANNER (CLAIMED SHIFTS) --- */}
+          {showAdminUpdateBanner && adminScheduleUpdates.length > 0 && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+              <div className="flex items-start">
+                <div className="h-2.5 w-2.5 bg-emerald-500 rounded-full animate-pulse mr-3 shrink-0 mt-1"></div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 mb-2">Open Shifts Claimed</h3>
+                  <ul className="space-y-1.5">
+                    {adminScheduleUpdates.map((msg, i) => (
+                      <li key={i} className="text-xs text-slate-700 font-medium bg-white px-3 py-2 rounded border border-emerald-100 shadow-sm flex items-start">
+                        <span className="mr-2 mt-0.5">{msg.substring(0,2)}</span>
+                        <span>{msg.substring(3)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <button onClick={acknowledgeAdminScheduleUpdates} className="w-full sm:w-auto px-4 py-2 text-sm font-bold bg-white text-emerald-700 border border-emerald-300 rounded-md hover:bg-emerald-100 transition shadow-sm whitespace-nowrap shrink-0">
+                Acknowledge & Clear
+              </button>
             </div>
           )}
 
@@ -566,8 +629,10 @@ function AdminDashboard({
           <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
             {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
-            {/* NEW: Red Dot for Pending Cancellations */}
-            {tab.id === 'schedule' && pendingCancellations.length > 0 && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>}
+            {/* --- ADMIN SCHEDULE TAB DOT --- */}
+            {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0) && (
+              <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${pendingCancellations.length > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+            )}
           </button>
         ))}
       </div>

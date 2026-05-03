@@ -615,6 +615,7 @@ export default function EmployeeDashboard({
   const myTimeOffLogs = safeTimeOffLogs.filter(l => l && l.employeeId === currentUser.id);
   
   const now = new Date();
+  const todayDateStr = now.toISOString().split('T')[0];
   const upcomingShifts = safeShiftsSort(myShifts.filter(s => s && s.date && s.endTime && new Date(`${s.date}T${s.endTime}`) > now));
   const nextShift = upcomingShifts[0];
 
@@ -629,7 +630,7 @@ export default function EmployeeDashboard({
     }
   }, [safeMessages, activeTab]);
 
-  // --- NEW: Smart Schedule Ping Logic (EXPLICIT ACKNOWLEDGEMENT) ---
+  // --- REBUILT: Bi-Directional Smart Schedule Ping Logic ---
   useEffect(() => {
     const saved = localStorage.getItem(`gn_shift_snapshot_${currentUser.id}`);
     if (saved) {
@@ -637,6 +638,15 @@ export default function EmployeeDashboard({
       let isNew = false;
       let isChanged = false;
       
+      // Check 1: Did any old shifts disappear or change?
+      snapshot.forEach(snapShift => {
+        const stillExists = myShifts.find(s => s.id === snapShift.id);
+        if (!stillExists) {
+          isChanged = true; // Admin deleted or reassigned the shift
+        }
+      });
+
+      // Check 2: Are there any brand new shifts, or modified dates/times?
       myShifts.forEach(shift => {
         const found = snapshot.find(s => s.id === shift.id);
         if (!found) {
@@ -650,7 +660,7 @@ export default function EmployeeDashboard({
       if (isChanged) setHasChangedShift(true);
       if (isNew || isChanged) setShowUpdateBanner(true);
     } else {
-      // First load, save snapshot immediately to baseline
+      // First load, save baseline snapshot immediately
       const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime }));
       localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
     }
@@ -789,6 +799,7 @@ export default function EmployeeDashboard({
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
             const holiday = getHoliday(dateStr);
+            const isToday = dateStr === todayStr;
             const dayShifts = myShifts.filter(s => s && s.date === dateStr);
             
             const cellTime = new Date(year, month, day).getTime();
@@ -804,10 +815,11 @@ export default function EmployeeDashboard({
             });
             
             return (
-              <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : ''}`}>
+              <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : ''} ${isToday ? 'border-2 border-teal-500 shadow-sm z-10' : ''}`}>
                 <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
-                  <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : 'text-slate-600'}`}>{day}</span>
+                  <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : isToday ? 'text-teal-700 font-bold' : 'text-slate-600'}`}>{day}</span>
                   <div className="flex flex-col items-end gap-1">
+                    {isToday && (<span className="text-[9px] font-bold bg-teal-500 text-white px-1.5 py-0.5 rounded shadow-sm">TODAY</span>)}
                     {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
                     {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
                   </div>
@@ -1093,7 +1105,7 @@ export default function EmployeeDashboard({
               {activeTab === 'schedule' && (
                 <div className="flex flex-col">
                   
-                  {/* --- NEW: EXPLICIT ACKNOWLEDGEMENT BANNER --- */}
+                  {/* --- EXPLICIT ACKNOWLEDGEMENT BANNER --- */}
                   {showUpdateBanner && (
                     <div className="mx-6 mt-6 mb-2 bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div className="flex items-center">

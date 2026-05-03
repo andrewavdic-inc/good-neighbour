@@ -62,7 +62,7 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-// --- UPDATED: ADD SHIFT MODAL WITH SHIFT TRACKER ---
+// --- UPDATED: ADD SHIFT MODAL WITH MONTHLY SUBSCRIPTION TRACKER ---
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], onSave }) {
   const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false) : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
@@ -75,11 +75,23 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(4);
 
-  // --- NEW: DYNAMIC OVERBOOKING MATH ---
+  // --- NEW: DYNAMIC MONTHLY OVERBOOKING MATH ---
+  const baseDate = parseLocalSafe(selectedDate);
+  const shiftMonthKey = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}`;
+  
   const selectedClientData = safeClients.find(c => c.id === clientId);
-  const clientShiftsCount = safeShifts.filter(s => s.clientId === clientId).length;
-  const totalPurchased = Number(selectedClientData?.purchasedShifts || 0);
-  const remainingShifts = totalPurchased - clientShiftsCount;
+  
+  const clientShiftsThisMonth = safeShifts.filter(s => {
+    if (s.clientId !== clientId || !s.date) return false;
+    const d = parseLocalSafe(s.date);
+    return d.getMonth() === baseDate.getMonth() && d.getFullYear() === baseDate.getFullYear();
+  }).length;
+
+  const baseShifts = selectedClientData?.autoRenew ? (Number(selectedClientData?.baseMonthlyShifts) || 0) : 0;
+  const extraShifts = selectedClientData?.extraShifts?.[shiftMonthKey] || 0;
+  const targetThisMonth = baseShifts + extraShifts;
+
+  const remainingShifts = targetThisMonth - clientShiftsThisMonth;
   const isOverbooked = remainingShifts <= 0;
 
   if (!isOpen) return null;
@@ -87,12 +99,12 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const handleSubmit = (e) => {
     e.preventDefault();
     const newShifts = [];
-    const baseDate = parseLocalSafe(selectedDate);
+    const startDate = parseLocalSafe(selectedDate);
 
     if (isRecurring) {
       for (let i = 0; i < recurrenceWeeks; i++) {
-        const nextDate = new Date(baseDate);
-        nextDate.setDate(baseDate.getDate() + (i * 7));
+        const nextDate = new Date(startDate);
+        nextDate.setDate(startDate.getDate() + (i * 7));
         const dateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
         
         if (getHoliday(dateStr)) continue;
@@ -128,13 +140,13 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
             <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
           </div>
           
-          {/* --- NEW: OVERBOOKING WARNING UI --- */}
+          {/* --- NEW: MONTHLY OVERBOOKING WARNING UI --- */}
           <div>
             <div className="flex justify-between items-end mb-1">
               <label className="block text-sm font-medium text-slate-700">Client</label>
               {clientId && (
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-sm ${isOverbooked ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
-                  {remainingShifts} Shifts Remaining
+                  {remainingShifts} Visits Left in {baseDate.toLocaleDateString('en-US', { month: 'short' })}
                 </span>
               )}
             </div>
@@ -143,7 +155,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
             </select>
             {isOverbooked && clientId && (
               <p className="text-[11px] text-red-600 mt-1.5 font-bold flex items-center bg-red-50 p-1.5 rounded border border-red-100">
-                <AlertCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Warning: This client has exhausted their purchased shifts!
+                <AlertCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Warning: This client has exhausted their visits for {baseDate.toLocaleDateString('en-US', { month: 'long' })}!
               </p>
             )}
           </div>

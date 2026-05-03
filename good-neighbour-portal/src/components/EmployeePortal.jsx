@@ -583,8 +583,7 @@ export default function EmployeeDashboard({
   
   // Notification & Upload States
   const [hasNewFeed, setHasNewFeed] = useState(false);
-  const [hasNewShift, setHasNewShift] = useState(false);
-  const [hasChangedShift, setHasChangedShift] = useState(false);
+  const [scheduleChanges, setScheduleChanges] = useState([]); // NEW: Detailed Changes Array
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -604,6 +603,7 @@ export default function EmployeeDashboard({
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
   const safeMessages = Array.isArray(messages) ? messages : [];
+  const safeClients = Array.isArray(clients) ? clients : [];
   
   const liveEmployee = employees.find(e => e && e.id === currentUser.id) || currentUser;
   const myUploads = liveEmployee.uploadedFiles || [];
@@ -630,49 +630,57 @@ export default function EmployeeDashboard({
     }
   }, [safeMessages, activeTab]);
 
-  // --- REBUILT: Bi-Directional Smart Schedule Ping Logic ---
+  // --- REBUILT: Highly Specific Bi-Directional Smart Ping Logic ---
   useEffect(() => {
     const saved = localStorage.getItem(`gn_shift_snapshot_${currentUser.id}`);
     if (saved) {
       const snapshot = JSON.parse(saved);
-      let isNew = false;
-      let isChanged = false;
+      const changes = [];
       
-      // Check 1: Did any old shifts disappear or change?
+      // Check 1: Did any old shifts disappear?
       snapshot.forEach(snapShift => {
         const stillExists = myShifts.find(s => s.id === snapShift.id);
         if (!stillExists) {
-          isChanged = true; // Admin deleted or reassigned the shift
+          const client = safeClients.find(c => c.id === snapShift.clientId);
+          const dateStr = parseLocalSafe(snapShift.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          changes.push(`🔴 REMOVED: Shift with ${client?.name || 'Unknown'} on ${dateStr} from ${snapShift.startTime} to ${snapShift.endTime}`);
         }
       });
 
       // Check 2: Are there any brand new shifts, or modified dates/times?
       myShifts.forEach(shift => {
         const found = snapshot.find(s => s.id === shift.id);
+        const client = safeClients.find(c => c.id === shift.clientId);
+        const dateStr = parseLocalSafe(shift.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
         if (!found) {
-          isNew = true;
+          changes.push(`🟢 ADDED: Shift with ${client?.name || 'Unknown'} on ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
         } else if (found.date !== shift.date || found.startTime !== shift.startTime || found.endTime !== shift.endTime) {
-          isChanged = true;
+          changes.push(`🟠 CHANGED: Shift with ${client?.name || 'Unknown'} moved to ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
         }
       });
 
-      if (isNew) setHasNewShift(true);
-      if (isChanged) setHasChangedShift(true);
-      if (isNew || isChanged) setShowUpdateBanner(true);
+      if (changes.length > 0) {
+        setScheduleChanges(changes);
+        setShowUpdateBanner(true);
+      }
     } else {
-      // First load, save baseline snapshot immediately
-      const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime }));
+      // First load, save baseline snapshot immediately with clientId
+      const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, clientId: s.clientId }));
       localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
     }
-  }, [myShifts, currentUser.id]);
+  }, [myShifts, currentUser.id, safeClients]);
 
   const acknowledgeScheduleUpdates = () => {
-    setHasNewShift(false);
-    setHasChangedShift(false);
+    setScheduleChanges([]);
     setShowUpdateBanner(false);
-    const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime }));
+    const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, clientId: s.clientId }));
     localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
   };
+
+  // Determine Tab Dot Colors based on precise messages
+  const hasNewShift = scheduleChanges.some(msg => msg.includes('🟢 ADDED'));
+  const hasChangedShift = scheduleChanges.some(msg => msg.includes('🟠 CHANGED') || msg.includes('🔴 REMOVED'));
 
   // --- TIME OFF BALANCE CALCULATIONS ---
   const currentYear = new Date().getFullYear();
@@ -1105,25 +1113,28 @@ export default function EmployeeDashboard({
               {activeTab === 'schedule' && (
                 <div className="flex flex-col">
                   
-                  {/* --- EXPLICIT ACKNOWLEDGEMENT BANNER --- */}
-                  {showUpdateBanner && (
-                    <div className="mx-6 mt-6 mb-2 bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div className="flex items-center">
-                        {hasNewShift ? (
-                          <div className="h-2.5 w-2.5 bg-emerald-500 rounded-full animate-pulse mr-3 shrink-0"></div>
-                        ) : (
-                          <div className="h-2.5 w-2.5 bg-amber-500 rounded-full animate-pulse mr-3 shrink-0"></div>
-                        )}
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-800">Unread Schedule Updates</h3>
-                          <p className="text-xs text-slate-600 mt-0.5">
-                            {hasNewShift ? "You have been assigned new shifts." : "One or more of your shifts have been modified."} Please review your schedule.
-                          </p>
+                  {/* --- NEW: DETAILED EXPLICIT ACKNOWLEDGEMENT BANNER --- */}
+                  {showUpdateBanner && scheduleChanges.length > 0 && (
+                    <div className="mx-6 mt-6 mb-2 bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col gap-4">
+                      <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+                        <div className="flex items-start">
+                          <div className={`h-2.5 w-2.5 rounded-full animate-pulse mr-3 shrink-0 mt-1 ${hasNewShift ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-800 mb-2">Unread Schedule Updates</h3>
+                            <ul className="space-y-1.5">
+                              {scheduleChanges.map((msg, i) => (
+                                <li key={i} className="text-xs text-slate-700 font-medium bg-white px-3 py-2 rounded border border-emerald-100 shadow-sm flex items-start">
+                                  <span className="mr-2 mt-0.5">{msg.substring(0,2)}</span>
+                                  <span>{msg.substring(3)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
+                        <button onClick={acknowledgeScheduleUpdates} className="w-full sm:w-auto px-4 py-2 text-sm font-bold bg-white text-emerald-700 border border-emerald-300 rounded-md hover:bg-emerald-100 transition shadow-sm whitespace-nowrap shrink-0">
+                          Acknowledge & Clear
+                        </button>
                       </div>
-                      <button onClick={acknowledgeScheduleUpdates} className="w-full sm:w-auto px-4 py-2 text-sm font-bold bg-white text-emerald-700 border border-emerald-300 rounded-md hover:bg-emerald-100 transition shadow-sm whitespace-nowrap">
-                        Acknowledge & Clear
-                      </button>
                     </div>
                   )}
 

@@ -615,7 +615,7 @@ export default function EmployeeDashboard({
   const myTimeOffLogs = safeTimeOffLogs.filter(l => l && l.employeeId === currentUser.id);
   
   const now = new Date();
-  const todayDateStr = now.toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0];
   const upcomingShifts = safeShiftsSort(myShifts.filter(s => s && s.date && s.endTime && new Date(`${s.date}T${s.endTime}`) > now));
   const nextShift = upcomingShifts[0];
 

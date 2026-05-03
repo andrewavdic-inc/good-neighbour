@@ -513,7 +513,6 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
   );
 }
 
-// --- UPDATED PAYSTUB MANAGER WITH TARGET _BLANK AND YEAR SORTING ---
 export function EmployeePaystubs({ myPaystubs = [] }) {
   const safePaystubs = Array.isArray(myPaystubs) ? myPaystubs : [];
   
@@ -554,7 +553,6 @@ export function EmployeePaystubs({ myPaystubs = [] }) {
                   <div className="font-semibold text-slate-800 text-sm">{parseLocalSafe(ps.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
                   <div className="text-xs text-slate-500 truncate w-full" title={ps.fileName}>{ps.fileName}</div>
                 </div>
-                {/* SAFELY OPENS IN NEW TAB */}
                 <a 
                   href={ps.fileUrl || '#'} 
                   target="_blank" 
@@ -587,6 +585,8 @@ export default function EmployeeDashboard({
   const [hasNewFeed, setHasNewFeed] = useState(false);
   const [hasNewShift, setHasNewShift] = useState(false);
   const [hasChangedShift, setHasChangedShift] = useState(false);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   
@@ -629,32 +629,40 @@ export default function EmployeeDashboard({
     }
   }, [safeMessages, activeTab]);
 
-  // --- NEW: Smart Schedule Ping Logic (Green vs Orange Dots) ---
+  // --- NEW: Smart Schedule Ping Logic (EXPLICIT ACKNOWLEDGEMENT) ---
   useEffect(() => {
-    if (activeTab === 'schedule' || activeTab === 'timeoff') { 
-      setHasNewShift(false);
-      setHasChangedShift(false);
+    const saved = localStorage.getItem(`gn_shift_snapshot_${currentUser.id}`);
+    if (saved) {
+      const snapshot = JSON.parse(saved);
+      let isNew = false;
+      let isChanged = false;
+      
+      myShifts.forEach(shift => {
+        const found = snapshot.find(s => s.id === shift.id);
+        if (!found) {
+          isNew = true;
+        } else if (found.date !== shift.date || found.startTime !== shift.startTime || found.endTime !== shift.endTime) {
+          isChanged = true;
+        }
+      });
+
+      if (isNew) setHasNewShift(true);
+      if (isChanged) setHasChangedShift(true);
+      if (isNew || isChanged) setShowUpdateBanner(true);
+    } else {
+      // First load, save snapshot immediately to baseline
       const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime }));
       localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
-    } else { 
-      const saved = localStorage.getItem(`gn_shift_snapshot_${currentUser.id}`);
-      if (saved) {
-        const snapshot = JSON.parse(saved);
-        let isNew = false;
-        let isChanged = false;
-        myShifts.forEach(shift => {
-          const found = snapshot.find(s => s.id === shift.id);
-          if (!found) isNew = true;
-          else if (found.date !== shift.date || found.startTime !== shift.startTime || found.endTime !== shift.endTime) isChanged = true;
-        });
-        if (isNew) setHasNewShift(true);
-        if (isChanged) setHasChangedShift(true);
-      } else {
-        const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime }));
-        localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
-      }
     }
-  }, [myShifts, activeTab, currentUser.id]);
+  }, [myShifts, currentUser.id]);
+
+  const acknowledgeScheduleUpdates = () => {
+    setHasNewShift(false);
+    setHasChangedShift(false);
+    setShowUpdateBanner(false);
+    const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime }));
+    localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
+  };
 
   // --- TIME OFF BALANCE CALCULATIONS ---
   const currentYear = new Date().getFullYear();
@@ -713,7 +721,7 @@ export default function EmployeeDashboard({
     setToStartDate(''); setToEndDate(''); setToNote(''); 
   };
 
-  // --- NEW: FORMAL CANCELLATION REQUEST LOGIC ---
+  // --- FORMAL CANCELLATION REQUEST LOGIC ---
   const initiateCancellation = (shiftId) => {
     setCancelShiftId(shiftId);
     setCancelReason('');
@@ -762,7 +770,7 @@ export default function EmployeeDashboard({
 
   const renderSchedule = () => {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <h2 className="text-lg font-semibold text-slate-800 flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-600" />{monthNames[month]} {year}</h2>
           <div className="flex space-x-2">
@@ -1084,6 +1092,29 @@ export default function EmployeeDashboard({
               {/* TAB 2: SCHEDULE */}
               {activeTab === 'schedule' && (
                 <div className="flex flex-col">
+                  
+                  {/* --- NEW: EXPLICIT ACKNOWLEDGEMENT BANNER --- */}
+                  {showUpdateBanner && (
+                    <div className="mx-6 mt-6 mb-2 bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center">
+                        {hasNewShift ? (
+                          <div className="h-2.5 w-2.5 bg-emerald-500 rounded-full animate-pulse mr-3 shrink-0"></div>
+                        ) : (
+                          <div className="h-2.5 w-2.5 bg-amber-500 rounded-full animate-pulse mr-3 shrink-0"></div>
+                        )}
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800">Unread Schedule Updates</h3>
+                          <p className="text-xs text-slate-600 mt-0.5">
+                            {hasNewShift ? "You have been assigned new shifts." : "One or more of your shifts have been modified."} Please review your schedule.
+                          </p>
+                        </div>
+                      </div>
+                      <button onClick={acknowledgeScheduleUpdates} className="w-full sm:w-auto px-4 py-2 text-sm font-bold bg-white text-emerald-700 border border-emerald-300 rounded-md hover:bg-emerald-100 transition shadow-sm whitespace-nowrap">
+                        Acknowledge & Clear
+                      </button>
+                    </div>
+                  )}
+
                   <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-end">
                     <div className="flex bg-slate-200 p-1 rounded-lg w-fit">
                       <button onClick={() => setScheduleView('list')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'list' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>List View</button>
@@ -1119,7 +1150,7 @@ export default function EmployeeDashboard({
                                   Care Plan
                                 </button>
                                 
-                                {/* REWRITTEN CANCELLATION BUTTON LOGIC */}
+                                {/* CANCELLATION BUTTON LOGIC */}
                                 {shift.cancelRequest?.pending ? (
                                   <button disabled className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded cursor-not-allowed text-center w-full sm:w-auto border border-slate-200">
                                     Cancellation Pending

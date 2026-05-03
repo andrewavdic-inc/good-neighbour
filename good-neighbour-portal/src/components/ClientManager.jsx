@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
 import { Heart, Search, Edit, Trash2, User, Phone, Wallet, Image as ImageIcon, Plus, MapPin, CalendarDays, Info, ShieldAlert, AlertCircle, Star, Sun, Moon, TreePine, Sailboat, Cloud, Zap, Coffee, HeartPulse, PieChart, Mail, FileText, ChevronRight, Clock, Upload, Loader2, Archive, RefreshCcw } from 'lucide-react';
 
+// --- DATE HELPER ---
+const parseLocalSafe = (dateStr) => {
+  if (!dateStr) return new Date();
+  try {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d || isNaN(y) || isNaN(m) || isNaN(d)) return new Date();
+    return new Date(y, m - 1, d);
+  } catch (e) {
+    return new Date();
+  }
+};
+
 const CaptainHatIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <path d="M6 10c-1-4 1-6 6-6s7 2 6 6" />
@@ -36,7 +48,7 @@ const SafeAvatar = ({ url, name, role, className }) => {
   return <img src={cleanUrl} alt={name || 'Avatar'} className={`h-full w-full object-cover bg-white ${className}`} onError={() => setImgError(true)} />;
 };
 
-function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpenses = [], expenses = [], onClose }) {
+function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpenses = [], expenses = [], updateClient, onClose }) {
   if (!client) return null;
 
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
@@ -60,16 +72,32 @@ function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpens
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeEmployees = Array.isArray(employees) ? employees : [];
   const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   
   const clientShifts = safeShifts.filter(s => s.clientId === client.id).sort((a, b) => new Date(a.date) - new Date(b.date));
   const upcomingShifts = clientShifts.filter(s => new Date(`${s.date}T${s.endTime || '23:59'}`) >= now).slice(0, 3);
   const pastShifts = clientShifts.filter(s => new Date(`${s.date}T${s.endTime || '23:59'}`) < now).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
   const getEmpName = (id) => safeEmployees.find(e => e.id === id)?.name || 'Unassigned';
 
-  // --- NEW: DYNAMIC SHIFT BALANCE CALCULATION ---
-  const totalPurchased = Number(client.purchasedShifts || 0);
-  const shiftsUsedOrScheduled = clientShifts.length;
-  const remainingShifts = totalPurchased - shiftsUsedOrScheduled;
+  // --- NEW: DYNAMIC MONTHLY SHIFT CALCULATION ---
+  const clientShiftsThisMonth = clientShifts.filter(s => {
+    if (!s.date) return false;
+    const d = parseLocalSafe(s.date);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  }).length;
+
+  const targetThisMonth = (client.autoRenew ? (Number(client.baseMonthlyShifts) || 0) : 0) + (client.extraShifts?.[currentMonthKey] || 0);
+
+  const handleAddExtraShift = () => {
+    if (!updateClient) return;
+    const currentExtra = client.extraShifts?.[currentMonthKey] || 0;
+    updateClient(client.id, {
+      extraShifts: {
+        ...(client.extraShifts || {}),
+        [currentMonthKey]: currentExtra + 1
+      }
+    }, null);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -154,19 +182,27 @@ function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpens
 
             <div className="space-y-6">
               
-              {/* --- NEW: SHIFT BALANCE TRACKER --- */}
+              {/* --- NEW: MONTHLY SHIFT TARGET TRACKER --- */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
-                  <CalendarDays className="h-5 w-5 mr-2 text-blue-600" /> Shift Balance
-                </h4>
-                <div className="mb-2 flex justify-between items-end">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-4">
+                  <h4 className="text-base font-bold text-slate-800 flex items-center">
+                    <CalendarDays className="h-5 w-5 mr-2 text-blue-600" /> Monthly Shift Target
+                  </h4>
+                  <button onClick={handleAddExtraShift} className="text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-2 py-1 rounded transition flex items-center shadow-sm">
+                    <Plus className="h-3 w-3 mr-1" /> Extra Visit
+                  </button>
+                </div>
+                <div className="flex justify-between items-end">
                   <div>
-                    <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Remaining</div>
-                    <div className={`text-2xl font-black ${remainingShifts <= 0 ? 'text-red-600' : 'text-blue-600'}`}>
-                      {remainingShifts}
+                    <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Scheduled This Month</div>
+                    <div className={`text-3xl font-black ${clientShiftsThisMonth > targetThisMonth ? 'text-red-600' : clientShiftsThisMonth === targetThisMonth ? 'text-emerald-600' : 'text-blue-600'}`}>
+                      {clientShiftsThisMonth} <span className="text-xl text-slate-400 font-bold">/ {targetThisMonth}</span>
                     </div>
                   </div>
-                  <div className="text-xs text-slate-400 text-right mb-1">of {totalPurchased} purchased</div>
+                  <div className="text-xs text-slate-400 text-right mb-1">
+                    {client.autoRenew ? `Auto-Renews (${client.baseMonthlyShifts}/mo)` : 'Manual Scheduling'}
+                    {client.extraShifts?.[currentMonthKey] > 0 && <div className="text-blue-500 font-bold">+{client.extraShifts[currentMonthKey]} Ad-Hoc</div>}
+                  </div>
                 </div>
               </div>
 
@@ -239,7 +275,8 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
     accountHolderName: client.accountHolderName || '', accountHolderAddress: client.accountHolderAddress || '',
     accountHolderPhone: client.accountHolderPhone || '', accountHolderEmail: client.accountHolderEmail || '',
     monthlyAllowance: client.monthlyAllowance?.toString() || '0',
-    purchasedShifts: client.purchasedShifts?.toString() || '0' // --- NEW: PURCHASED SHIFTS STATE ---
+    baseMonthlyShifts: client.baseMonthlyShifts?.toString() || '4',
+    autoRenew: client.autoRenew !== false // defaults to true
   });
   
   const [photoFile, setPhotoFile] = useState(null);
@@ -257,7 +294,7 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
     const updatedData = { 
       ...formData, 
       monthlyAllowance: Number(formData.monthlyAllowance) || 0,
-      purchasedShifts: Number(formData.purchasedShifts) || 0 // --- NEW: PARSE PURCHASED SHIFTS ---
+      baseMonthlyShifts: Number(formData.baseMonthlyShifts) || 0
     };
     if (onSave) await onSave(client.id, updatedData, photoFile);
     setIsUploading(false);
@@ -313,11 +350,17 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
                 <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Account Holder Full Name</label><input type="text" disabled={isUploading} value={formData.accountHolderName} onChange={(e) => handleChange('accountHolderName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
                 <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Monthly Expense Allowance ($) *</label><input type="number" disabled={isUploading} min="0" value={formData.monthlyAllowance} onChange={(e) => handleChange('monthlyAllowance', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required /></div>
               </div>
-              {/* --- NEW: TOTAL PURCHASED SHIFTS INPUT --- */}
+              {/* --- NEW: AUTO RENEW INPUTS --- */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Total Purchased Shifts *</label>
-                  <input type="number" disabled={isUploading} min="0" value={formData.purchasedShifts} onChange={(e) => handleChange('purchasedShifts', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Base Monthly Shifts *</label>
+                  <input type="number" disabled={isUploading} min="0" value={formData.baseMonthlyShifts} onChange={(e) => handleChange('baseMonthlyShifts', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
+                </div>
+                <div className="col-span-2 sm:col-span-1 flex items-center pt-5">
+                  <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer">
+                    <input type="checkbox" disabled={isUploading} checked={formData.autoRenew} onChange={(e) => handleChange('autoRenew', e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
+                    <span>Auto-Renew Monthly Target</span>
+                  </label>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -413,7 +456,8 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
     accountHolderName: '', accountHolderAddress: '', accountHolderPhone: '', accountHolderEmail: '',
     emergencyContactName: '', emergencyContactPhone: '', secondaryEmergencyName: '', secondaryEmergencyPhone: '',
     monthlyAllowance: '100',
-    purchasedShifts: '0' // --- NEW: PURCHASED SHIFTS STATE ---
+    baseMonthlyShifts: '4', // --- NEW ---
+    autoRenew: true         // --- NEW ---
   });
   
   const [newPhotoFile, setNewPhotoFile] = useState(null);
@@ -424,7 +468,18 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
   const [clientStatusView, setClientStatusView] = useState('active'); 
 
   const safeClients = Array.isArray(clients) ? clients : [];
-  const safeShifts = Array.isArray(shifts) ? shifts : []; // Make sure shifts is accessible
+  const safeShifts = Array.isArray(shifts) ? shifts : []; 
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const currentMonthShifts = safeShifts.filter(s => {
+    if (!s.date) return false;
+    const d = parseLocalSafe(s.date);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+  
+  const agencyTotalThisMonth = currentMonthShifts.length;
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
@@ -437,7 +492,8 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       id: `client_${Date.now()}`,
       photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : '', 
       monthlyAllowance: Number(formData.monthlyAllowance) || 0,
-      purchasedShifts: Number(formData.purchasedShifts) || 0, // --- NEW: PARSE PURCHASED SHIFTS ---
+      baseMonthlyShifts: Number(formData.baseMonthlyShifts) || 0,
+      extraShifts: {},
       isActive: true 
     };
     if (onAddClient) onAddClient(newClient);
@@ -447,7 +503,8 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       accountHolderName: '', accountHolderAddress: '', accountHolderPhone: '', accountHolderEmail: '',
       emergencyContactName: '', emergencyContactPhone: '', secondaryEmergencyName: '', secondaryEmergencyPhone: '',
       monthlyAllowance: '100',
-      purchasedShifts: '0'
+      baseMonthlyShifts: '4',
+      autoRenew: true
     });
     setNewPhotoFile(null);
   };
@@ -468,14 +525,24 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       
       {/* LEFT COLUMN: Client List */}
       <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[800px]">
+        
+        {/* HEADER WITH NEW AGENCY TOTAL */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center">
-            <Heart className="h-5 w-5 mr-2 text-teal-600" />
-            <h2 className="text-lg font-semibold text-slate-800">Client Directory</h2>
-            <span className="ml-3 bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-0.5 rounded-full">{filteredClients.length} Profiles</span>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center">
+              <Heart className="h-5 w-5 mr-2 text-teal-600" />
+              <h2 className="text-lg font-semibold text-slate-800">Client Directory</h2>
+              <span className="ml-3 bg-teal-100 text-teal-800 text-xs font-bold px-2.5 py-0.5 rounded-full">{filteredClients.length} Profiles</span>
+            </div>
+            
+            {/* --- NEW: AGENCY MONTHLY TOTAL --- */}
+            <div className="hidden sm:flex items-center bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-3 py-1.5 rounded-md shadow-sm">
+              <CalendarDays className="h-4 w-4 mr-1.5 text-emerald-600" />
+              Agency Total: {agencyTotalThisMonth} Shifts Scheduled This Month
+            </div>
           </div>
 
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full sm:w-64 shrink-0">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-slate-400" />
             </div>
@@ -484,12 +551,18 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
               placeholder="Search name or notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 text-sm"
+              className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 text-sm shadow-sm"
             />
           </div>
         </div>
 
-        <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide bg-slate-50/50">
+        {/* --- MOBILE AGENCY TOTAL FALLBACK --- */}
+        <div className="sm:hidden px-6 py-2 bg-emerald-50 border-b border-emerald-200 flex items-center justify-center text-emerald-800 text-xs font-bold shadow-sm">
+          <CalendarDays className="h-4 w-4 mr-1.5 text-emerald-600" />
+          Agency Total: {agencyTotalThisMonth} Shifts Scheduled This Month
+        </div>
+
+        <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide bg-slate-50/50 shrink-0">
           <button 
             onClick={() => setClientStatusView('active')} 
             className={`flex-1 py-2 px-4 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${clientStatusView === 'active' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
@@ -506,9 +579,10 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
 
         <div className="divide-y divide-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 p-4 gap-5 flex-1 overflow-y-auto bg-slate-50/50">
           {filteredClients.map(client => {
-            // --- NEW: DYNAMIC SHIFT BALANCE CALCULATION FOR CARD ---
-            const clientShiftsCount = safeShifts.filter(s => s.clientId === client.id).length;
-            const remainingShifts = (Number(client.purchasedShifts) || 0) - clientShiftsCount;
+            
+            // --- NEW: DYNAMIC MONTHLY SHIFT CALCULATION FOR CARD ---
+            const clientShiftsThisMonth = currentMonthShifts.filter(s => s.clientId === client.id).length;
+            const targetThisMonth = (client.autoRenew ? (Number(client.baseMonthlyShifts) || 0) : 0) + (client.extraShifts?.[currentMonthKey] || 0);
 
             return (
               <div key={client.id} className={`border border-slate-200 rounded-xl p-5 flex flex-col justify-between transition duration-200 bg-white relative group ${client.isActive === false ? 'opacity-80' : 'hover:shadow-md'}`}>
@@ -567,10 +641,11 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
                 <div className="space-y-2.5 mb-5 text-sm text-slate-600 flex-1">
                   {client.phone && <div className="flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> {client.phone}</div>}
                   {client.address && <div className="flex items-start"><MapPin className="h-4 w-4 mr-2 text-slate-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{client.address}</span></div>}
-                  {/* --- NEW: SHIFTS REMAINING PILL --- */}
+                  
+                  {/* --- NEW: MONTHLY SHIFTS PILL --- */}
                   <div className="flex items-center mt-2 pt-2 border-t border-slate-50">
-                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wider ${remainingShifts <= 0 ? 'bg-red-100 text-red-800 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
-                      {remainingShifts} Shifts Remaining
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded uppercase tracking-wider shadow-sm ${clientShiftsThisMonth > targetThisMonth ? 'bg-red-100 text-red-800 border border-red-200' : clientShiftsThisMonth === targetThisMonth ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+                      {clientShiftsThisMonth} / {targetThisMonth} Visits Booked
                     </span>
                   </div>
                 </div>
@@ -640,11 +715,17 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
                 <input type="number" min="0" value={formData.monthlyAllowance} onChange={(e) => handleChange('monthlyAllowance', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
               </div>
             </div>
-            {/* --- NEW: TOTAL PURCHASED SHIFTS INPUT --- */}
+            {/* --- NEW: AUTO RENEW INPUTS --- */}
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Total Purchased Shifts *</label>
-                <input type="number" min="0" value={formData.purchasedShifts} onChange={(e) => handleChange('purchasedShifts', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Base Monthly Shifts *</label>
+                <input type="number" min="0" value={formData.baseMonthlyShifts} onChange={(e) => handleChange('baseMonthlyShifts', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
+              </div>
+              <div className="col-span-2 sm:col-span-1 flex items-center pt-5">
+                <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer">
+                  <input type="checkbox" checked={formData.autoRenew} onChange={(e) => handleChange('autoRenew', e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
+                  <span>Auto-Renew Target</span>
+                </label>
               </div>
             </div>
           </div>
@@ -695,7 +776,7 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       </div>
 
       {editingClient && <EditClientModal client={editingClient} onClose={() => setEditingClient(null)} onSave={async (id, data, file) => { if (updateClient) await updateClient(id, data, file); setEditingClient(null); }} onClientFileUpload={onClientFileUpload} />}
-      {viewingClient && <ClientCarePlanModal client={viewingClient} shifts={shifts} employees={employees} clientExpenses={clientExpenses} expenses={expenses} onClose={() => setViewingClient(null)} />}
+      {viewingClient && <ClientCarePlanModal client={viewingClient} shifts={shifts} employees={employees} clientExpenses={clientExpenses} expenses={expenses} updateClient={updateClient} onClose={() => setViewingClient(null)} />}
     </div>
   );
 }

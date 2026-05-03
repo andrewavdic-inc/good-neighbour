@@ -156,7 +156,8 @@ function AdminDashboard({
   onAddClientExpense, onEmployeeFileUpload, notes = [], businessExpenses = [], adminDrawer = [], cabinetDocuments = [],
   appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment,
   onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense, onAddDrawerFile, onRemoveDrawerFile, onUpdateDeskPicture,
-  onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard
+  onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard,
+  onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel // NEW CANCEL MUTATIONS
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -165,18 +166,19 @@ function AdminDashboard({
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [calendarView, setCalendarView] = useState('month'); 
 
-  // --- NEW: Global Banner Mute State ---
   const [isDeskPingMuted, setIsDeskPingMuted] = useState(false);
 
   const isMasterAdmin = currentUser.role === 'Master Admin' || currentUser.id === 'admin1';
 
-  // Urgent Notification Ping Logic
+  // --- Ping Logic ---
   const todayStr = new Date().toISOString().split('T')[0];
-  
-  // --- BUG FIX: Strict `isUrgent` checking ---
   const urgentNotes = notes.filter(n => n.authorId === currentUser.id && n.isUrgent === true);
   const todayAppts = appointments.filter(a => a.authorId === currentUser.id && a.date === todayStr);
   const hasUrgentDeskItem = urgentNotes.length > 0 || todayAppts.length > 0;
+
+  // --- NEW: Pending Cancellations Tracker ---
+  const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
+  const pendingCancellations = safeShifts.filter(s => s.cancelRequest?.pending === true);
 
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
@@ -235,7 +237,6 @@ function AdminDashboard({
 
   const safeEmployees = Array.isArray(employees) ? employees.filter(Boolean) : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
-  const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
   
   const filteredShifts = safeShifts.filter(s => {
     if (!s) return false;
@@ -315,6 +316,12 @@ function AdminDashboard({
                 <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{empNameDisplay}</div>
                 <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{clientNameDisplay}</span></div>
                 <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
+                
+                {/* Visual Indicator if a cancellation is pending */}
+                {shift.cancelRequest?.pending && (
+                  <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse"></div>
+                )}
+
                 <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
                   {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
                   <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
@@ -367,6 +374,42 @@ function AdminDashboard({
       case 'schedule':
       default: return (
         <div className="space-y-4">
+          
+          {/* --- NEW: HIGH PRIORITY CANCELLATION BANNER --- */}
+          {pendingCancellations.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-6 shadow-sm">
+              <h3 className="font-bold text-red-800 flex items-center mb-4 text-lg">
+                <AlertCircle className="h-6 w-6 mr-2" /> Pending Cancellation Requests ({pendingCancellations.length})
+              </h3>
+              <div className="space-y-3">
+                {pendingCancellations.map(shift => {
+                  const emp = safeEmployees.find(e => e.id === shift.employeeId);
+                  const client = safeClients.find(c => c.id === shift.clientId);
+                  return (
+                    <div key={`cancel_${shift.id}`} className="bg-white rounded-lg p-5 border border-red-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-sm hover:shadow-md transition">
+                      <div className="flex-1">
+                        <div className="font-bold text-slate-800 text-lg">
+                          {emp?.name || 'Unknown'} <span className="text-slate-500 font-medium text-base mx-1">requested to cancel shift with</span> {client?.name || 'Unknown'}
+                        </div>
+                        <div className="text-sm text-slate-600 mt-2 flex items-center font-medium">
+                          <CalendarDays className="h-4 w-4 mr-1.5 text-slate-400" /> {parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })} at {shift.startTime} - {shift.endTime}
+                        </div>
+                        <div className="text-sm text-red-800 mt-3 bg-red-100/50 p-3 rounded-md border border-red-100 font-medium">
+                          <span className="font-bold text-red-900 uppercase text-xs tracking-wider mr-2">Reason:</span> "{shift.cancelRequest.reason}"
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                        <button onClick={() => onApproveShiftCancelDelete(shift.id)} className="px-4 py-2.5 text-sm font-bold bg-red-600 text-white rounded-md hover:bg-red-700 transition shadow-sm">Delete Shift</button>
+                        <button onClick={() => onApproveShiftCancelOpen(shift.id)} className="px-4 py-2.5 text-sm font-bold bg-amber-500 text-white rounded-md hover:bg-amber-600 transition shadow-sm">Mark as Open</button>
+                        <button onClick={() => onDenyShiftCancel(shift.id)} className="px-4 py-2.5 text-sm font-bold bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300 transition shadow-sm">Deny Request</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
             <div className="flex items-center space-x-3 w-full sm:w-auto">
               <label htmlFor="schedule-search" className="text-sm font-semibold text-slate-700 whitespace-nowrap">Filter Schedule:</label>
@@ -523,6 +566,8 @@ function AdminDashboard({
           <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
             {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
+            {/* NEW: Red Dot for Pending Cancellations */}
+            {tab.id === 'schedule' && pendingCancellations.length > 0 && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>}
           </button>
         ))}
       </div>
@@ -934,6 +979,11 @@ export default function App() {
             onAddAppointment={(data) => runMutation('gn_appointments', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })}
             onUpdateAppointment={(id, data) => runMutation('gn_appointments', id, 'update', data)}
             onRemoveAppointment={(id) => runMutation('gn_appointments', id, 'delete')}
+            
+            // --- NEW: CANCEL SHIFT MUTATIONS ---
+            onApproveShiftCancelDelete={(shiftId) => runMutation('gn_shifts', shiftId, 'delete')}
+            onApproveShiftCancelOpen={(shiftId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: 'unassigned', cancelRequest: null })}
+            onDenyShiftCancel={(shiftId) => runMutation('gn_shifts', shiftId, 'update', { cancelRequest: null })}
           />
         ) : (
           <EmployeeDashboard 
@@ -982,6 +1032,8 @@ export default function App() {
               setCurrentUser(prev => ({ ...prev, uploadedFiles: [...currentUploads, newFileRecord] }));
             }}
             onAddTimeOff={(req) => runMutation('gn_timeOffLogs', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
+            // --- NEW: CANCEL REQUEST MUTATION ---
+            onRequestShiftCancel={(shiftId, reason) => runMutation('gn_shifts', shiftId, 'update', { cancelRequest: { pending: true, reason } })}
           />
         )}
       </main>

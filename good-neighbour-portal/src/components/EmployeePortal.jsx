@@ -513,7 +513,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
   );
 }
 
-// --- NEW: UPDATED PAYSTUB MANAGER WITH TARGET _BLANK AND YEAR SORTING ---
+// --- UPDATED PAYSTUB MANAGER WITH TARGET _BLANK AND YEAR SORTING ---
 export function EmployeePaystubs({ myPaystubs = [] }) {
   const safePaystubs = Array.isArray(myPaystubs) ? myPaystubs : [];
   
@@ -572,17 +572,30 @@ export function EmployeePaystubs({ myPaystubs = [] }) {
   );
 }
 
-export default function EmployeeDashboard({ shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, onEmployeeFileUpload, onAddTimeOff }) {
+export default function EmployeeDashboard({ 
+  shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, 
+  clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], 
+  timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, 
+  onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, 
+  onEmployeeFileUpload, onAddTimeOff, onRequestShiftCancel 
+}) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
   const [currentDate, setCurrentDate] = useState(new Date());
   
-  // Notification States
+  // Notification & Upload States
   const [hasNewFeed, setHasNewFeed] = useState(false);
-  const [hasNewSchedule, setHasNewSchedule] = useState(false);
+  const [hasNewShift, setHasNewShift] = useState(false);
+  const [hasChangedShift, setHasChangedShift] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   
+  // Cancellation Modal State
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelShiftId, setCancelShiftId] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+
+  // Time Off State
   const [toStartDate, setToStartDate] = useState(''); 
   const [toEndDate, setToEndDate] = useState(''); 
   const [toType, setToType] = useState('sick'); 
@@ -605,7 +618,7 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
   const upcomingShifts = safeShiftsSort(myShifts.filter(s => s && s.date && s.endTime && new Date(`${s.date}T${s.endTime}`) > now));
   const nextShift = upcomingShifts[0];
 
-  // Feed Ping Logic
+  // --- Feed Ping Logic ---
   useEffect(() => {
     if (activeTab === 'announcements') { 
       localStorage.setItem('gn_feed_last_read', Date.now().toString()); 
@@ -616,17 +629,32 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
     }
   }, [safeMessages, activeTab]);
 
-  // Schedule Ping Logic
+  // --- NEW: Smart Schedule Ping Logic (Green vs Orange Dots) ---
   useEffect(() => {
     if (activeTab === 'schedule' || activeTab === 'timeoff') { 
-      localStorage.setItem('gn_schedule_hash', myShifts.length.toString() + safeTimeOffLogs.length.toString()); 
-      setHasNewSchedule(false); 
+      setHasNewShift(false);
+      setHasChangedShift(false);
+      const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime }));
+      localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
     } else { 
-      const lastHash = localStorage.getItem('gn_schedule_hash'); 
-      const currentHash = myShifts.length.toString() + safeTimeOffLogs.length.toString();
-      if (lastHash && lastHash !== currentHash) setHasNewSchedule(true);
+      const saved = localStorage.getItem(`gn_shift_snapshot_${currentUser.id}`);
+      if (saved) {
+        const snapshot = JSON.parse(saved);
+        let isNew = false;
+        let isChanged = false;
+        myShifts.forEach(shift => {
+          const found = snapshot.find(s => s.id === shift.id);
+          if (!found) isNew = true;
+          else if (found.date !== shift.date || found.startTime !== shift.startTime || found.endTime !== shift.endTime) isChanged = true;
+        });
+        if (isNew) setHasNewShift(true);
+        if (isChanged) setHasChangedShift(true);
+      } else {
+        const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime }));
+        localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
+      }
     }
-  }, [myShifts.length, safeTimeOffLogs.length, activeTab]);
+  }, [myShifts, activeTab, currentUser.id]);
 
   // --- TIME OFF BALANCE CALCULATIONS ---
   const currentYear = new Date().getFullYear();
@@ -670,37 +698,37 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
       alert('End date must be the same or after the start date.');
       return;
     }
-    
     if (toType === 'sick' && requestedDays > remainingSick) {
       alert(`You only have ${remainingSick} sick days remaining. You cannot request ${requestedDays}.`);
       return;
     }
-    
     if (toType === 'vacation' && requestedDays > remainingVacation) {
       alert(`You only have ${remainingVacation} vacation days remaining. You cannot request ${requestedDays}.`);
       return;
     }
 
     if (onAddTimeOff) {
-      onAddTimeOff({ 
-        id: `to_${Date.now()}`, 
-        employeeId: currentUser.id, 
-        startDate: toStartDate, 
-        endDate: toEndDate, 
-        type: toType, 
-        note: toNote 
-      }); 
+      onAddTimeOff({ id: `to_${Date.now()}`, employeeId: currentUser.id, startDate: toStartDate, endDate: toEndDate, type: toType, note: toNote }); 
     }
     setToStartDate(''); setToEndDate(''); setToNote(''); 
   };
 
-  // --- NEW: AUTOMATED SHIFT CANCELLATION REQUEST ---
-  const handleRequestCancellation = (shift) => {
-    const client = clients.find(c => c.id === shift.clientId);
-    if(window.confirm(`Are you sure you want to request cancellation for your shift with ${client?.name} on ${parseLocalSafe(shift.date).toLocaleDateString()}?`)) {
-      onSendMessage(`🚨 CANCELLATION REQUEST: I need to cancel my shift with ${client?.name} on ${parseLocalSafe(shift.date).toLocaleDateString()} from ${shift.startTime}-${shift.endTime}. Please remove me from this shift and reassign it.`, currentUser.id);
-      alert("Your cancellation request has been posted to the Team Feed for an Administrator to approve.");
+  // --- NEW: FORMAL CANCELLATION REQUEST LOGIC ---
+  const initiateCancellation = (shiftId) => {
+    setCancelShiftId(shiftId);
+    setCancelReason('');
+    setIsCancelModalOpen(true);
+  };
+
+  const submitCancellation = (e) => {
+    e.preventDefault();
+    if (!cancelReason.trim()) return;
+    if (onRequestShiftCancel && cancelShiftId) {
+      onRequestShiftCancel(cancelShiftId, cancelReason);
     }
+    setIsCancelModalOpen(false);
+    setCancelShiftId(null);
+    setCancelReason('');
   };
 
   const handlePhotoUpload = async (e) => {
@@ -764,7 +792,6 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
               const end = parseLocalSafe(log.endDate);
               const sTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
               const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
-              
               return cellTime >= sTime && cellTime <= eTime;
             });
             
@@ -795,15 +822,18 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                   {dayShifts.map(shift => {
                     const client = clients.find(c => c && c.id === shift.clientId);
                     return (
-                      <div key={shift.id} onClick={() => setSelectedClient(client)} className="text-xs p-1.5 rounded bg-teal-100 text-teal-800 border border-teal-200 cursor-pointer hover:bg-teal-200 transition shadow-sm">
+                      <div key={shift.id} onClick={() => setSelectedClient(client)} className={`text-xs p-1.5 rounded cursor-pointer transition shadow-sm ${shift.cancelRequest?.pending ? 'bg-slate-200 text-slate-500 border border-slate-300' : 'bg-teal-100 text-teal-800 border border-teal-200 hover:bg-teal-200'}`}>
                         <div className="font-semibold truncate flex items-center">
-                          <Heart className="h-2.5 w-2.5 mr-1 shrink-0 text-teal-600" />
+                          <Heart className={`h-2.5 w-2.5 mr-1 shrink-0 ${shift.cancelRequest?.pending ? 'text-slate-400' : 'text-teal-600'}`} />
                           {client?.name?.split(' ')[0] || 'Unknown'}
                         </div>
                         <div className="text-[10px] mt-0.5 opacity-90 flex items-center">
                           <Clock className="h-2.5 w-2.5 mr-1 shrink-0" />
                           {shift.startTime}-{shift.endTime}
                         </div>
+                        {shift.cancelRequest?.pending && (
+                          <div className="mt-1 text-[9px] font-bold text-red-600 uppercase tracking-wider text-center">Pending Cancel</div>
+                        )}
                       </div>
                     );
                   })}
@@ -818,9 +848,38 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
 
   return (
     <div className="space-y-6">
+      
+      {/* CANCELLATION REASON MODAL */}
+      {isCancelModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 bg-red-50 text-red-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold flex items-center"><AlertCircle className="h-5 w-5 mr-2"/> Request Shift Cancellation</h3>
+              <button onClick={() => setIsCancelModalOpen(false)} className="hover:text-red-600 transition text-2xl leading-none">&times;</button>
+            </div>
+            <form onSubmit={submitCancellation} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Reason for Cancellation *</label>
+                <textarea 
+                  value={cancelReason} 
+                  onChange={(e) => setCancelReason(e.target.value)} 
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 text-sm" 
+                  rows="4" 
+                  placeholder="e.g. Client requested a different day, sick leave, etc." 
+                  required 
+                />
+                <p className="text-xs text-slate-500 mt-2">This request will be sent to Administration. You remain responsible for this shift until the request is approved.</p>
+              </div>
+              <div className="flex justify-end space-x-3 pt-2">
+                <button type="button" onClick={() => setIsCancelModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Back</button>
+                <button type="submit" className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-md hover:bg-red-700 transition shadow-sm">Submit Request</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-6">
-        
-        {/* LEFT PROFILE & TRACKER COLUMN */}
         <div className="md:w-1/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col items-center text-center">
             <div className="relative mb-4 group">
@@ -885,14 +944,15 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
           )}
         </div>
 
-        {/* RIGHT INTERACTIVE TABS COLUMN */}
         <div className="md:w-2/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             
             {/* TABS NAVIGATION */}
             <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
               <button onClick={() => setActiveTab('schedule')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
-                My Schedule {hasNewSchedule && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-white"></span>}
+                My Schedule 
+                {hasNewShift && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-white animate-pulse" title="New Shift Added"></span>}
+                {!hasNewShift && hasChangedShift && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-amber-500 rounded-full border-2 border-white animate-pulse" title="Schedule Changed"></span>}
               </button>
               <button onClick={() => setActiveTab('timeoff')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'timeoff' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
                 Time Off
@@ -1043,11 +1103,11 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                           return (
                             <div key={shift.id || Math.random()} className="p-4 hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                               <div className="flex items-start space-x-4">
-                                <div className="bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px]">
+                                <div className={`bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px] ${shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}`}>
                                   <div className="text-xs font-bold text-teal-600 uppercase">{!isInvalid ? d.toLocaleDateString('en-US', { month: 'short' }) : ''}</div>
                                   <div className="text-xl font-extrabold text-teal-800">{!isInvalid ? d.getDate() : ''}</div>
                                 </div>
-                                <div>
+                                <div className={shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}>
                                   <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
                                   <div className="text-sm text-slate-600 flex items-center mt-1">
                                     <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
@@ -1058,9 +1118,18 @@ export default function EmployeeDashboard({ shifts = [], employees = [], current
                                 <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
                                   Care Plan
                                 </button>
-                                <button onClick={() => handleRequestCancellation(shift)} className="text-xs font-medium text-slate-400 hover:text-red-500 hover:underline text-center w-full sm:w-auto">
-                                  Request Cancellation
-                                </button>
+                                
+                                {/* REWRITTEN CANCELLATION BUTTON LOGIC */}
+                                {shift.cancelRequest?.pending ? (
+                                  <button disabled className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded cursor-not-allowed text-center w-full sm:w-auto border border-slate-200">
+                                    Cancellation Pending
+                                  </button>
+                                ) : (
+                                  <button onClick={() => initiateCancellation(shift.id)} className="text-xs font-medium text-slate-500 hover:text-red-500 hover:underline text-center w-full sm:w-auto">
+                                    Request Cancellation
+                                  </button>
+                                )}
+
                               </div>
                             </div>
                           );

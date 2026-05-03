@@ -66,6 +66,11 @@ function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpens
   const pastShifts = clientShifts.filter(s => new Date(`${s.date}T${s.endTime || '23:59'}`) < now).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
   const getEmpName = (id) => safeEmployees.find(e => e.id === id)?.name || 'Unassigned';
 
+  // --- NEW: DYNAMIC SHIFT BALANCE CALCULATION ---
+  const totalPurchased = Number(client.purchasedShifts || 0);
+  const shiftsUsedOrScheduled = clientShifts.length;
+  const remainingShifts = totalPurchased - shiftsUsedOrScheduled;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden max-h-[95vh] flex flex-col">
@@ -148,6 +153,23 @@ function ClientCarePlanModal({ client, shifts = [], employees = [], clientExpens
             </div>
 
             <div className="space-y-6">
+              
+              {/* --- NEW: SHIFT BALANCE TRACKER --- */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
+                  <CalendarDays className="h-5 w-5 mr-2 text-blue-600" /> Shift Balance
+                </h4>
+                <div className="mb-2 flex justify-between items-end">
+                  <div>
+                    <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Remaining</div>
+                    <div className={`text-2xl font-black ${remainingShifts <= 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                      {remainingShifts}
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-400 text-right mb-1">of {totalPurchased} purchased</div>
+                </div>
+              </div>
+
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
                 <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center border-b border-slate-100 pb-2">
                   <PieChart className="h-5 w-5 mr-2 text-emerald-600" /> Expense Budget
@@ -216,7 +238,8 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
     secondaryEmergencyName: client.secondaryEmergencyName || '', secondaryEmergencyPhone: client.secondaryEmergencyPhone || '',
     accountHolderName: client.accountHolderName || '', accountHolderAddress: client.accountHolderAddress || '',
     accountHolderPhone: client.accountHolderPhone || '', accountHolderEmail: client.accountHolderEmail || '',
-    monthlyAllowance: client.monthlyAllowance?.toString() || '0'
+    monthlyAllowance: client.monthlyAllowance?.toString() || '0',
+    purchasedShifts: client.purchasedShifts?.toString() || '0' // --- NEW: PURCHASED SHIFTS STATE ---
   });
   
   const [photoFile, setPhotoFile] = useState(null);
@@ -231,7 +254,11 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
     e.preventDefault();
     if (!formData.name.trim()) return;
     setIsUploading(true);
-    const updatedData = { ...formData, monthlyAllowance: Number(formData.monthlyAllowance) || 0 };
+    const updatedData = { 
+      ...formData, 
+      monthlyAllowance: Number(formData.monthlyAllowance) || 0,
+      purchasedShifts: Number(formData.purchasedShifts) || 0 // --- NEW: PARSE PURCHASED SHIFTS ---
+    };
     if (onSave) await onSave(client.id, updatedData, photoFile);
     setIsUploading(false);
   };
@@ -285,6 +312,13 @@ function EditClientModal({ client, onClose, onSave, onClientFileUpload }) {
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Account Holder Full Name</label><input type="text" disabled={isUploading} value={formData.accountHolderName} onChange={(e) => handleChange('accountHolderName', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
                 <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Monthly Expense Allowance ($) *</label><input type="number" disabled={isUploading} min="0" value={formData.monthlyAllowance} onChange={(e) => handleChange('monthlyAllowance', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required /></div>
+              </div>
+              {/* --- NEW: TOTAL PURCHASED SHIFTS INPUT --- */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Total Purchased Shifts *</label>
+                  <input type="number" disabled={isUploading} min="0" value={formData.purchasedShifts} onChange={(e) => handleChange('purchasedShifts', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 sm:col-span-1"><label className="block text-sm font-medium text-slate-700 mb-1">Account Phone</label><input type="text" disabled={isUploading} value={formData.accountHolderPhone} onChange={(e) => handleChange('accountHolderPhone', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" /></div>
@@ -378,7 +412,8 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
     name: '', dateOfBirth: '', phone: '', address: '', notes: '', dietary: '', mobility: '', hobbies: '',
     accountHolderName: '', accountHolderAddress: '', accountHolderPhone: '', accountHolderEmail: '',
     emergencyContactName: '', emergencyContactPhone: '', secondaryEmergencyName: '', secondaryEmergencyPhone: '',
-    monthlyAllowance: '100'
+    monthlyAllowance: '100',
+    purchasedShifts: '0' // --- NEW: PURCHASED SHIFTS STATE ---
   });
   
   const [newPhotoFile, setNewPhotoFile] = useState(null);
@@ -386,10 +421,10 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
   const [viewingClient, setViewingClient] = useState(null); 
   const [searchTerm, setSearchTerm] = useState('');
   
-  // NEW: Toggle to view Active vs Deactivated clients
   const [clientStatusView, setClientStatusView] = useState('active'); 
 
   const safeClients = Array.isArray(clients) ? clients : [];
+  const safeShifts = Array.isArray(shifts) ? shifts : []; // Make sure shifts is accessible
 
   const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
 
@@ -402,7 +437,8 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       id: `client_${Date.now()}`,
       photoUrl: newPhotoFile ? URL.createObjectURL(newPhotoFile) : '', 
       monthlyAllowance: Number(formData.monthlyAllowance) || 0,
-      isActive: true // NEW: Automatically mark new clients as active
+      purchasedShifts: Number(formData.purchasedShifts) || 0, // --- NEW: PARSE PURCHASED SHIFTS ---
+      isActive: true 
     };
     if (onAddClient) onAddClient(newClient);
 
@@ -410,17 +446,16 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
       name: '', dateOfBirth: '', phone: '', address: '', notes: '', dietary: '', mobility: '', hobbies: '',
       accountHolderName: '', accountHolderAddress: '', accountHolderPhone: '', accountHolderEmail: '',
       emergencyContactName: '', emergencyContactPhone: '', secondaryEmergencyName: '', secondaryEmergencyPhone: '',
-      monthlyAllowance: '100'
+      monthlyAllowance: '100',
+      purchasedShifts: '0'
     });
     setNewPhotoFile(null);
   };
 
-  // NEW: Filter explicitly checks the isActive property
   const filteredClients = safeClients.filter(client => {
     const isMatch = client.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                     (client.notes && client.notes.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    // If client.isActive is undefined, we assume they are active (for backwards compatibility with old data)
     const isStatusMatch = clientStatusView === 'active' 
       ? client.isActive !== false 
       : client.isActive === false;
@@ -454,7 +489,6 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
           </div>
         </div>
 
-        {/* NEW: Tabs for Active/Deactivated */}
         <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide bg-slate-50/50">
           <button 
             onClick={() => setClientStatusView('active')} 
@@ -471,77 +505,88 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
         </div>
 
         <div className="divide-y divide-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 p-4 gap-5 flex-1 overflow-y-auto bg-slate-50/50">
-          {filteredClients.map(client => (
-            <div key={client.id} className={`border border-slate-200 rounded-xl p-5 flex flex-col justify-between transition duration-200 bg-white relative group ${client.isActive === false ? 'opacity-80' : 'hover:shadow-md'}`}>
-              
-              <div className="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-md p-1 z-10">
-                <button onClick={() => setEditingClient(client)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition" title="Edit Profile & Documents">
-                  <Edit className="h-4 w-4" />
-                </button>
+          {filteredClients.map(client => {
+            // --- NEW: DYNAMIC SHIFT BALANCE CALCULATION FOR CARD ---
+            const clientShiftsCount = safeShifts.filter(s => s.clientId === client.id).length;
+            const remainingShifts = (Number(client.purchasedShifts) || 0) - clientShiftsCount;
+
+            return (
+              <div key={client.id} className={`border border-slate-200 rounded-xl p-5 flex flex-col justify-between transition duration-200 bg-white relative group ${client.isActive === false ? 'opacity-80' : 'hover:shadow-md'}`}>
                 
-                {/* NEW: Safe Soft-Deactivate / Reactivate button */}
-                {client.isActive !== false ? (
-                  <button 
-                    onClick={() => {
-                      if(window.confirm(`Deactivate ${client.name}? They will be hidden from the active schedule and assignments, but their history will be saved.`)) {
-                        updateClient(client.id, { isActive: false }, null);
-                      }
-                    }} 
-                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition" 
-                    title="Deactivate Client"
-                  >
-                    <Archive className="h-4 w-4" />
+                <div className="absolute top-3 right-3 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/80 backdrop-blur-sm rounded-md p-1 z-10">
+                  <button onClick={() => setEditingClient(client)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition" title="Edit Profile & Documents">
+                    <Edit className="h-4 w-4" />
                   </button>
-                ) : (
-                  <button 
-                    onClick={() => {
-                      if(window.confirm(`Reactivate ${client.name}? They will be placed back into the active rotation.`)) {
-                        updateClient(client.id, { isActive: true }, null);
-                      }
-                    }} 
-                    className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition" 
-                    title="Reactivate Client"
-                  >
-                    <RefreshCcw className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-              
-              <div className="flex items-center space-x-4 mb-4 pr-16">
-                <div className={`h-14 w-14 rounded-full flex items-center justify-center border-2 shadow-sm shrink-0 overflow-hidden ${client.isActive === false ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-teal-100 text-teal-600 border-teal-50'}`}>
-                  <SafeAvatar url={client.photoUrl} name={client.name} role="" className="h-7 w-7"/>
+                  
+                  {client.isActive !== false ? (
+                    <button 
+                      onClick={() => {
+                        if(window.confirm(`Deactivate ${client.name}? They will be hidden from the active schedule and assignments, but their history will be saved.`)) {
+                          updateClient(client.id, { isActive: false }, null);
+                        }
+                      }} 
+                      className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition" 
+                      title="Deactivate Client"
+                    >
+                      <Archive className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => {
+                        if(window.confirm(`Reactivate ${client.name}? They will be placed back into the active rotation.`)) {
+                          updateClient(client.id, { isActive: true }, null);
+                        }
+                      }} 
+                      className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition" 
+                      title="Reactivate Client"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-lg leading-tight">{client.name}</h3>
-                  <div className="flex space-x-2 mt-1">
-                    <div className={`text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wider ${client.isActive === false ? 'bg-slate-100 text-slate-500 border border-slate-200' : 'bg-teal-50 text-teal-700 border border-teal-100'}`}>
-                      Client
-                    </div>
-                    {client.isActive === false && (
-                      <div className="text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
-                        Deactivated
+                
+                <div className="flex items-center space-x-4 mb-4 pr-16">
+                  <div className={`h-14 w-14 rounded-full flex items-center justify-center border-2 shadow-sm shrink-0 overflow-hidden ${client.isActive === false ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-teal-100 text-teal-600 border-teal-50'}`}>
+                    <SafeAvatar url={client.photoUrl} name={client.name} role="" className="h-7 w-7"/>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-lg leading-tight">{client.name}</h3>
+                    <div className="flex space-x-2 mt-1">
+                      <div className={`text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wider ${client.isActive === false ? 'bg-slate-100 text-slate-500 border border-slate-200' : 'bg-teal-50 text-teal-700 border border-teal-100'}`}>
+                        Client
                       </div>
-                    )}
+                      {client.isActive === false && (
+                        <div className="text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                          Deactivated
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="space-y-2.5 mb-5 text-sm text-slate-600 flex-1">
-                {client.phone && <div className="flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> {client.phone}</div>}
-                {client.address && <div className="flex items-start"><MapPin className="h-4 w-4 mr-2 text-slate-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{client.address}</span></div>}
-              </div>
-              
-              <div className="mt-auto border-t border-slate-100 pt-4">
-                <button 
-                  onClick={() => setViewingClient(client)}
-                  className="w-full flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg transition border border-slate-200 text-sm"
-                >
-                  <HeartPulse className="h-4 w-4 mr-2" /> View Care Plan Hub
-                </button>
-              </div>
+                
+                <div className="space-y-2.5 mb-5 text-sm text-slate-600 flex-1">
+                  {client.phone && <div className="flex items-center"><Phone className="h-4 w-4 mr-2 text-slate-400 shrink-0" /> {client.phone}</div>}
+                  {client.address && <div className="flex items-start"><MapPin className="h-4 w-4 mr-2 text-slate-400 shrink-0 mt-0.5" /> <span className="line-clamp-2">{client.address}</span></div>}
+                  {/* --- NEW: SHIFTS REMAINING PILL --- */}
+                  <div className="flex items-center mt-2 pt-2 border-t border-slate-50">
+                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded uppercase tracking-wider ${remainingShifts <= 0 ? 'bg-red-100 text-red-800 border-red-200' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
+                      {remainingShifts} Shifts Remaining
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="mt-auto border-t border-slate-100 pt-4">
+                  <button 
+                    onClick={() => setViewingClient(client)}
+                    className="w-full flex items-center justify-center bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold py-2 rounded-lg transition border border-slate-200 text-sm"
+                  >
+                    <HeartPulse className="h-4 w-4 mr-2" /> View Care Plan Hub
+                  </button>
+                </div>
 
-            </div>
-          ))}
+              </div>
+            )
+          })}
           {filteredClients.length === 0 && (
             <div className="col-span-full p-8 text-center text-slate-500">
               {clientStatusView === 'active' ? `No active clients found matching "${searchTerm}".` : "No deactivated clients on file."}
@@ -593,6 +638,13 @@ export default function ClientManager({ clients = [], shifts = [], employees = [
               <div className="col-span-2 sm:col-span-1">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Allowance ($) *</label>
                 <input type="number" min="0" value={formData.monthlyAllowance} onChange={(e) => handleChange('monthlyAllowance', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
+              </div>
+            </div>
+            {/* --- NEW: TOTAL PURCHASED SHIFTS INPUT --- */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Total Purchased Shifts *</label>
+                <input type="number" min="0" value={formData.purchasedShifts} onChange={(e) => handleChange('purchasedShifts', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 text-sm" required />
               </div>
             </div>
           </div>

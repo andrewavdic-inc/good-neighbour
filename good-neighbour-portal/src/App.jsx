@@ -62,15 +62,25 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], onSave }) {
+// --- UPDATED: ADD SHIFT MODAL WITH SHIFT TRACKER ---
+function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], onSave }) {
   const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false) : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
+  const safeShifts = Array.isArray(shifts) ? shifts : [];
+  
   const [employeeId, setEmployeeId] = useState(safeEmps[0]?.id || '');
   const [clientId, setClientId] = useState(safeClients[0]?.id || '');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(4);
+
+  // --- NEW: DYNAMIC OVERBOOKING MATH ---
+  const selectedClientData = safeClients.find(c => c.id === clientId);
+  const clientShiftsCount = safeShifts.filter(s => s.clientId === clientId).length;
+  const totalPurchased = Number(selectedClientData?.purchasedShifts || 0);
+  const remainingShifts = totalPurchased - clientShiftsCount;
+  const isOverbooked = remainingShifts <= 0;
 
   if (!isOpen) return null;
 
@@ -105,22 +115,39 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" value={selectedDate} readOnly className="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-500 cursor-not-allowed focus:outline-none" /></div>
+          
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
             <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
               {safeEmps.map(emp => <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>)}
             </select>
           </div>
+          
           <div className="grid grid-cols-2 gap-4">
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Start</label><input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
           </div>
+          
+          {/* --- NEW: OVERBOOKING WARNING UI --- */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Client</label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+            <div className="flex justify-between items-end mb-1">
+              <label className="block text-sm font-medium text-slate-700">Client</label>
+              {clientId && (
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-sm ${isOverbooked ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+                  {remainingShifts} Shifts Remaining
+                </span>
+              )}
+            </div>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 transition ${isOverbooked ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-300'}`} required>
               {safeClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
             </select>
+            {isOverbooked && clientId && (
+              <p className="text-[11px] text-red-600 mt-1.5 font-bold flex items-center bg-red-50 p-1.5 rounded border border-red-100">
+                <AlertCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Warning: This client has exhausted their purchased shifts!
+              </p>
+            )}
           </div>
+          
           <div className="pt-2 border-t border-slate-200">
             <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
               <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
@@ -168,7 +195,7 @@ function AdminDashboard({
 
   const [isDeskPingMuted, setIsDeskPingMuted] = useState(false);
   
-  // --- NEW: Admin Smart Notification State ---
+  // Admin Smart Notification State
   const [adminScheduleUpdates, setAdminScheduleUpdates] = useState([]);
   const [showAdminUpdateBanner, setShowAdminUpdateBanner] = useState(false);
 
@@ -188,7 +215,7 @@ function AdminDashboard({
   // Pending Cancellations Tracker
   const pendingCancellations = safeShifts.filter(s => s.cancelRequest?.pending === true);
 
-  // --- NEW: Admin Smart Schedule Tracker (For Picked Up Shifts) ---
+  // Admin Smart Schedule Tracker (For Picked Up Shifts)
   useEffect(() => {
     const saved = localStorage.getItem('gn_admin_shift_snapshot');
     if (saved) {
@@ -305,7 +332,7 @@ function AdminDashboard({
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
-    const isToday = dateStr === todayStr; // --- NEW: EXACT DATE CHECK ---
+    const isToday = dateStr === todayStr; 
     
     const dayShifts = filteredShifts
       .filter(s => s && s.date === dateStr)
@@ -362,6 +389,11 @@ function AdminDashboard({
                 <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{empNameDisplay}</div>
                 <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{clientNameDisplay}</span></div>
                 <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
+                
+                {shift.cancelRequest?.pending && (
+                  <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse"></div>
+                )}
+
                 <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
                   {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
                   <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
@@ -450,7 +482,7 @@ function AdminDashboard({
             </div>
           )}
 
-          {/* --- NEW: ADMIN EXPLICIT ACKNOWLEDGEMENT BANNER (CLAIMED SHIFTS) --- */}
+          {/* --- ADMIN EXPLICIT ACKNOWLEDGEMENT BANNER (CLAIMED SHIFTS) --- */}
           {showAdminUpdateBanner && adminScheduleUpdates.length > 0 && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
               <div className="flex items-start">
@@ -639,8 +671,9 @@ function AdminDashboard({
       
       {renderAdminTab()}
 
+      {/* --- RENDER ADD SHIFT MODAL WITH PASSED SHIFTS --- */}
       {isModalOpen && (
-        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={safeEmployees} clients={safeClients} onSave={onAddShift} />
+        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={safeEmployees} clients={safeClients} shifts={safeShifts} onSave={onAddShift} />
       )}
     </div>
   );

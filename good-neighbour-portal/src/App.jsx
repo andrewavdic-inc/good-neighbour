@@ -62,7 +62,7 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-// --- UPDATED: ADD SHIFT MODAL WITH MONTHLY SUBSCRIPTION TRACKER ---
+// --- ADD SHIFT MODAL WITH MONTHLY TRACKER ---
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], onSave }) {
   const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false) : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
@@ -75,10 +75,9 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(4);
 
-  // --- NEW: DYNAMIC MONTHLY OVERBOOKING MATH ---
+  // --- DYNAMIC OVERBOOKING MATH ---
   const baseDate = parseLocalSafe(selectedDate);
   const shiftMonthKey = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}`;
-  
   const selectedClientData = safeClients.find(c => c.id === clientId);
   
   const clientShiftsThisMonth = safeShifts.filter(s => {
@@ -140,7 +139,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
             <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
           </div>
           
-          {/* --- NEW: MONTHLY OVERBOOKING WARNING UI --- */}
+          {/* --- OVERBOOKING WARNING UI --- */}
           <div>
             <div className="flex justify-between items-end mb-1">
               <label className="block text-sm font-medium text-slate-700">Client</label>
@@ -224,10 +223,9 @@ function AdminDashboard({
   const todayAppts = appointments.filter(a => a.authorId === currentUser.id && a.date === todayStr);
   const hasUrgentDeskItem = urgentNotes.length > 0 || todayAppts.length > 0;
 
-  // Pending Cancellations Tracker
   const pendingCancellations = safeShifts.filter(s => s.cancelRequest?.pending === true);
 
-  // Admin Smart Schedule Tracker (For Picked Up Shifts)
+  // Admin Smart Schedule Tracker
   useEffect(() => {
     const saved = localStorage.getItem('gn_admin_shift_snapshot');
     if (saved) {
@@ -236,7 +234,6 @@ function AdminDashboard({
       
       safeShifts.forEach(liveShift => {
         const snapShift = snapshot.find(s => s.id === liveShift.id);
-        // Check if shift was unassigned in memory, but now has an employee ID
         if (snapShift && snapShift.employeeId === 'unassigned' && liveShift.employeeId !== 'unassigned') {
           const emp = safeEmployees.find(e => e.id === liveShift.employeeId);
           const client = safeClients.find(c => c.id === liveShift.clientId);
@@ -253,7 +250,6 @@ function AdminDashboard({
         setShowAdminUpdateBanner(false);
       }
     } else {
-      // First load, save baseline snapshot
       const snapshot = safeShifts.map(s => ({ id: s.id, employeeId: s.employeeId }));
       localStorage.setItem('gn_admin_shift_snapshot', JSON.stringify(snapshot));
     }
@@ -448,8 +444,11 @@ function AdminDashboard({
       case 'employees': return <EmployeeManager employees={safeEmployees} shifts={safeShifts} payPeriodStart={payPeriodStart} onEmployeeFileUpload={onEmployeeFileUpload} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} onAddClientExpense={onAddClientExpense} />;      
-      case 'expenses': return <ExpenseManager expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
-      case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
+      
+      // --- RECONCILIATION HUB CONNECTIONS ---
+      case 'expenses': return <ExpenseManager shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} />;
+      case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} clients={safeClients} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
+      
       case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={onApproveTimeOff} onReject={onRejectTimeOff} onRemoveTimeOff={onRemoveTimeOffLog} />;
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
@@ -1090,7 +1089,7 @@ export default function App() {
             onUpdateAppointment={(id, data) => runMutation('gn_appointments', id, 'update', data)}
             onRemoveAppointment={(id) => runMutation('gn_appointments', id, 'delete')}
             
-            // --- NEW: CANCEL SHIFT MUTATIONS ---
+            // --- CANCEL SHIFT MUTATIONS ---
             onApproveShiftCancelDelete={(shiftId) => runMutation('gn_shifts', shiftId, 'delete')}
             onApproveShiftCancelOpen={(shiftId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: 'unassigned', cancelRequest: null })}
             onDenyShiftCancel={(shiftId) => runMutation('gn_shifts', shiftId, 'update', { cancelRequest: null })}
@@ -1142,7 +1141,7 @@ export default function App() {
               setCurrentUser(prev => ({ ...prev, uploadedFiles: [...currentUploads, newFileRecord] }));
             }}
             onAddTimeOff={(req) => runMutation('gn_timeOffLogs', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
-            // --- NEW: CANCEL REQUEST MUTATION ---
+            // --- CANCEL REQUEST MUTATION ---
             onRequestShiftCancel={(shiftId, reason) => runMutation('gn_shifts', shiftId, 'update', { cancelRequest: { pending: true, reason } })}
           />
         )}

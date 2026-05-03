@@ -1,6 +1,30 @@
 import React, { useState, useMemo } from 'react';
 import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, DollarSign, CalendarDays, Plus, Trash2, Undo, AlertCircle } from 'lucide-react';
 
+// --- DATE HELPER ---
+const parseLocalSafe = (dateStr) => {
+  try {
+    if (!dateStr) return new Date();
+    if (typeof dateStr === 'number') return new Date(dateStr);
+    if (typeof dateStr === 'object') {
+      if (dateStr instanceof Date) return isNaN(dateStr.getTime()) ? new Date() : dateStr;
+      if (typeof dateStr.toDate === 'function') return dateStr.toDate();
+      if (typeof dateStr.seconds === 'number') return new Date(dateStr.seconds * 1000);
+      return new Date();
+    }
+    const str = String(dateStr);
+    const parts = str.split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) return new Date(y, m - 1, d);
+    }
+    const fallback = new Date(str);
+    return isNaN(fallback.getTime()) ? new Date() : fallback;
+  } catch (e) { 
+    return new Date(); 
+  }
+};
+
 export default function ExpenseManager({ 
   shifts = [], expenses = [], clientExpenses = [], employees = [], clients = [], 
   onUpdateExpense, onUpdateClientExpense 

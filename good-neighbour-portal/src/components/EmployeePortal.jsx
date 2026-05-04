@@ -575,7 +575,9 @@ export default function EmployeeDashboard({
   clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], 
   timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, 
   onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, 
-  onEmployeeFileUpload, onAddTimeOff, onRequestShiftCancel 
+  onEmployeeFileUpload, onAddTimeOff, onRequestShiftCancel,
+  // --- NEW: FEED ACTIONS PASSED IN FROM APP.JSX ---
+  onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture
 }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
@@ -583,7 +585,7 @@ export default function EmployeeDashboard({
   
   // Notification & Upload States
   const [hasNewFeed, setHasNewFeed] = useState(false);
-  const [scheduleChanges, setScheduleChanges] = useState([]); // NEW: Detailed Changes Array
+  const [scheduleChanges, setScheduleChanges] = useState([]); 
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -630,24 +632,22 @@ export default function EmployeeDashboard({
     }
   }, [safeMessages, activeTab]);
 
-  // --- REBUILT: Highly Specific Bi-Directional Smart Ping Logic ---
+  // --- Smart Ping Logic ---
   useEffect(() => {
     const saved = localStorage.getItem(`gn_shift_snapshot_${currentUser.id}`);
     if (saved) {
       const snapshot = JSON.parse(saved);
       const changes = [];
       
-      // Check 1: Did any old shifts disappear?
       snapshot.forEach(snapShift => {
         const stillExists = myShifts.find(s => s.id === snapShift.id);
         if (!stillExists) {
           const client = safeClients.find(c => c.id === snapShift.clientId);
           const dateStr = parseLocalSafe(snapShift.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          changes.push(`🔴 REMOVED: Shift with ${client?.name || 'Unknown'} on ${dateStr} from ${snapShift.startTime} to ${snapShift.endTime}`);
+          changes.push(`🚨 REMOVED: Shift with ${client?.name || 'Unknown'} on ${dateStr} from ${snapShift.startTime} to ${snapShift.endTime}`);
         }
       });
 
-      // Check 2: Are there any brand new shifts, or modified dates/times?
       myShifts.forEach(shift => {
         const found = snapshot.find(s => s.id === shift.id);
         const client = safeClients.find(c => c.id === shift.clientId);
@@ -656,7 +656,7 @@ export default function EmployeeDashboard({
         if (!found) {
           changes.push(`🟢 ADDED: Shift with ${client?.name || 'Unknown'} on ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
         } else if (found.date !== shift.date || found.startTime !== shift.startTime || found.endTime !== shift.endTime) {
-          changes.push(`🟠 CHANGED: Shift with ${client?.name || 'Unknown'} moved to ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
+          changes.push(`🔄 CHANGED: Shift with ${client?.name || 'Unknown'} moved to ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
         }
       });
 
@@ -665,7 +665,6 @@ export default function EmployeeDashboard({
         setShowUpdateBanner(true);
       }
     } else {
-      // First load, save baseline snapshot immediately with clientId
       const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, clientId: s.clientId }));
       localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
     }
@@ -678,9 +677,8 @@ export default function EmployeeDashboard({
     localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
   };
 
-  // Determine Tab Dot Colors based on precise messages
   const hasNewShift = scheduleChanges.some(msg => msg.includes('🟢 ADDED'));
-  const hasChangedShift = scheduleChanges.some(msg => msg.includes('🟠 CHANGED') || msg.includes('🔴 REMOVED'));
+  const hasChangedShift = scheduleChanges.some(msg => msg.includes('🔄 CHANGED') || msg.includes('🚨 REMOVED'));
 
   // --- TIME OFF BALANCE CALCULATIONS ---
   const currentYear = new Date().getFullYear();
@@ -1113,7 +1111,7 @@ export default function EmployeeDashboard({
               {activeTab === 'schedule' && (
                 <div className="flex flex-col">
                   
-                  {/* --- NEW: DETAILED EXPLICIT ACKNOWLEDGEMENT BANNER --- */}
+                  {/* --- DETAILED EXPLICIT ACKNOWLEDGEMENT BANNER --- */}
                   {showUpdateBanner && scheduleChanges.length > 0 && (
                     <div className="mx-6 mt-6 mb-2 bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col gap-4">
                       <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
@@ -1307,7 +1305,18 @@ export default function EmployeeDashboard({
 
               {/* TAB 7 & 8: PAYSTUBS AND ANNOUNCEMENTS */}
               {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
-              {activeTab === 'announcements' && <Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={employees} />}
+              {activeTab === 'announcements' && (
+                <Announcements 
+                  messages={messages} 
+                  onSendMessage={onSendMessage} 
+                  currentUser={currentUser} 
+                  employees={employees} 
+                  onDeleteMessage={onDeleteMessage} 
+                  onAcknowledgeMessage={onAcknowledgeMessage} 
+                  announcementPictureUrl={announcementPictureUrl} 
+                  onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} 
+                />
+              )}
             </div>
           </div>
         </div>

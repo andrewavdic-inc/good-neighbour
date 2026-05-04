@@ -1,76 +1,219 @@
 import React, { useState } from 'react';
-import { MessageSquare, Send, User } from 'lucide-react';
+import { MessageSquare, Send, User, Trash2, AlertTriangle, CheckCircle, Camera, Loader2, Image as ImageIcon, Users, CheckSquare, XCircle } from 'lucide-react';
 
-export default function Announcements({ messages = [], onSendMessage, currentUser, employees = [] }) {
+export default function Announcements({ 
+  messages = [], 
+  onSendMessage, 
+  currentUser, 
+  employees = [],
+  onDeleteMessage,
+  onAcknowledgeMessage,
+  announcementPictureUrl,
+  onUpdateAnnouncementPicture
+}) {
   const [text, setText] = useState('');
+  const [isHighPriority, setIsHighPriority] = useState(false);
+  const [isUploadingPic, setIsUploadingPic] = useState(false);
+  const [expandedTrackerId, setExpandedTrackerId] = useState(null);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (text.trim()) {
-      onSendMessage(text, currentUser?.id || 'unknown');
+      // Pass the new isHighPriority flag to the App.jsx function
+      if (onSendMessage) onSendMessage(text, currentUser?.id || 'unknown', isHighPriority);
       setText('');
+      setIsHighPriority(false);
     }
   };
 
-  // Bulletproof date sorting to prevent crashes from malformed Firebase timestamps
+  const handlePicUpload = async (e) => {
+    const file = e.target.files[0];
+    if (file && onUpdateAnnouncementPicture) {
+      setIsUploadingPic(true);
+      await onUpdateAnnouncementPicture(file);
+      setIsUploadingPic(false);
+    }
+  };
+
+  // Bulletproof date sorting
   const safeSortByDateDesc = (arr) => {
     if (!arr || !Array.isArray(arr)) return [];
     return [...arr].filter(Boolean).sort((a, b) => {
       let dA = 0;
       let dB = 0;
-      
       try { dA = a.date ? new Date(a.date).getTime() : 0; } catch(e) {}
       try { dB = b.date ? new Date(b.date).getTime() : 0; } catch(e) {}
-      
       return (isNaN(dB) ? 0 : dB) - (isNaN(dA) ? 0 : dA);
     });
   };
 
-  // Check if the current user has permission to broadcast messages
-  const canSend = currentUser?.role === 'Administrator' || currentUser?.role === 'admin' || currentUser?.role === 'Block Captain';
+  // Check if the current user has permission to broadcast/moderate
+  const isAdmin = currentUser?.role === 'Administrator' || currentUser?.role === 'admin' || currentUser?.role === 'Master Admin';
+  const canSend = isAdmin || currentUser?.role === 'Block Captain';
+
+  // Filter out the owner from the tracker so they don't show up in "Pending"
+  const trackableEmployees = employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin');
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[800px]">
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center">
         <MessageSquare className="h-5 w-5 mr-2 text-teal-600" />
-        <h2 className="text-lg font-bold text-slate-800">Team Announcements</h2>
+        <h2 className="text-lg font-bold text-slate-800">Team Feed & Announcements</h2>
       </div>
       
-      <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-50/50">
-        {!messages || messages.length === 0 ? (
-          <div className="text-center text-slate-500 py-8">No announcements yet.</div>
-        ) : (
-          safeSortByDateDesc(messages).map(m => {
-            if (!m) return null;
-            
-            const safeSenderId = m.senderId || '';
-            const sender = (employees || []).find(e => e && e.id === safeSenderId);
-            
-            return (
-              <div key={m.id || Math.random().toString()} className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm hover:shadow transition">
-                <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
-                  <div className="text-sm font-bold text-slate-800 flex items-center">
-                    <User className="h-4 w-4 mr-1.5 text-slate-400" />
-                    {String(sender?.name || 'Unknown')}
-                    <span className="ml-2 bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">
-                      {String(sender?.role || 'Admin')}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-500 font-medium">
-                    {m.date ? new Date(m.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''}
-                  </div>
-                </div>
-                <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                  {String(m.text || '')}
-                </div>
+      <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-slate-50/50">
+        
+        {/* --- 1. SHARED COMMUNITY PICTURE FRAME --- */}
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm relative group">
+          <div className="bg-slate-100 min-h-[160px] flex items-center justify-center relative">
+            {isUploadingPic ? (
+              <div className="flex flex-col items-center py-10 text-slate-500">
+                <Loader2 className="h-8 w-8 animate-spin mb-2 text-teal-600" />
+                <span className="text-sm font-medium">Updating Poster...</span>
               </div>
-            );
-          })
-        )}
+            ) : announcementPictureUrl ? (
+              <img src={announcementPictureUrl} alt="Community Announcement" className="w-full object-cover max-h-[350px]" />
+            ) : (
+              <div className="flex flex-col items-center py-10 text-slate-400">
+                <ImageIcon className="h-10 w-10 mb-2 opacity-50" />
+                <span className="text-sm font-medium">Company Bulletin Board</span>
+              </div>
+            )}
+
+            {/* Admin Upload Overlay */}
+            {isAdmin && (
+              <label className="absolute inset-0 bg-slate-900/0 hover:bg-slate-900/40 transition-all flex items-center justify-center cursor-pointer group-hover:opacity-100 opacity-0">
+                <div className="bg-white/90 text-slate-800 px-4 py-2 rounded-lg shadow font-bold text-sm flex items-center transform translate-y-4 group-hover:translate-y-0 transition-all">
+                  <Camera className="h-4 w-4 mr-2" /> Change Picture
+                </div>
+                <input type="file" accept="image/*" className="hidden" onChange={handlePicUpload} disabled={isUploadingPic} />
+              </label>
+            )}
+          </div>
+        </div>
+
+        {/* --- 2. THE MESSAGE FEED --- */}
+        <div className="space-y-4">
+          {!messages || messages.length === 0 ? (
+            <div className="text-center text-slate-500 py-8 italic border border-dashed border-slate-300 rounded-xl bg-slate-50">No announcements yet.</div>
+          ) : (
+            safeSortByDateDesc(messages).map(m => {
+              if (!m) return null;
+              
+              const safeSenderId = m.senderId || '';
+              const sender = (employees || []).find(e => e && e.id === safeSenderId);
+              
+              const isUrgent = m.isHighPriority;
+              const acks = m.acknowledgements || [];
+              const hasAcknowledged = acks.includes(currentUser?.id);
+
+              // Calculate Tracker Data
+              const acknowledgedStaff = trackableEmployees.filter(e => acks.includes(e.id));
+              const pendingStaff = trackableEmployees.filter(e => !acks.includes(e.id));
+
+              return (
+                <div key={m.id || Math.random().toString()} className={`bg-white border rounded-lg p-5 shadow-sm transition relative overflow-hidden ${isUrgent ? 'border-amber-300' : 'border-slate-200'}`}>
+                  
+                  {isUrgent && (
+                    <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
+                  )}
+
+                  <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
+                    <div className="text-sm font-bold text-slate-800 flex items-center">
+                      <User className="h-4 w-4 mr-1.5 text-slate-400" />
+                      {String(sender?.name || 'Unknown Admin')}
+                      <span className="ml-2 bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">
+                        {String(sender?.role || 'Admin')}
+                      </span>
+                      {isUrgent && (
+                        <span className="ml-2 bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider flex items-center">
+                          <AlertTriangle className="h-3 w-3 mr-1" /> High Priority
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <div className="text-xs text-slate-500 font-medium">
+                        {m.date ? new Date(m.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                      </div>
+                      {/* Delete Button for Admins */}
+                      {isAdmin && (
+                        <button onClick={() => onDeleteMessage && onDeleteMessage(m.id)} className="text-slate-400 hover:text-red-600 transition p-1 bg-slate-50 hover:bg-red-50 rounded" title="Delete Message">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                    {String(m.text || '')}
+                  </div>
+
+                  {/* --- 3. ACKNOWLEDGEMENT ACTIONS & TRACKER --- */}
+                  {isUrgent && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      
+                      {/* Employee Action */}
+                      {!isAdmin && (
+                        hasAcknowledged ? (
+                          <div className="flex items-center text-emerald-700 text-xs font-bold bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200 w-fit">
+                            <CheckCircle className="h-4 w-4 mr-1.5" /> You acknowledged this.
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => onAcknowledgeMessage && onAcknowledgeMessage(m.id, currentUser.id)}
+                            className="flex items-center text-white bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-md font-bold text-sm transition shadow-sm w-full sm:w-auto justify-center"
+                          >
+                            <CheckSquare className="h-4 w-4 mr-2" /> I Acknowledge
+                          </button>
+                        )
+                      )}
+
+                      {/* Admin Tracker Button */}
+                      {isAdmin && (
+                        <div className="w-full">
+                          <button 
+                            onClick={() => setExpandedTrackerId(expandedTrackerId === m.id ? null : m.id)}
+                            className="flex items-center text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-md transition w-full sm:w-auto justify-center"
+                          >
+                            <Users className="h-4 w-4 mr-2 text-slate-500" />
+                            Tracker: {acknowledgedStaff.length} / {trackableEmployees.length} Acknowledged
+                          </button>
+
+                          {/* Expanded Tracker UI */}
+                          {expandedTrackerId === m.id && (
+                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                              <div>
+                                <h4 className="text-xs font-bold text-emerald-800 flex items-center mb-2"><CheckCircle className="h-3.5 w-3.5 mr-1"/> Acknowledged ({acknowledgedStaff.length})</h4>
+                                <ul className="space-y-1 max-h-32 overflow-y-auto pr-2">
+                                  {acknowledgedStaff.length === 0 ? <li className="text-[11px] text-slate-400 italic">No one yet.</li> : acknowledgedStaff.map(e => (
+                                    <li key={e.id} className="text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded truncate">{e.name}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold text-amber-800 flex items-center mb-2"><XCircle className="h-3.5 w-3.5 mr-1"/> Pending ({pendingStaff.length})</h4>
+                                <ul className="space-y-1 max-h-32 overflow-y-auto pr-2">
+                                  {pendingStaff.length === 0 ? <li className="text-[11px] text-slate-400 italic">Everyone acknowledged!</li> : pendingStaff.map(e => (
+                                    <li key={e.id} className="text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded truncate opacity-70">{e.name}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
       
       {canSend && (
-        <form onSubmit={handleSubmit} className="p-5 border-t border-slate-200 bg-slate-50 flex flex-col gap-3">
+        <form onSubmit={handleSubmit} className="p-5 border-t border-slate-200 bg-slate-50 flex flex-col gap-3 shrink-0">
           <label className="text-sm font-semibold text-slate-800">Broadcast New Announcement</label>
           <textarea 
             value={text} 
@@ -79,13 +222,27 @@ export default function Announcements({ messages = [], onSendMessage, currentUse
             placeholder="Write an announcement to share with the whole team..." 
             rows="3"
           />
-          <button 
-            type="submit" 
-            disabled={!text.trim()}
-            className="self-end bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-md px-5 py-2 flex items-center justify-center transition shadow-sm font-medium text-sm"
-          >
-            <Send className="h-4 w-4 mr-2" /> Broadcast Message
-          </button>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            
+            <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition w-full sm:w-auto">
+              <input 
+                type="checkbox" 
+                checked={isHighPriority} 
+                onChange={(e) => setIsHighPriority(e.target.checked)} 
+                className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 h-4 w-4" 
+              />
+              <span className="flex items-center"><AlertTriangle className="h-4 w-4 mr-1.5 text-amber-500" /> Require Acknowledgement (High Priority)</span>
+            </label>
+
+            <button 
+              type="submit" 
+              disabled={!text.trim()}
+              className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-md px-6 py-2.5 flex items-center justify-center transition shadow-sm font-bold text-sm"
+            >
+              <Send className="h-4 w-4 mr-2" /> Broadcast Message
+            </button>
+
+          </div>
         </form>
       )}
     </div>

@@ -64,7 +64,6 @@ const parseLocalSafe = (dateStr) => {
 
 // --- ADD SHIFT MODAL WITH MONTHLY TRACKER ---
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], onSave }) {
-  // --- UPDATED: BULLETPROOF FILTER TO GHOST THE OWNER ---
   const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
@@ -196,7 +195,9 @@ function AdminDashboard({
   appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment,
   onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense, onAddDrawerFile, onRemoveDrawerFile, onUpdateDeskPicture,
   onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard,
-  onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel
+  onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
+  // --- NEW FEED PROPS ---
+  onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -446,7 +447,6 @@ function AdminDashboard({
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} onAddClientExpense={onAddClientExpense} />;      
       
-      // --- UPDATED: RECONCILIATION HUB CONNECTIONS WITH PAY PERIOD PROPS ---
       case 'expenses': return <ExpenseManager shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
       
       case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} clients={safeClients} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
@@ -454,7 +454,10 @@ function AdminDashboard({
       case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={onApproveTimeOff} onReject={onRejectTimeOff} onRemoveTimeOff={onRemoveTimeOffLog} />;
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
-      case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} /></div>;
+      
+      // --- UPDATED: FEED PROPS PIPED INTO ANNOUNCEMENTS ---
+      case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
+      
       case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
       case 'schedule':
       default: return (
@@ -722,6 +725,9 @@ export default function App() {
   const [isBonusActive, setIsBonusActive] = useState(false);
   const [bonusSettings, setBonusSettings] = useState({ monthly: [100, 50, 20], annual: [3000, 2000, 1000] });
   const [officeLocation, setOfficeLocation] = useState('Port Colborne, ON');
+  
+  // --- NEW: ANNOUNCEMENT SETTINGS ---
+  const [announcementPictureUrl, setAnnouncementPictureUrl] = useState('');
 
   // Setup Firebase Auth
   useEffect(() => {
@@ -772,6 +778,9 @@ export default function App() {
         if (data.isBonusActive !== undefined) setIsBonusActive(data.isBonusActive);
         if (data.bonusAmounts) setBonusSettings(data.bonusAmounts);
         if (data.officeLocation) setOfficeLocation(data.officeLocation);
+        
+        // --- NEW: SYNC PICTURE STATE ---
+        if (data.announcementPictureUrl !== undefined) setAnnouncementPictureUrl(data.announcementPictureUrl);
       }
     }, handleError));
 
@@ -853,11 +862,15 @@ export default function App() {
     if (field === 'bonusAmounts') setBonusSettings(value);
     if (field === 'officeLocation') setOfficeLocation(value);
     
+    // --- NEW: SYNC PICTURE URL ---
+    if (field === 'announcementPictureUrl') setAnnouncementPictureUrl(value);
+    
     const payload = { 
       payPeriodStart: field === 'payPeriodStart' ? value : payPeriodStart, 
       isBonusActive: field === 'isBonusActive' ? value : isBonusActive, 
       bonusAmounts: field === 'bonusAmounts' ? value : bonusSettings,
-      officeLocation: field === 'officeLocation' ? value : officeLocation
+      officeLocation: field === 'officeLocation' ? value : officeLocation,
+      announcementPictureUrl: field === 'announcementPictureUrl' ? value : announcementPictureUrl
     };
     
     await setDoc(getDocRef('gn_settings', 'global'), payload, { merge: true });
@@ -900,6 +913,25 @@ export default function App() {
 
   const handleRejectTimeOff = (requestId) => {
     runMutation('gn_timeOffLogs', requestId, 'update', { status: 'rejected' });
+  };
+
+  // --- NEW FEED ACTION HELPERS ---
+  const handleUpdateAnnouncementPicture = async (file) => {
+    if (!file) return;
+    const url = await handleFileUpload(file, 'documents');
+    if (url) {
+      await handleSaveSettings('announcementPictureUrl', url);
+    }
+  };
+
+  const handleAcknowledgeMessage = (msgId, empId) => {
+    const msg = messages.find(m => m.id === msgId);
+    if (msg) {
+      const acks = msg.acknowledgements || [];
+      if (!acks.includes(empId)) {
+        runMutation('gn_messages', msgId, 'update', { acknowledgements: [...acks, empId] });
+      }
+    }
   };
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={Boolean(isDbReady)} hasData={Boolean(Array.isArray(employees) && employees.length > 0)} onSeedData={handleSeedData} />;
@@ -1009,7 +1041,14 @@ export default function App() {
             
             documents={documents} 
             messages={messages} 
-            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
+            
+            // --- UPDATED: FEED ACTIONS ---
+            onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
+            onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
+            onAcknowledgeMessage={handleAcknowledgeMessage}
+            announcementPictureUrl={announcementPictureUrl}
+            onUpdateAnnouncementPicture={handleUpdateAnnouncementPicture}
+
             currentUser={currentUser} 
             payPeriodStart={payPeriodStart} 
             setPayPeriodStart={(v) => handleSaveSettings('payPeriodStart', v)} 
@@ -1114,7 +1153,14 @@ export default function App() {
             timeOffLogs={timeOffLogs} 
             messages={messages} 
             documents={documents} 
-            onSendMessage={(text, senderId) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString() })} 
+            
+            // --- UPDATED: FEED ACTIONS ---
+            onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
+            onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
+            onAcknowledgeMessage={handleAcknowledgeMessage}
+            announcementPictureUrl={announcementPictureUrl}
+            onUpdateAnnouncementPicture={handleUpdateAnnouncementPicture}
+
             payPeriodStart={payPeriodStart} 
             isBonusActive={isBonusActive} 
             bonusSettings={bonusSettings} 

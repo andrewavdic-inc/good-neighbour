@@ -57,27 +57,6 @@ export default function Announcements({
   // Filter out the owner from the tracker so they don't show up in "Pending"
   const trackableEmployees = employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin');
 
-  // --- MONTHLY ARCHIVE LOGIC ---
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-
-  const sortedMessages = safeSortByDateDesc(messages);
-  
-  const currentMessages = sortedMessages.filter(m => {
-    if (!m.date) return false;
-    const d = new Date(m.date);
-    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-  });
-
-  const archivedMessages = sortedMessages.filter(m => {
-    if (!m.date) return true;
-    const d = new Date(m.date);
-    return d.getMonth() !== currentMonth || d.getFullYear() !== currentYear;
-  });
-
-  const displayMessages = showArchived ? [...currentMessages, ...archivedMessages] : currentMessages;
-
   // --- CSV COMPLIANCE EXPORT ---
   const exportTrackerCSV = (m, acknowledgedStaff, pendingStaff) => {
     const sender = employees.find(e => e.id === m.senderId);
@@ -105,6 +84,160 @@ export default function Announcements({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // --- MONTHLY ARCHIVE LOGIC ---
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const sortedMessages = safeSortByDateDesc(messages);
+  
+  const currentMessages = sortedMessages.filter(m => {
+    if (!m.date) return false;
+    const d = new Date(m.date);
+    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+  });
+
+  const archivedMessages = sortedMessages.filter(m => {
+    if (!m.date) return true;
+    const d = new Date(m.date);
+    return d.getMonth() !== currentMonth || d.getFullYear() !== currentYear;
+  });
+
+  // Group Archived Messages by Month & Year
+  const groupedArchived = archivedMessages.reduce((acc, m) => {
+    if (!m.date) return acc;
+    const d = new Date(m.date);
+    const monthYear = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    if (!acc[monthYear]) acc[monthYear] = [];
+    acc[monthYear].push(m);
+    return acc;
+  }, {});
+
+  // --- REUSABLE MESSAGE CARD RENDERER ---
+  const renderMessageCard = (m) => {
+    if (!m) return null;
+    
+    const safeSenderId = m.senderId || '';
+    const sender = (employees || []).find(e => e && e.id === safeSenderId);
+    
+    const isUrgent = m.isHighPriority;
+    const acks = m.acknowledgements || [];
+    const hasAcknowledged = acks.includes(currentUser?.id);
+
+    // Calculate Tracker Data
+    const acknowledgedStaff = trackableEmployees.filter(e => acks.includes(e.id));
+    const pendingStaff = trackableEmployees.filter(e => !acks.includes(e.id));
+
+    return (
+      <div key={m.id || Math.random().toString()} className={`bg-white border rounded-lg p-5 shadow-sm transition relative overflow-hidden ${isUrgent ? 'border-yellow-300' : 'border-slate-200'}`}>
+        
+        {isUrgent && (
+          <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400"></div>
+        )}
+
+        <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
+          <div className="text-sm font-bold text-slate-800 flex items-center">
+            <User className="h-4 w-4 mr-1.5 text-slate-400" />
+            {String(sender?.name || 'Unknown Admin')}
+            <span className="ml-2 bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">
+              {String(sender?.role || 'Admin')}
+            </span>
+            {isUrgent && (
+              <span className="ml-2 bg-yellow-50 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider flex items-center">
+                <AlertTriangle className="h-3 w-3 mr-1" /> High Priority
+              </span>
+            )}
+          </div>
+          <div className="flex items-center space-x-3">
+            <div className="text-xs text-slate-500 font-medium">
+              {m.date ? new Date(m.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+            </div>
+            {/* Delete Button for Admins */}
+            {isAdmin && (
+              <button onClick={() => onDeleteMessage && onDeleteMessage(m.id)} className="text-slate-400 hover:text-red-600 transition p-1 bg-slate-50 hover:bg-red-50 rounded" title="Delete Message">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+        
+        <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+          {String(m.text || '')}
+        </div>
+
+        {/* --- ACKNOWLEDGEMENT ACTIONS & TRACKER --- */}
+        {isUrgent && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            
+            {/* Everyone EXCEPT the Owner needs to acknowledge */}
+            {!isOwner && (
+              hasAcknowledged ? (
+                <div className="flex items-center text-emerald-700 text-xs font-bold bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200 w-fit shrink-0">
+                  <CheckCircle className="h-4 w-4 mr-1.5" /> You acknowledged this.
+                </div>
+              ) : (
+                <button 
+                  onClick={() => onAcknowledgeMessage && onAcknowledgeMessage(m.id, currentUser.id)}
+                  className="flex items-center text-yellow-900 bg-yellow-400 hover:bg-yellow-500 px-4 py-2 rounded-md font-bold text-sm transition shadow-sm w-full sm:w-auto justify-center shrink-0"
+                >
+                  <CheckSquare className="h-4 w-4 mr-2" /> I Acknowledge
+                </button>
+              )
+            )}
+
+            {/* Admin Tracker Button */}
+            {isAdmin && (
+              <div className="w-full flex flex-col items-end">
+                <button 
+                  onClick={() => setExpandedTrackerId(expandedTrackerId === m.id ? null : m.id)}
+                  className="flex items-center text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-md transition w-full sm:w-auto justify-center"
+                >
+                  <Users className="h-4 w-4 mr-2 text-slate-500" />
+                  Tracker: {acknowledgedStaff.length} / {trackableEmployees.length} Acknowledged
+                </button>
+
+                {/* Expanded Tracker UI */}
+                {expandedTrackerId === m.id && (
+                  <div className="mt-3 w-full bg-slate-50 p-4 rounded-lg border border-slate-200">
+                    
+                    <div className="flex justify-end mb-3">
+                      <button 
+                        onClick={() => exportTrackerCSV(m, acknowledgedStaff, pendingStaff)}
+                        className="flex items-center text-[10px] font-bold text-slate-600 bg-white hover:bg-slate-100 border border-slate-300 px-2 py-1 rounded shadow-sm transition"
+                      >
+                        <Download className="h-3 w-3 mr-1" /> Export Audit CSV
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-xs font-bold text-emerald-800 flex items-center mb-2"><CheckCircle className="h-3.5 w-3.5 mr-1"/> Acknowledged ({acknowledgedStaff.length})</h4>
+                        <ul className="space-y-1 max-h-32 overflow-y-auto pr-2">
+                          {acknowledgedStaff.length === 0 ? <li className="text-[11px] text-slate-400 italic">No one yet.</li> : acknowledgedStaff.map(e => (
+                            <li key={e.id} className="text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded truncate">{e.name} <span className="text-[10px] text-slate-400 ml-1">({e.role})</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-800 flex items-center mb-2"><XCircle className="h-3.5 w-3.5 mr-1"/> Pending ({pendingStaff.length})</h4>
+                        <ul className="space-y-1 max-h-32 overflow-y-auto pr-2">
+                          {pendingStaff.length === 0 ? <li className="text-[11px] text-slate-400 italic">Everyone acknowledged!</li> : pendingStaff.map(e => (
+                            <li key={e.id} className="text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded truncate opacity-70">{e.name} <span className="text-[10px] text-slate-400 ml-1">({e.role})</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    );
   };
 
   return (
@@ -147,135 +280,21 @@ export default function Announcements({
           </div>
         </div>
 
-        {/* --- 2. THE MESSAGE FEED --- */}
+        {/* --- 2. THE CURRENT MESSAGE FEED --- */}
         <div className="space-y-4">
-          {displayMessages.length === 0 ? (
+          {currentMessages.length === 0 && !showArchived ? (
             <div className="text-center text-slate-500 py-8 italic border border-dashed border-slate-300 rounded-xl bg-slate-50">No announcements for this period.</div>
           ) : (
-            displayMessages.map(m => {
-              if (!m) return null;
-              
-              const safeSenderId = m.senderId || '';
-              const sender = (employees || []).find(e => e && e.id === safeSenderId);
-              
-              const isUrgent = m.isHighPriority;
-              const acks = m.acknowledgements || [];
-              const hasAcknowledged = acks.includes(currentUser?.id);
-
-              // Calculate Tracker Data
-              const acknowledgedStaff = trackableEmployees.filter(e => acks.includes(e.id));
-              const pendingStaff = trackableEmployees.filter(e => !acks.includes(e.id));
-
-              return (
-                <div key={m.id || Math.random().toString()} className={`bg-white border rounded-lg p-5 shadow-sm transition relative overflow-hidden ${isUrgent ? 'border-yellow-300' : 'border-slate-200'}`}>
-                  
-                  {isUrgent && (
-                    <div className="absolute top-0 left-0 w-1 h-full bg-yellow-400"></div>
-                  )}
-
-                  <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
-                    <div className="text-sm font-bold text-slate-800 flex items-center">
-                      <User className="h-4 w-4 mr-1.5 text-slate-400" />
-                      {String(sender?.name || 'Unknown Admin')}
-                      <span className="ml-2 bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider">
-                        {String(sender?.role || 'Admin')}
-                      </span>
-                      {isUrgent && (
-                        <span className="ml-2 bg-yellow-50 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider flex items-center">
-                          <AlertTriangle className="h-3 w-3 mr-1" /> High Priority
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <div className="text-xs text-slate-500 font-medium">
-                        {m.date ? new Date(m.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''}
-                      </div>
-                      {/* Delete Button for Admins */}
-                      {isAdmin && (
-                        <button onClick={() => onDeleteMessage && onDeleteMessage(m.id)} className="text-slate-400 hover:text-red-600 transition p-1 bg-slate-50 hover:bg-red-50 rounded" title="Delete Message">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                    {String(m.text || '')}
-                  </div>
-
-                  {/* --- 3. ACKNOWLEDGEMENT ACTIONS & TRACKER --- */}
-                  {isUrgent && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      
-                      {/* Everyone EXCEPT the Owner needs to acknowledge */}
-                      {!isOwner && (
-                        hasAcknowledged ? (
-                          <div className="flex items-center text-emerald-700 text-xs font-bold bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200 w-fit shrink-0">
-                            <CheckCircle className="h-4 w-4 mr-1.5" /> You acknowledged this.
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => onAcknowledgeMessage && onAcknowledgeMessage(m.id, currentUser.id)}
-                            className="flex items-center text-yellow-900 bg-yellow-400 hover:bg-yellow-500 px-4 py-2 rounded-md font-bold text-sm transition shadow-sm w-full sm:w-auto justify-center shrink-0"
-                          >
-                            <CheckSquare className="h-4 w-4 mr-2" /> I Acknowledge
-                          </button>
-                        )
-                      )}
-
-                      {/* Admin Tracker Button */}
-                      {isAdmin && (
-                        <div className="w-full flex flex-col items-end">
-                          <button 
-                            onClick={() => setExpandedTrackerId(expandedTrackerId === m.id ? null : m.id)}
-                            className="flex items-center text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-md transition w-full sm:w-auto justify-center"
-                          >
-                            <Users className="h-4 w-4 mr-2 text-slate-500" />
-                            Tracker: {acknowledgedStaff.length} / {trackableEmployees.length} Acknowledged
-                          </button>
-
-                          {/* Expanded Tracker UI */}
-                          {expandedTrackerId === m.id && (
-                            <div className="mt-3 w-full bg-slate-50 p-4 rounded-lg border border-slate-200">
-                              
-                              <div className="flex justify-end mb-3">
-                                <button 
-                                  onClick={() => exportTrackerCSV(m, acknowledgedStaff, pendingStaff)}
-                                  className="flex items-center text-[10px] font-bold text-slate-600 bg-white hover:bg-slate-100 border border-slate-300 px-2 py-1 rounded shadow-sm transition"
-                                >
-                                  <Download className="h-3 w-3 mr-1" /> Export Audit CSV
-                                </button>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                  <h4 className="text-xs font-bold text-emerald-800 flex items-center mb-2"><CheckCircle className="h-3.5 w-3.5 mr-1"/> Acknowledged ({acknowledgedStaff.length})</h4>
-                                  <ul className="space-y-1 max-h-32 overflow-y-auto pr-2">
-                                    {acknowledgedStaff.length === 0 ? <li className="text-[11px] text-slate-400 italic">No one yet.</li> : acknowledgedStaff.map(e => (
-                                      <li key={e.id} className="text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded truncate">{e.name} <span className="text-[10px] text-slate-400 ml-1">({e.role})</span></li>
-                                    ))}
-                                  </ul>
-                                </div>
-                                <div>
-                                  <h4 className="text-xs font-bold text-amber-800 flex items-center mb-2"><XCircle className="h-3.5 w-3.5 mr-1"/> Pending ({pendingStaff.length})</h4>
-                                  <ul className="space-y-1 max-h-32 overflow-y-auto pr-2">
-                                    {pendingStaff.length === 0 ? <li className="text-[11px] text-slate-400 italic">Everyone acknowledged!</li> : pendingStaff.map(e => (
-                                      <li key={e.id} className="text-xs text-slate-700 bg-white border border-slate-200 px-2 py-1 rounded truncate opacity-70">{e.name} <span className="text-[10px] text-slate-400 ml-1">({e.role})</span></li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                </div>
-              );
-            })
+            currentMessages.map(renderMessageCard)
           )}
+          
+          {/* ARCHIVED MESSAGES GROUPED BY MONTH */}
+          {showArchived && Object.keys(groupedArchived).map(monthYear => (
+            <div key={monthYear} className="mt-8 space-y-4">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-2">{monthYear}</h3>
+              {groupedArchived[monthYear].map(renderMessageCard)}
+            </div>
+          ))}
           
           {/* ARCHIVE TOGGLE BUTTON */}
           {archivedMessages.length > 0 && (
@@ -293,6 +312,7 @@ export default function Announcements({
         </div>
       </div>
       
+      {/* --- BROADCAST FORM --- */}
       {canSend && (
         <form onSubmit={handleSubmit} className="p-5 border-t border-slate-200 bg-slate-50 flex flex-col gap-3 shrink-0">
           <label className="text-sm font-semibold text-slate-800">Broadcast New Announcement</label>
@@ -303,22 +323,25 @@ export default function Announcements({
             placeholder="Write an announcement to share with the whole team..." 
             rows="3"
           />
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 ${isAdmin ? 'justify-between' : 'justify-end'}`}>
             
-            <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition w-full sm:w-auto">
-              <input 
-                type="checkbox" 
-                checked={isHighPriority} 
-                onChange={(e) => setIsHighPriority(e.target.checked)} 
-                className="rounded border-slate-300 text-yellow-500 focus:ring-yellow-400 h-4 w-4" 
-              />
-              <span className="flex items-center"><AlertTriangle className="h-4 w-4 mr-1.5 text-yellow-500" /> Require Acknowledgement (High Priority)</span>
-            </label>
+            {/* ONLY Admins can see and use the Priority Checkbox */}
+            {isAdmin && (
+              <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition w-full sm:w-auto">
+                <input 
+                  type="checkbox" 
+                  checked={isHighPriority} 
+                  onChange={(e) => setIsHighPriority(e.target.checked)} 
+                  className="rounded border-slate-300 text-yellow-500 focus:ring-yellow-400 h-4 w-4" 
+                />
+                <span className="flex items-center"><AlertTriangle className="h-4 w-4 mr-1.5 text-yellow-500" /> Require Acknowledgement (High Priority)</span>
+              </label>
+            )}
 
             <button 
               type="submit" 
               disabled={!text.trim()}
-              className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-md px-6 py-2.5 flex items-center justify-center transition shadow-sm font-bold text-sm"
+              className={`bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-md px-6 py-2.5 flex items-center justify-center transition shadow-sm font-bold text-sm ${isAdmin ? 'w-full sm:w-auto' : 'w-full sm:w-64'}`}
             >
               <Send className="h-4 w-4 mr-2" /> Broadcast Message
             </button>

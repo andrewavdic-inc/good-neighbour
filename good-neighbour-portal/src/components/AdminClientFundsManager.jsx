@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Wallet, Car, Receipt, Download, Plus } from 'lucide-react';
+import { Wallet, Car, Receipt, Download, Plus, FileText } from 'lucide-react';
 import { parseLocal } from '../utils';
 
 export default function AdminClientFundsManager({ clients = [], expenses = [], clientExpenses = [], employees = [], onAddClientExpense }) {
@@ -50,14 +50,20 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
         const d = parseLocal(e.date);
         return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
       });
-      const oopCost = cOOP.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      
+      // Separate actual purchases from Top-Up credits to keep the UI clean
+      const actualPurchases = cOOP.filter(e => Number(e.amount || 0) > 0);
+      const topUpCredits = cOOP.filter(e => Number(e.amount || 0) < 0);
+      
+      const oopCost = actualPurchases.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const creditCost = topUpCredits.reduce((sum, e) => sum + Number(e.amount || 0), 0); // This is a negative number
 
       return {
         ...client,
         mileageCost,
         oopCost,
         totalSpent: mileageCost + oopCost,
-        remaining: (client.monthlyAllowance || 0) - (mileageCost + oopCost),
+        remaining: (client.monthlyAllowance || 0) - (mileageCost + oopCost + creditCost),
         transactions: [
           ...cMileage.map(m => ({ ...m, type: 'mileage', cost: Number(m.kilometers || 0) * 0.68 })),
           ...cOOP.map(o => ({ ...o, type: 'oop', cost: Number(o.amount || 0) }))
@@ -112,7 +118,7 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
     document.body.removeChild(link);
   };
 
-  // --- NEW: INDIVIDUAL ITEMIZED RECEIPT EXPORTER ---
+  // --- INDIVIDUAL ITEMIZED RECEIPT EXPORTER ---
   const exportClientItemizedCSV = (client, e) => {
     e.stopPropagation();
     
@@ -224,7 +230,7 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
                     <td className="px-6 py-4 text-center space-x-3">
                       <button 
                         onClick={(e) => { e.stopPropagation(); setTopUpModal(client); }}
-                        className="text-amber-600 hover:text-amber-800 text-sm font-bold transition bg-amber-50 px-2 py-1 rounded"
+                        className="text-amber-600 hover:text-amber-800 text-sm font-bold transition bg-amber-50 px-2 py-1 rounded shadow-sm border border-amber-100"
                       >
                         Top Up
                       </button>
@@ -243,7 +249,6 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Itemized Deductions & Credits ({selectedMonth})</h4>
                           
-                          {/* NEW EXPORT RECEIPT BUTTON */}
                           {client.transactions.length > 0 && (
                             <button 
                               onClick={(e) => exportClientItemizedCSV(client, e)}
@@ -276,8 +281,17 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
                                       </div>
                                     </div>
                                   </div>
-                                  <div className={`font-bold ${isCredit ? 'text-amber-600' : 'text-slate-700'}`}>
-                                    {isCredit ? '+' : '-'}${Math.abs(tx.cost || 0).toFixed(2)}
+                                  
+                                  {/* RECEIPT LINK & AMOUNT */}
+                                  <div className="flex items-center">
+                                    {tx.receiptUrl && (
+                                      <a onClick={(e) => e.stopPropagation()} href={tx.receiptUrl} target="_blank" rel="noopener noreferrer" className="flex items-center mr-4 px-2 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 rounded-md text-xs font-bold transition shadow-sm">
+                                        <FileText className="h-3.5 w-3.5 mr-1.5" /> View Receipt
+                                      </a>
+                                    )}
+                                    <div className={`font-bold min-w-[70px] text-right ${isCredit ? 'text-amber-600' : 'text-slate-700'}`}>
+                                      {isCredit ? '+' : '-'}${Math.abs(tx.cost || 0).toFixed(2)}
+                                    </div>
                                   </div>
                                 </div>
                               )

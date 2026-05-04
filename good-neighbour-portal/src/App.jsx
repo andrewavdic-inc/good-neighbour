@@ -64,8 +64,8 @@ const parseLocalSafe = (dateStr) => {
 
 // --- ADD SHIFT MODAL WITH MONTHLY TRACKER ---
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], onSave }) {
-  // --- UPDATED: GHOST THE MASTER ADMIN FROM SHIFT BOOKING ---
-  const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false && e.role !== 'Master Admin') : [];
+  // --- UPDATED: BULLETPROOF FILTER TO GHOST THE OWNER ---
+  const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   

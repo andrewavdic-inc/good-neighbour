@@ -5,8 +5,8 @@ import { getPastPayPeriods, parseLocal } from '../utils';
 export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], clients = [], payPeriodStart, isBonusActive, bonusSettings }) {
   const kmRate = 0.68;
   
-  // --- UPDATED: GHOST THE MASTER ADMIN FROM FINANCIALS ---
-  const safeEmps = Array.isArray(employees) ? employees.filter(e => e && e.role !== 'Master Admin') : [];
+  // --- UPDATED: BULLETPROOF FILTER TO GHOST THE OWNER ---
+  const safeEmps = Array.isArray(employees) ? employees.filter(e => e && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeExp = Array.isArray(expenses) ? expenses : [];
   const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];

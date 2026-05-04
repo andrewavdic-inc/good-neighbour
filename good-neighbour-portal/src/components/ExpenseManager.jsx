@@ -43,8 +43,10 @@ export default function ExpenseManager({
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
-  // --- UPDATED: GHOST THE MASTER ADMIN ---
-  const safeEmployees = Array.isArray(employees) ? employees.filter(e => e && e.role !== 'Master Admin') : [];
+  
+  // --- UPDATED: BULLETPROOF FILTER TO GHOST THE OWNER ---
+  const safeEmployees = Array.isArray(employees) ? employees.filter(e => e && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
+  
   const safeClients = Array.isArray(clients) ? clients : [];
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
 

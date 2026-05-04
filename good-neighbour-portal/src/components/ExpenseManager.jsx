@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, DollarSign, CalendarDays, Plus, Trash2, Undo, AlertCircle } from 'lucide-react';
+import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, DollarSign, CalendarDays, Plus, Trash2, Undo, AlertCircle, Download } from 'lucide-react';
 
 // --- DATE HELPER ---
 const parseLocalSafe = (dateStr) => {
@@ -80,6 +80,67 @@ export default function ExpenseManager({
   const totalAdjustments = empAdjs.reduce((sum, a) => sum + Number(a.amount || 0), 0);
   
   const grandTotalOwed = approvedShiftsCost + approvedMileageCost + approvedOOPCost + totalAdjustments;
+
+  // --- NEW: CONTEXTUAL CSV EXPORT ---
+  const exportContextualCSV = () => {
+    if (!selectedEmp) return;
+    
+    let headers = [];
+    let rows = [];
+    let filename = `${selectedEmp.name.replace(/\s+/g, '_')}_${activeTab}_${auditMonth}.csv`;
+
+    if (activeTab === 'shifts') {
+      headers = ['Date', 'Client', 'Start Time', 'End Time', 'Cost ($)', 'Status'];
+      rows = empShifts.map(s => {
+        const isDisputed = localDisputes[s.id];
+        const cost = getShiftCost(selectedEmp, s);
+        return [
+          `"${parseLocalSafe(s.date).toLocaleDateString()}"`,
+          `"${getClientName(s.clientId)}"`,
+          `"${s.startTime}"`,
+          `"${s.endTime}"`,
+          cost.toFixed(2),
+          isDisputed ? 'Disputed' : 'Approved'
+        ];
+      });
+    } else if (activeTab === 'mileage') {
+      headers = ['Date', 'Client', 'Description', 'Kilometers', 'Cost ($)', 'Status'];
+      rows = empMileage.map(e => [
+        `"${parseLocalSafe(e.date).toLocaleDateString()}"`,
+        `"${getClientName(e.clientId)}"`,
+        `"${e.description || ''}"`,
+        e.kilometers,
+        (Number(e.kilometers) * 0.68).toFixed(2),
+        e.status
+      ]);
+    } else if (activeTab === 'oop') {
+      headers = ['Date', 'Client', 'Description', 'Amount ($)', 'Status'];
+      rows = empOOP.map(e => [
+        `"${parseLocalSafe(e.date).toLocaleDateString()}"`,
+        `"${getClientName(e.clientId)}"`,
+        `"${e.description || ''}"`,
+        Number(e.amount).toFixed(2),
+        e.status
+      ]);
+    } else if (activeTab === 'adjustments') {
+      headers = ['Date', 'Description', 'Amount ($)'];
+      rows = empAdjs.map(a => [
+        `"${parseLocalSafe(a.date).toLocaleDateString()}"`,
+        `"${a.description}"`,
+        a.amount.toFixed(2)
+      ]);
+    }
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleAddAdjustment = (e) => {
     e.preventDefault();
@@ -204,22 +265,30 @@ export default function ExpenseManager({
                 </div>
               </div>
 
-              {/* TABS */}
-              <div className="flex border-b border-slate-200 bg-slate-50 overflow-x-auto scrollbar-hide shrink-0">
-                <button onClick={() => setActiveTab('shifts')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'shifts' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                  <CalendarDays className="h-4 w-4 mr-2" /> Shifts ({empShifts.length})
-                </button>
-                <button onClick={() => setActiveTab('mileage')} className={`relative py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'mileage' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                  <Car className="h-4 w-4 mr-2" /> Mileage 
-                  {empMileage.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
-                </button>
-                <button onClick={() => setActiveTab('oop')} className={`relative py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'oop' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                  <Receipt className="h-4 w-4 mr-2" /> Purchases
-                  {empOOP.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
-                </button>
-                <button onClick={() => setActiveTab('adjustments')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'adjustments' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                  <DollarSign className="h-4 w-4 mr-2" /> Adjustments ({empAdjs.length})
-                </button>
+              {/* TABS WITH NEW SUBTOTALS & DOWNLOAD BUTTON */}
+              <div className="flex border-b border-slate-200 bg-slate-50 overflow-x-auto scrollbar-hide shrink-0 items-center justify-between">
+                <div className="flex">
+                  <button onClick={() => setActiveTab('shifts')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'shifts' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                    <CalendarDays className="h-4 w-4 mr-2" /> Shifts ({empShifts.length}) &bull; ${approvedShiftsCost.toFixed(2)}
+                  </button>
+                  <button onClick={() => setActiveTab('mileage')} className={`relative py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'mileage' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                    <Car className="h-4 w-4 mr-2" /> Mileage ({empMileage.length}) &bull; ${approvedMileageCost.toFixed(2)}
+                    {empMileage.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
+                  </button>
+                  <button onClick={() => setActiveTab('oop')} className={`relative py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'oop' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                    <Receipt className="h-4 w-4 mr-2" /> Purchases ({empOOP.length}) &bull; ${approvedOOPCost.toFixed(2)}
+                    {empOOP.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
+                  </button>
+                  <button onClick={() => setActiveTab('adjustments')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'adjustments' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                    <DollarSign className="h-4 w-4 mr-2" /> Adjustments ({empAdjs.length}) &bull; ${totalAdjustments.toFixed(2)}
+                  </button>
+                </div>
+                
+                <div className="pr-4">
+                  <button onClick={exportContextualCSV} className="flex items-center text-xs font-bold text-slate-600 bg-white border border-slate-300 px-3 py-1.5 rounded-md hover:bg-slate-100 transition shadow-sm whitespace-nowrap shrink-0">
+                    <Download className="h-3 w-3 mr-1.5" /> Download CSV
+                  </button>
+                </div>
               </div>
 
               {/* AUDIT CONTENT AREA */}

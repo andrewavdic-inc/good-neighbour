@@ -22,7 +22,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const [selectedYear, setSelectedYear] = useState(availableYears[0]?.toString() || new Date().getFullYear().toString());
   const [selectedPeriodTime, setSelectedPeriodTime] = useState('');
   
-  // --- NEW: PROJECTED RATE STATE ---
+  // --- PROJECTED RATE STATE ---
   const [shiftRate, setShiftRate] = useState(45);
 
   const filteredPeriods = useMemo(() => {
@@ -194,7 +194,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
     document.body.removeChild(link);
   };
 
-  // --- NEW: FINANCIAL WIDGET CALCULATIONS ---
+  // --- FINANCIAL WIDGET CALCULATIONS ---
   const totalPayrollLiability = employeeEarnings.reduce((sum, emp) => sum + emp.totalEarnings, 0);
 
   const currentMonthTarget = currentPeriodEnd.getMonth();
@@ -209,6 +209,10 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const maxExpenseLiability = safeClients
     .filter(c => c.isActive !== false)
     .reduce((sum, c) => sum + (Number(c.monthlyAllowance) || 0), 0);
+
+  // --- NEW: TOTAL USED EXPENSE BUDGET ---
+  const totalUsedExpense = employeeEarnings.reduce((sum, emp) => sum + emp.kmEarnings + emp.clientExpenseEarnings, 0);
+  const expensePercent = maxExpenseLiability > 0 ? Math.min((totalUsedExpense / maxExpenseLiability) * 100, 100) : 0;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
@@ -251,7 +255,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         </div>
       </div>
       
-      {/* --- NEW: HIGH LEVEL FINANCIAL DASHBOARD --- */}
+      {/* --- HIGH LEVEL FINANCIAL DASHBOARD --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 border-b border-slate-200 bg-slate-50/50">
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Wallet className="h-4 w-4 mr-2 text-teal-600"/> Total Payroll Liability</div>
@@ -272,10 +276,26 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           <div className="text-xs text-slate-400 mt-2 font-medium">Based on {shiftsThisMonthCount} shifts in {currentPeriodEnd.toLocaleDateString('en-US', {month: 'long'})}</div>
         </div>
 
+        {/* --- UPDATED MAX EXPENSE LIABILITY WITH UTILIZATION BAR --- */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Receipt className="h-4 w-4 mr-2 text-rose-600"/> Max Expense Liability</div>
-          <div className="text-4xl font-black text-slate-800 tracking-tight">${maxExpenseLiability.toFixed(2)}</div>
-          <div className="text-xs text-slate-400 mt-2 font-medium">Sum of active client allowances</div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
+            <Receipt className="h-4 w-4 mr-2 text-rose-600"/> Expense Budget Utilized
+          </div>
+          <div className="flex items-end mb-2">
+            <div className={`text-3xl font-black tracking-tight ${expensePercent > 90 ? 'text-red-600' : expensePercent > 75 ? 'text-amber-500' : 'text-slate-800'}`}>
+              ${totalUsedExpense.toFixed(2)}
+            </div>
+            <div className="text-sm font-bold text-slate-400 mb-1 ml-1">
+              / ${maxExpenseLiability.toFixed(2)}
+            </div>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-2 mb-1 overflow-hidden">
+            <div className={`h-2 rounded-full ${expensePercent > 90 ? 'bg-red-500' : expensePercent > 75 ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${expensePercent}%` }}></div>
+          </div>
+          <div className="flex justify-between items-center text-xs mt-1">
+            <span className="text-slate-400 font-medium">For selected period</span>
+            <span className="text-slate-500 font-bold">{expensePercent.toFixed(0)}%</span>
+          </div>
         </div>
       </div>
 

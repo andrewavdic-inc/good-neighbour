@@ -16,6 +16,7 @@ export default function Announcements({
   const [isUploadingPic, setIsUploadingPic] = useState(false);
   const [expandedTrackerId, setExpandedTrackerId] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [selectedArchiveMonth, setSelectedArchiveMonth] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -114,6 +115,9 @@ export default function Announcements({
     acc[monthYear].push(m);
     return acc;
   }, {});
+
+  const archiveMonthKeys = Object.keys(groupedArchived);
+  const activeArchiveMonth = selectedArchiveMonth || archiveMonthKeys[0]; // Default to most recent archived month
 
   // --- REUSABLE MESSAGE CARD RENDERER ---
   const renderMessageCard = (m) => {
@@ -282,21 +286,13 @@ export default function Announcements({
 
         {/* --- 2. THE CURRENT MESSAGE FEED --- */}
         <div className="space-y-4">
-          {currentMessages.length === 0 && !showArchived ? (
+          {currentMessages.length === 0 ? (
             <div className="text-center text-slate-500 py-8 italic border border-dashed border-slate-300 rounded-xl bg-slate-50">No announcements for this period.</div>
           ) : (
             currentMessages.map(renderMessageCard)
           )}
           
-          {/* ARCHIVED MESSAGES GROUPED BY MONTH */}
-          {showArchived && Object.keys(groupedArchived).map(monthYear => (
-            <div key={monthYear} className="mt-8 space-y-4">
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200 pb-2">{monthYear}</h3>
-              {groupedArchived[monthYear].map(renderMessageCard)}
-            </div>
-          ))}
-          
-          {/* ARCHIVE TOGGLE BUTTON */}
+          {/* --- 3. ARCHIVE TOGGLE & SELECTOR --- */}
           {archivedMessages.length > 0 && (
             <div className="pt-6 pb-2 flex justify-center border-t border-slate-200 border-dashed mt-8">
               <button 
@@ -306,6 +302,28 @@ export default function Announcements({
                 <Archive className="h-4 w-4 mr-2" />
                 {showArchived ? 'Hide Archived Announcements' : `View Archived Announcements (${archivedMessages.length})`}
               </button>
+            </div>
+          )}
+
+          {/* --- 4. ARCHIVED MESSAGES FOR SELECTED MONTH --- */}
+          {showArchived && archiveMonthKeys.length > 0 && (
+            <div className="mt-4 space-y-4 bg-slate-100 p-5 rounded-xl border border-slate-200 shadow-inner">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 mb-4 gap-3">
+                 <h3 className="text-sm font-bold text-slate-700 flex items-center"><Archive className="h-4 w-4 mr-2 text-slate-500" /> Archive Viewer</h3>
+                 <select
+                  value={activeArchiveMonth}
+                  onChange={(e) => setSelectedArchiveMonth(e.target.value)}
+                  className="bg-white border border-slate-300 rounded text-sm px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium shadow-sm w-full sm:w-auto"
+                >
+                  {archiveMonthKeys.map(key => (
+                    <option key={key} value={key}>{key}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="space-y-4">
+                {groupedArchived[activeArchiveMonth]?.map(renderMessageCard)}
+              </div>
             </div>
           )}
 

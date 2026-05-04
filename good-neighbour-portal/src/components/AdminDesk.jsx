@@ -153,6 +153,11 @@ export default function AdminDesk({
       });
   }, [businessExpenses, expFilterCategory, expFilterMonth, expSort]);
 
+  // --- NEW: Dynamic Ledger Total ---
+  const currentLedgerTotal = useMemo(() => {
+    return filteredAndSortedExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+  }, [filteredAndSortedExpenses]);
+
   // Cabinet Documents Filter & Sort
   const filteredCabinetDocs = useMemo(() => {
     return safeCabinetDocs.filter(doc => {
@@ -340,12 +345,18 @@ export default function AdminDesk({
       ];
     });
 
+    // --- NEW: Add the dynamic total to the exported CSV ---
+    rows.push(['', '', '', '', '']); // Blank spacer row
+    rows.push(['', '', '"TOTAL SPENT:"', currentLedgerTotal.toFixed(2), '']);
+
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Company_Expenses_Export_${year}_${monthNames[month]}.csv`);
+    
+    const timeFrame = expFilterMonth ? expFilterMonth : 'All_Time';
+    link.setAttribute('download', `Company_Expenses_Export_${timeFrame}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -634,7 +645,7 @@ export default function AdminDesk({
                 </div>
               </div>
 
-              {/* NEW EXPENSE FILTER BAR */}
+              {/* EXPENSE FILTER BAR */}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between px-6 py-2 bg-slate-100 border-b border-slate-200 gap-3">
                 <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full lg:w-auto">
                   <div className="flex items-center bg-white border border-slate-300 rounded px-2 py-1 focus-within:ring-1 focus-within:ring-teal-500 transition shrink-0">
@@ -651,6 +662,16 @@ export default function AdminDesk({
                 <button onClick={() => setExpSort(s => s === 'desc' ? 'asc' : 'desc')} className="text-xs font-bold bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded transition hover:bg-slate-50 w-full lg:w-auto shadow-sm">
                   Sort: {expSort === 'desc' ? 'Newest First' : 'Oldest First'}
                 </button>
+              </div>
+
+              {/* --- NEW: SUMMARY TOTAL BAR --- */}
+              <div className="px-6 py-3 bg-emerald-50/50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm z-10">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 sm:mb-0">
+                  {expFilterCategory === 'All' ? 'Total Spent (All Categories)' : `Total Spent (${expFilterCategory})`}
+                </span>
+                <span className="text-2xl font-black text-emerald-700">
+                  ${currentLedgerTotal.toFixed(2)}
+                </span>
               </div>
               
               <div className="p-0 flex-1 overflow-y-auto">

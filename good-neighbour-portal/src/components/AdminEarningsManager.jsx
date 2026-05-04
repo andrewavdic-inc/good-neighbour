@@ -157,13 +157,50 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
     }).filter(Boolean).sort((a, b) => b.totalEarnings - a.totalEarnings);
   }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd, isBonusActive, safeBonusSettings]);
 
-  // --- NATIVE CSV EXPORT LOGIC ---
-  const exportToCSV = () => {
-    const headers = ['Employee', 'Role', 'Base Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)'];
-    if (isBonusActive) headers.push('Bonuses ($)');
-    headers.push('Total Due ($)');
+  // --- PERFECTED FINANCIAL WIDGET CALCULATIONS ---
+  // (Moved up so the CSV Exporter can read them)
+  const totalPayrollLiability = employeeEarnings.reduce((sum, emp) => sum + emp.totalEarnings, 0);
 
-    const rows = employeeEarnings.map(emp => {
+  const salariedEmployees = employeeEarnings.filter(e => e.payType === 'salary');
+  const totalSalaryCost = salariedEmployees.reduce((sum, e) => sum + e.shiftEarnings, 0);
+
+  const wageEmployees = employeeEarnings.filter(e => e.payType !== 'salary');
+  const totalWageCost = wageEmployees.reduce((sum, e) => sum + e.shiftEarnings, 0);
+  
+  const totalHourlyHours = wageEmployees.filter(e => e.payType === 'hourly').reduce((sum, e) => sum + e.totalHours, 0);
+  const totalVisitShifts = wageEmployees.filter(e => e.payType !== 'hourly').reduce((sum, e) => sum + e.shiftCount, 0);
+
+  const totalBonuses = employeeEarnings.reduce((sum, e) => sum + (e.bonusEarnings || 0), 0);
+
+  const maxExpenseLiability = safeClients
+    .filter(c => c.isActive !== false)
+    .reduce((sum, c) => sum + (Number(c.monthlyAllowance) || 0), 0);
+
+  const totalUsedExpense = employeeEarnings.reduce((sum, emp) => sum + emp.kmEarnings + emp.clientExpenseEarnings, 0);
+  const expensePercent = maxExpenseLiability > 0 ? Math.min((totalUsedExpense / maxExpenseLiability) * 100, 100) : 0;
+
+  // --- NEW: 2-PART NATIVE CSV EXPORT LOGIC ---
+  const exportToCSV = () => {
+    const payPeriodDisplay = `${currentPeriodStart.toLocaleDateString('en-US')} to ${currentPeriodEnd.toLocaleDateString('en-US')}`;
+    
+    // 1. Executive Summary Section
+    const summaryRows = [
+      ['EXECUTIVE SUMMARY'],
+      ['Pay Period', `"${payPeriodDisplay}"`],
+      ['Total Payroll Liability', `"$${totalPayrollLiability.toFixed(2)}"`],
+      ['Wage & Bonus Cost', `"$${(totalWageCost + totalBonuses).toFixed(2)}"`],
+      ['Salary Cost', `"$${totalSalaryCost.toFixed(2)}"`],
+      ['Expense Budget Utilized', `"$${totalUsedExpense.toFixed(2)} of $${maxExpenseLiability.toFixed(2)}"`],
+      [], // Blank Spacer Row
+      ['LINE-BY-LINE BREAKDOWN']
+    ];
+
+    // 2. Table Section
+    const tableHeaders = ['Employee', 'Role', 'Base Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)'];
+    if (isBonusActive) tableHeaders.push('Bonuses ($)');
+    tableHeaders.push('Total Due ($)');
+
+    const tableRows = employeeEarnings.map(emp => {
       const row = [
         `"${emp.name}"`, 
         `"${emp.role}"`,
@@ -176,7 +213,12 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       return row;
     });
 
-    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const csvContent = [
+      ...summaryRows.map(r => r.join(',')),
+      tableHeaders.join(','),
+      ...tableRows.map(r => r.join(','))
+    ].join('\n');
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -184,34 +226,12 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
     
     const startDateStr = currentPeriodStart.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).replace(' ', '_');
     const endDateStr = currentPeriodEnd.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).replace(' ', '_');
-    link.setAttribute('download', `Team_Earnings_${startDateStr}_to_${endDateStr}.csv`);
+    link.setAttribute('download', `Team_Earnings_Report_${startDateStr}_to_${endDateStr}.csv`);
     
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
-
-  // --- PERFECTED FINANCIAL WIDGET CALCULATIONS ---
-  const totalPayrollLiability = employeeEarnings.reduce((sum, emp) => sum + emp.totalEarnings, 0);
-
-  const salariedEmployees = employeeEarnings.filter(e => e.payType === 'salary');
-  const totalSalaryCost = salariedEmployees.reduce((sum, e) => sum + e.shiftEarnings, 0);
-
-  const wageEmployees = employeeEarnings.filter(e => e.payType !== 'salary');
-  const totalWageCost = wageEmployees.reduce((sum, e) => sum + e.shiftEarnings, 0);
-  
-  const totalHourlyHours = wageEmployees.filter(e => e.payType === 'hourly').reduce((sum, e) => sum + e.totalHours, 0);
-  const totalVisitShifts = wageEmployees.filter(e => e.payType !== 'hourly').reduce((sum, e) => sum + e.shiftCount, 0);
-
-  // --- NEW: TOTAL BONUSES MATH ---
-  const totalBonuses = employeeEarnings.reduce((sum, e) => sum + (e.bonusEarnings || 0), 0);
-
-  const maxExpenseLiability = safeClients
-    .filter(c => c.isActive !== false)
-    .reduce((sum, c) => sum + (Number(c.monthlyAllowance) || 0), 0);
-
-  const totalUsedExpense = employeeEarnings.reduce((sum, emp) => sum + emp.kmEarnings + emp.clientExpenseEarnings, 0);
-  const expensePercent = maxExpenseLiability > 0 ? Math.min((totalUsedExpense / maxExpenseLiability) * 100, 100) : 0;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
@@ -263,7 +283,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           <div className="text-xs text-slate-400 mt-2 font-medium">For selected pay period</div>
         </div>
 
-        {/* --- UPDATED: WAGE & BONUS COST WIDGET --- */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Clock className="h-4 w-4 mr-2 text-blue-600"/> Wage & Bonus Cost</div>
           <div className="text-4xl font-black text-slate-800 tracking-tight">${(totalWageCost + totalBonuses).toFixed(2)}</div>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Coins, Award, Trophy, Medal, Download, ShieldAlert, Wallet, CalendarDays, Receipt } from 'lucide-react';
+import { Coins, Award, Trophy, Medal, Download, ShieldAlert, Wallet, CalendarDays, Receipt, Clock, Briefcase } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
 export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], clients = [], payPeriodStart, isBonusActive, bonusSettings }) {
@@ -21,9 +21,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
 
   const [selectedYear, setSelectedYear] = useState(availableYears[0]?.toString() || new Date().getFullYear().toString());
   const [selectedPeriodTime, setSelectedPeriodTime] = useState('');
-  
-  // --- PROJECTED RATE STATE ---
-  const [shiftRate, setShiftRate] = useState(45);
 
   const filteredPeriods = useMemo(() => {
     return allPeriods.filter(p => p.end.getFullYear().toString() === selectedYear);
@@ -194,23 +191,22 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
     document.body.removeChild(link);
   };
 
-  // --- FINANCIAL WIDGET CALCULATIONS ---
+  // --- PERFECTED FINANCIAL WIDGET CALCULATIONS ---
   const totalPayrollLiability = employeeEarnings.reduce((sum, emp) => sum + emp.totalEarnings, 0);
 
-  const currentMonthTarget = currentPeriodEnd.getMonth();
-  const currentYearTarget = currentPeriodEnd.getFullYear();
+  const salariedEmployees = employeeEarnings.filter(e => e.payType === 'salary');
+  const totalSalaryCost = salariedEmployees.reduce((sum, e) => sum + e.shiftEarnings, 0);
 
-  const shiftsThisMonthCount = safeShifts.filter(s => {
-    if (!s || !s.date) return false;
-    const d = parseLocal(s.date);
-    return d.getMonth() === currentMonthTarget && d.getFullYear() === currentYearTarget;
-  }).length;
+  const wageEmployees = employeeEarnings.filter(e => e.payType !== 'salary');
+  const totalWageCost = wageEmployees.reduce((sum, e) => sum + e.shiftEarnings, 0);
+  
+  const totalHourlyHours = wageEmployees.filter(e => e.payType === 'hourly').reduce((sum, e) => sum + e.totalHours, 0);
+  const totalVisitShifts = wageEmployees.filter(e => e.payType !== 'hourly').reduce((sum, e) => sum + e.shiftCount, 0);
 
   const maxExpenseLiability = safeClients
     .filter(c => c.isActive !== false)
     .reduce((sum, c) => sum + (Number(c.monthlyAllowance) || 0), 0);
 
-  // --- NEW: TOTAL USED EXPENSE BUDGET ---
   const totalUsedExpense = employeeEarnings.reduce((sum, emp) => sum + emp.kmEarnings + emp.clientExpenseEarnings, 0);
   const expensePercent = maxExpenseLiability > 0 ? Math.min((totalUsedExpense / maxExpenseLiability) * 100, 100) : 0;
 
@@ -255,8 +251,9 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         </div>
       </div>
       
-      {/* --- HIGH LEVEL FINANCIAL DASHBOARD --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 border-b border-slate-200 bg-slate-50/50">
+      {/* --- REBUILT: EXACT 4-COLUMN FINANCIAL DASHBOARD --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-6 border-b border-slate-200 bg-slate-50/50">
+        
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Wallet className="h-4 w-4 mr-2 text-teal-600"/> Total Payroll Liability</div>
           <div className="text-4xl font-black text-slate-800 tracking-tight">${totalPayrollLiability.toFixed(2)}</div>
@@ -264,19 +261,20 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start mb-2">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center"><CalendarDays className="h-4 w-4 mr-2 text-blue-600"/> Projected Shift Cost</div>
-            <div className="flex items-center bg-slate-50 border border-slate-200 rounded px-2 py-1 shadow-sm">
-              <span className="text-slate-500 text-xs font-bold mr-1">$</span>
-              <input type="number" value={shiftRate} onChange={(e)=>setShiftRate(Number(e.target.value))} className="w-10 text-xs font-bold text-slate-800 bg-transparent focus:outline-none text-center" />
-              <span className="text-slate-500 text-xs font-bold ml-1">/shift</span>
-            </div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Clock className="h-4 w-4 mr-2 text-blue-600"/> Wage & Shift Cost</div>
+          <div className="text-4xl font-black text-slate-800 tracking-tight">${totalWageCost.toFixed(2)}</div>
+          <div className="flex flex-col text-xs text-slate-400 mt-2 font-medium space-y-0.5">
+            <span>{totalVisitShifts} Per-Visit Shifts</span>
+            <span>{totalHourlyHours.toFixed(1)} Hourly Hours</span>
           </div>
-          <div className="text-4xl font-black text-slate-800 tracking-tight">${(shiftsThisMonthCount * shiftRate).toFixed(2)}</div>
-          <div className="text-xs text-slate-400 mt-2 font-medium">Based on {shiftsThisMonthCount} shifts in {currentPeriodEnd.toLocaleDateString('en-US', {month: 'long'})}</div>
         </div>
 
-        {/* --- UPDATED MAX EXPENSE LIABILITY WITH UTILIZATION BAR --- */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Briefcase className="h-4 w-4 mr-2 text-indigo-600"/> Salary Cost</div>
+          <div className="text-4xl font-black text-slate-800 tracking-tight">${totalSalaryCost.toFixed(2)}</div>
+          <div className="text-xs text-slate-400 mt-2 font-medium">Fixed bi-weekly pay ({salariedEmployees.length} staff)</div>
+        </div>
+
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
             <Receipt className="h-4 w-4 mr-2 text-rose-600"/> Expense Budget Utilized
@@ -297,6 +295,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
             <span className="text-slate-500 font-bold">{expensePercent.toFixed(0)}%</span>
           </div>
         </div>
+
       </div>
 
       <div className="overflow-y-auto flex-1 bg-white">

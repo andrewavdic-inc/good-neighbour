@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, DollarSign, CalendarDays, Plus, Trash2, Undo, AlertCircle, Download } from 'lucide-react';
+import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, DollarSign, CalendarDays, Plus, Trash2, Undo, AlertCircle, Download, Award } from 'lucide-react';
+import { getPastPayPeriods } from '../utils';
 
 // --- DATE HELPER ---
 const parseLocalSafe = (dateStr) => {
@@ -27,11 +28,10 @@ const parseLocalSafe = (dateStr) => {
 
 export default function ExpenseManager({ 
   shifts = [], expenses = [], clientExpenses = [], employees = [], clients = [], 
-  onUpdateExpense, onUpdateClientExpense 
+  onUpdateExpense, onUpdateClientExpense, payPeriodStart, isBonusActive, bonusSettings
 }) {
   const [selectedEmpId, setSelectedEmpId] = useState(null);
   const [activeTab, setActiveTab] = useState('shifts');
-  const [auditMonth, setAuditMonth] = useState(new Date().toISOString().slice(0, 7));
   const [searchTerm, setSearchTerm] = useState('');
   
   // Local state to handle instant UI updates for the new features
@@ -45,8 +45,35 @@ export default function ExpenseManager({
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
   const safeEmployees = Array.isArray(employees) ? employees : [];
   const safeClients = Array.isArray(clients) ? clients : [];
+  const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
 
   const getClientName = (id) => safeClients.find(c => c.id === id)?.name || 'Unknown Client';
+
+  // --- NEW: PAY PERIOD LOGIC ---
+  const allPeriods = useMemo(() => getPastPayPeriods(payPeriodStart || '2026-04-01', 104), [payPeriodStart]);
+  
+  const availableYears = useMemo(() => {
+    const years = allPeriods.map(p => p.end.getFullYear());
+    return [...new Set(years)].sort((a, b) => b - a);
+  }, [allPeriods]);
+
+  const [selectedYear, setSelectedYear] = useState(availableYears[0]?.toString() || new Date().getFullYear().toString());
+  const [selectedPeriodTime, setSelectedPeriodTime] = useState('');
+
+  const filteredPeriods = useMemo(() => {
+    return allPeriods.filter(p => p.end.getFullYear().toString() === selectedYear);
+  }, [allPeriods, selectedYear]);
+
+  const activePeriod = useMemo(() => {
+    if (selectedPeriodTime) {
+      const found = filteredPeriods.find(p => p.start.getTime().toString() === selectedPeriodTime);
+      if (found) return found;
+    }
+    return filteredPeriods[0] || allPeriods[0];
+  }, [filteredPeriods, selectedPeriodTime, allPeriods]);
+
+  const currentPeriodStart = activePeriod.start;
+  const currentPeriodEnd = activePeriod.end;
 
   // --- MATH HELPERS ---
   const getShiftCost = (emp, shift) => {
@@ -67,17 +94,79 @@ export default function ExpenseManager({
 
   const selectedEmp = safeEmployees.find(e => e.id === selectedEmpId);
 
-  // --- EMPLOYEE SPECIFIC DATA ---
-  const empShifts = useMemo(() => safeShifts.filter(s => s.employeeId === selectedEmpId && s.date?.startsWith(auditMonth)).sort((a,b) => new Date(b.date) - new Date(a.date)), [safeShifts, selectedEmpId, auditMonth]);
-  const empMileage = useMemo(() => safeExpenses.filter(e => e.employeeId === selectedEmpId && e.date?.startsWith(auditMonth)).sort((a,b) => new Date(b.date) - new Date(a.date)), [safeExpenses, selectedEmpId, auditMonth]);
-  const empOOP = useMemo(() => safeClientExpenses.filter(e => e.employeeId === selectedEmpId && e.date?.startsWith(auditMonth)).sort((a,b) => new Date(b.date) - new Date(a.date)), [safeClientExpenses, selectedEmpId, auditMonth]);
-  const empAdjs = manualAdjustments.filter(a => a.employeeId === selectedEmpId && a.month === auditMonth);
+  // --- EMPLOYEE SPECIFIC DATA BY PAY PERIOD ---
+  const empShifts = useMemo(() => safeShifts.filter(s => {
+    if (s.employeeId !== selectedEmpId || !s.date) return false;
+    const d = parseLocalSafe(s.date);
+    return d >= currentPeriodStart && d <= currentPeriodEnd;
+  }).sort((a,b) => new Date(b.date) - new Date(a.date)), [safeShifts, selectedEmpId, currentPeriodStart, currentPeriodEnd]);
+
+  const empMileage = useMemo(() => safeExpenses.filter(e => {
+    if (e.employeeId !== selectedEmpId || !e.date) return false;
+    const d = parseLocalSafe(e.date);
+    return d >= currentPeriodStart && d <= currentPeriodEnd;
+  }).sort((a,b) => new Date(b.date) - new Date(a.date)), [safeExpenses, selectedEmpId, currentPeriodStart, currentPeriodEnd]);
+
+  const empOOP = useMemo(() => safeClientExpenses.filter(e => {
+    if (e.employeeId !== selectedEmpId || !e.date) return false;
+    const d = parseLocalSafe(e.date);
+    return d >= currentPeriodStart && d <= currentPeriodEnd;
+  }).sort((a,b) => new Date(b.date) - new Date(a.date)), [safeClientExpenses, selectedEmpId, currentPeriodStart, currentPeriodEnd]);
+
+  const empAdjs = manualAdjustments.filter(a => a.employeeId === selectedEmpId && a.periodTime === activePeriod.start.getTime().toString());
+
+  // --- NEW: AUTO-BONUS ENGINE ---
+  const getMonthlyLeaderboard = () => {
+    const mStart = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), 1);
+    const mEnd = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth() + 1, 0, 23, 59, 59);
+    
+    let results = safeEmployees.map(emp => {
+      const empShiftsForBonus = safeShifts.filter(s => {
+        if (s.employeeId !== emp.id || !s.date || !s.endTime) return false;
+        const shiftDate = new Date(`${s.date}T${s.endTime}`);
+        return shiftDate >= mStart && shiftDate <= mEnd;
+      });
+      
+      let sEarn = 0;
+      if (emp.payType === 'salary') {
+         sEarn = (Number(emp.annualSalary) || 0) / 12; 
+      } else if (emp.payType === 'hourly') {
+        let hrs = 0;
+        empShiftsForBonus.forEach(s => {
+          const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
+          const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
+          let h = (eH + eM/60) - (sH + sM/60);
+          if (h < 0) h += 24;
+          hrs += h;
+        });
+        sEarn = hrs * (Number(emp.hourlyWage) || 22.5);
+      } else {
+        sEarn = empShiftsForBonus.length * (Number(emp.perVisitRate) || 45);
+      }
+      
+      const kmE = safeExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= mStart && parseLocalSafe(e.date) <= mEnd).reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
+      const oopE = safeClientExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= mStart && parseLocalSafe(e.date) <= mEnd).reduce((sum, e) => sum + Number(e.amount), 0);
+      
+      return { emp, shiftCount: empShiftsForBonus.length, total: sEarn + kmE + oopE };
+    });
+    
+    return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total).slice(0, 3);
+  };
+
+  const autoBonusAmount = useMemo(() => {
+    if (!isBonusActive || !selectedEmpId) return 0;
+    const winners = getMonthlyLeaderboard();
+    if (winners[0]?.emp.id === selectedEmpId) return Number(safeBonusSettings.monthly[0] || 0);
+    if (winners[1]?.emp.id === selectedEmpId) return Number(safeBonusSettings.monthly[1] || 0);
+    if (winners[2]?.emp.id === selectedEmpId) return Number(safeBonusSettings.monthly[2] || 0);
+    return 0;
+  }, [isBonusActive, selectedEmpId, currentPeriodEnd, safeShifts, safeExpenses, safeClientExpenses, safeEmployees, safeBonusSettings]);
 
   // --- LIVE TOTAL CALCULATIONS ---
   const approvedShiftsCost = empShifts.reduce((sum, s) => sum + (localDisputes[s.id] ? 0 : getShiftCost(selectedEmp, s)), 0);
   const approvedMileageCost = empMileage.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.kilometers || 0) * 0.68 : 0), 0);
   const approvedOOPCost = empOOP.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.amount || 0) : 0), 0);
-  const totalAdjustments = empAdjs.reduce((sum, a) => sum + Number(a.amount || 0), 0);
+  const totalAdjustments = empAdjs.reduce((sum, a) => sum + Number(a.amount || 0), 0) + autoBonusAmount;
   
   const grandTotalOwed = approvedShiftsCost + approvedMileageCost + approvedOOPCost + totalAdjustments;
 
@@ -87,7 +176,8 @@ export default function ExpenseManager({
     
     let headers = [];
     let rows = [];
-    let filename = `${selectedEmp.name.replace(/\s+/g, '_')}_${activeTab}_${auditMonth}.csv`;
+    const periodName = `${currentPeriodStart.toLocaleDateString('en-US', {month:'short', day:'numeric'})}_to_${currentPeriodEnd.toLocaleDateString('en-US', {month:'short', day:'numeric'})}`.replace(/\s+/g, '_');
+    let filename = `${selectedEmp.name.replace(/\s+/g, '_')}_${activeTab}_${periodName}.csv`;
 
     if (activeTab === 'shifts') {
       headers = ['Date', 'Client', 'Start Time', 'End Time', 'Cost ($)', 'Status'];
@@ -124,11 +214,20 @@ export default function ExpenseManager({
       ]);
     } else if (activeTab === 'adjustments') {
       headers = ['Date', 'Description', 'Amount ($)'];
-      rows = empAdjs.map(a => [
-        `"${parseLocalSafe(a.date).toLocaleDateString()}"`,
-        `"${a.description}"`,
-        a.amount.toFixed(2)
-      ]);
+      if (autoBonusAmount > 0) {
+        rows.push([
+          `"${currentPeriodEnd.toLocaleDateString('en-US')}"`,
+          `"Performance Bonus (System Generated)"`,
+          autoBonusAmount.toFixed(2)
+        ]);
+      }
+      empAdjs.forEach(a => {
+        rows.push([
+          `"${parseLocalSafe(a.date).toLocaleDateString()}"`,
+          `"${a.description}"`,
+          a.amount.toFixed(2)
+        ]);
+      });
     }
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -149,7 +248,7 @@ export default function ExpenseManager({
       id: `adj_${Date.now()}`,
       employeeId: selectedEmpId,
       date: new Date().toISOString().split('T')[0],
-      month: auditMonth,
+      periodTime: activePeriod.start.getTime().toString(),
       description: adjDesc,
       amount: Number(adjAmount)
     };
@@ -171,7 +270,7 @@ export default function ExpenseManager({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[800px]">
       
-      {/* HEADER */}
+      {/* HEADER: SYNCED TO PAY PERIOD */}
       <div className="px-6 py-4 border-b border-slate-200 bg-slate-800 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div className="flex items-center">
           <Receipt className="h-6 w-6 mr-3 text-teal-400" />
@@ -181,15 +280,30 @@ export default function ExpenseManager({
           </div>
         </div>
         
-        <div className="flex items-center bg-slate-900 border border-slate-700 rounded-md px-3 py-1.5 focus-within:ring-1 focus-within:ring-teal-500 transition">
-          <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
-          <input
-            type="month"
-            value={auditMonth}
-            onChange={(e) => setAuditMonth(e.target.value)}
-            className="block w-full text-slate-200 focus:outline-none text-sm bg-transparent font-bold"
-            title="Filter by Month"
-          />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 w-full sm:w-auto shrink-0">
+          <label className="text-sm font-medium text-slate-400 whitespace-nowrap">Pay Period:</label>
+          <div className="flex space-x-2 w-full sm:w-auto">
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="w-1/3 sm:w-auto px-3 py-1.5 border border-slate-700 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 bg-slate-900 font-medium text-slate-200 shadow-sm"
+            >
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            <select
+              value={activePeriod.start.getTime().toString()}
+              onChange={(e) => setSelectedPeriodTime(e.target.value)}
+              className="w-2/3 sm:w-auto px-3 py-1.5 border border-slate-700 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 bg-slate-900 font-medium text-slate-200 shadow-sm"
+            >
+              {filteredPeriods.map((period) => (
+                <option key={period.start.getTime()} value={period.start.getTime().toString()}>
+                  {period.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} &ndash; {period.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {period.isCurrent ? '(Current)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -280,7 +394,7 @@ export default function ExpenseManager({
                     {empOOP.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
                   </button>
                   <button onClick={() => setActiveTab('adjustments')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'adjustments' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                    <DollarSign className="h-4 w-4 mr-2" /> Adjustments ({empAdjs.length}) &bull; ${totalAdjustments.toFixed(2)}
+                    <DollarSign className="h-4 w-4 mr-2" /> Adjustments ({empAdjs.length + (autoBonusAmount > 0 ? 1 : 0)}) &bull; ${totalAdjustments.toFixed(2)}
                   </button>
                 </div>
                 
@@ -298,7 +412,7 @@ export default function ExpenseManager({
                 {activeTab === 'shifts' && (
                   <div className="space-y-3">
                     {empShifts.length === 0 ? (
-                      <p className="text-slate-500 text-center py-8">No shifts found for this month.</p>
+                      <p className="text-slate-500 text-center py-8">No shifts found for this pay period.</p>
                     ) : (
                       empShifts.map(shift => {
                         const isDisputed = localDisputes[shift.id];
@@ -338,7 +452,7 @@ export default function ExpenseManager({
                 {activeTab === 'mileage' && (
                   <div className="space-y-3">
                     {empMileage.length === 0 ? (
-                      <p className="text-slate-500 text-center py-8">No mileage logs found for this month.</p>
+                      <p className="text-slate-500 text-center py-8">No mileage logs found for this pay period.</p>
                     ) : (
                       empMileage.map(exp => (
                         <div key={exp.id} className={`flex items-center justify-between p-4 rounded-xl border shadow-sm transition ${exp.status === 'rejected' ? 'bg-red-50 border-red-200' : exp.status === 'approved' ? 'bg-white border-emerald-200' : 'bg-white border-amber-200'}`}>
@@ -390,7 +504,7 @@ export default function ExpenseManager({
                 {activeTab === 'oop' && (
                   <div className="space-y-3">
                     {empOOP.length === 0 ? (
-                      <p className="text-slate-500 text-center py-8">No client purchases found for this month.</p>
+                      <p className="text-slate-500 text-center py-8">No client purchases found for this pay period.</p>
                     ) : (
                       empOOP.map(exp => (
                         <div key={exp.id} className={`flex items-center justify-between p-4 rounded-xl border shadow-sm transition ${exp.status === 'rejected' ? 'bg-red-50 border-red-200' : exp.status === 'approved' ? 'bg-white border-emerald-200' : 'bg-white border-amber-200'}`}>
@@ -471,9 +585,25 @@ export default function ExpenseManager({
                     </div>
 
                     <div className="space-y-3">
-                      <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2">Logged Adjustments for this Month</h3>
-                      {empAdjs.length === 0 ? (
-                        <p className="text-slate-500 italic text-sm py-4">No manual adjustments made this month.</p>
+                      <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2">Logged Adjustments for this Period</h3>
+                      
+                      {autoBonusAmount > 0 && (
+                        <div className="flex items-center justify-between p-4 rounded-xl border shadow-sm bg-amber-50 border-amber-200">
+                          <div>
+                            <div className="font-bold text-sm text-amber-900 flex items-center"><Award className="h-4 w-4 mr-1"/> Performance Bonus</div>
+                            <div className="text-xs text-amber-700 mt-1 font-medium">System Generated - Auto-applied for this period</div>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <div className="text-lg font-black text-amber-600">
+                              +${autoBonusAmount.toFixed(2)}
+                            </div>
+                            <div className="w-7"></div> {/* Spacer to align with the trash icons below */}
+                          </div>
+                        </div>
+                      )}
+
+                      {empAdjs.length === 0 && autoBonusAmount === 0 ? (
+                        <p className="text-slate-500 italic text-sm py-4">No manual adjustments made this period.</p>
                       ) : (
                         empAdjs.map(adj => (
                           <div key={adj.id} className={`flex items-center justify-between p-4 rounded-xl border shadow-sm ${adj.amount < 0 ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'}`}>

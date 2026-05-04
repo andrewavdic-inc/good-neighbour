@@ -81,7 +81,7 @@ export default function ExpenseManager({
   
   const grandTotalOwed = approvedShiftsCost + approvedMileageCost + approvedOOPCost + totalAdjustments;
 
-  // --- NEW: CONTEXTUAL CSV EXPORT ---
+  // --- CONTEXTUAL CSV EXPORT ---
   const exportContextualCSV = () => {
     if (!selectedEmp) return;
     
@@ -265,7 +265,7 @@ export default function ExpenseManager({
                 </div>
               </div>
 
-              {/* TABS WITH NEW SUBTOTALS & DOWNLOAD BUTTON */}
+              {/* TABS WITH SUBTOTALS & DOWNLOAD BUTTON */}
               <div className="flex border-b border-slate-200 bg-slate-50 overflow-x-auto scrollbar-hide shrink-0 items-center justify-between">
                 <div className="flex">
                   <button onClick={() => setActiveTab('shifts')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'shifts' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
@@ -358,14 +358,25 @@ export default function ExpenseManager({
                               <div className={`text-xs font-bold ${exp.status === 'rejected' ? 'text-red-400' : 'text-teal-600'}`}>${(Number(exp.kilometers)*0.68).toFixed(2)}</div>
                             </div>
                             
-                            <div className="flex items-center justify-end w-24">
+                            <div className="flex items-center justify-end min-w-[100px]">
                               {exp.status === 'pending' ? (
                                 <div className="flex space-x-2">
                                   <button onClick={() => onUpdateExpense(exp.id, 'approved')} className="p-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-md transition shadow-sm" title="Approve"><CheckCircle className="h-5 w-5" /></button>
                                   <button onClick={() => onUpdateExpense(exp.id, 'rejected')} className="p-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md transition shadow-sm" title="Reject"><XCircle className="h-5 w-5" /></button>
                                 </div>
                               ) : (
-                                renderStatusBadge(exp.status)
+                                <div className="flex flex-col items-end space-y-1.5">
+                                  {renderStatusBadge(exp.status)}
+                                  {exp.status === 'approved' ? (
+                                    <button onClick={() => onUpdateExpense(exp.id, 'rejected')} className="flex items-center text-[10px] font-bold text-red-600 hover:text-red-800 transition">
+                                      <XCircle className="h-3 w-3 mr-1" /> Dispute
+                                    </button>
+                                  ) : (
+                                    <button onClick={() => onUpdateExpense(exp.id, 'approved')} className="flex items-center text-[10px] font-bold text-slate-500 hover:text-slate-700 transition">
+                                      <Undo className="h-3 w-3 mr-1" /> Restore
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>
@@ -408,14 +419,25 @@ export default function ExpenseManager({
                               ${Number(exp.amount).toFixed(2)}
                             </div>
                             
-                            <div className="flex items-center justify-end w-24">
+                            <div className="flex items-center justify-end min-w-[100px]">
                               {exp.status === 'pending' ? (
                                 <div className="flex space-x-2">
                                   <button onClick={() => onUpdateClientExpense(exp.id, 'approved')} className="p-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 rounded-md transition shadow-sm" title="Approve"><CheckCircle className="h-5 w-5" /></button>
                                   <button onClick={() => onUpdateClientExpense(exp.id, 'rejected')} className="p-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-md transition shadow-sm" title="Reject"><XCircle className="h-5 w-5" /></button>
                                 </div>
                               ) : (
-                                renderStatusBadge(exp.status)
+                                <div className="flex flex-col items-end space-y-1.5">
+                                  {renderStatusBadge(exp.status)}
+                                  {exp.status === 'approved' ? (
+                                    <button onClick={() => onUpdateClientExpense(exp.id, 'rejected')} className="flex items-center text-[10px] font-bold text-red-600 hover:text-red-800 transition">
+                                      <XCircle className="h-3 w-3 mr-1" /> Dispute
+                                    </button>
+                                  ) : (
+                                    <button onClick={() => onUpdateClientExpense(exp.id, 'approved')} className="flex items-center text-[10px] font-bold text-slate-500 hover:text-slate-700 transition">
+                                      <Undo className="h-3 w-3 mr-1" /> Restore
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </div>

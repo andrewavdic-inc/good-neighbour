@@ -203,6 +203,9 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const totalHourlyHours = wageEmployees.filter(e => e.payType === 'hourly').reduce((sum, e) => sum + e.totalHours, 0);
   const totalVisitShifts = wageEmployees.filter(e => e.payType !== 'hourly').reduce((sum, e) => sum + e.shiftCount, 0);
 
+  // --- NEW: TOTAL BONUSES MATH ---
+  const totalBonuses = employeeEarnings.reduce((sum, e) => sum + (e.bonusEarnings || 0), 0);
+
   const maxExpenseLiability = safeClients
     .filter(c => c.isActive !== false)
     .reduce((sum, c) => sum + (Number(c.monthlyAllowance) || 0), 0);
@@ -251,7 +254,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         </div>
       </div>
       
-      {/* --- REBUILT: EXACT 4-COLUMN FINANCIAL DASHBOARD --- */}
+      {/* --- EXACT 4-COLUMN FINANCIAL DASHBOARD --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-6 border-b border-slate-200 bg-slate-50/50">
         
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
@@ -260,12 +263,14 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           <div className="text-xs text-slate-400 mt-2 font-medium">For selected pay period</div>
         </div>
 
+        {/* --- UPDATED: WAGE & BONUS COST WIDGET --- */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Clock className="h-4 w-4 mr-2 text-blue-600"/> Wage & Shift Cost</div>
-          <div className="text-4xl font-black text-slate-800 tracking-tight">${totalWageCost.toFixed(2)}</div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Clock className="h-4 w-4 mr-2 text-blue-600"/> Wage & Bonus Cost</div>
+          <div className="text-4xl font-black text-slate-800 tracking-tight">${(totalWageCost + totalBonuses).toFixed(2)}</div>
           <div className="flex flex-col text-xs text-slate-400 mt-2 font-medium space-y-0.5">
             <span>{totalVisitShifts} Per-Visit Shifts</span>
             <span>{totalHourlyHours.toFixed(1)} Hourly Hours</span>
+            {isBonusActive && <span className="text-amber-500 font-bold">+ ${totalBonuses.toFixed(2)} in Bonuses</span>}
           </div>
         </div>
 

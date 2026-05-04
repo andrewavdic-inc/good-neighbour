@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, DollarSign, CalendarDays, Plus, Trash2, Undo, AlertCircle, Download, Award } from 'lucide-react';
 import { getPastPayPeriods } from '../utils';
 
@@ -43,13 +43,14 @@ export default function ExpenseManager({
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
-  const safeEmployees = Array.isArray(employees) ? employees : [];
+  // --- UPDATED: GHOST THE MASTER ADMIN ---
+  const safeEmployees = Array.isArray(employees) ? employees.filter(e => e && e.role !== 'Master Admin') : [];
   const safeClients = Array.isArray(clients) ? clients : [];
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
 
   const getClientName = (id) => safeClients.find(c => c.id === id)?.name || 'Unknown Client';
 
-  // --- NEW: PAY PERIOD LOGIC ---
+  // --- PAY PERIOD LOGIC ---
   const allPeriods = useMemo(() => getPastPayPeriods(payPeriodStart || '2026-04-01', 104), [payPeriodStart]);
   
   const availableYears = useMemo(() => {
@@ -93,6 +94,14 @@ export default function ExpenseManager({
   );
 
   const selectedEmp = safeEmployees.find(e => e.id === selectedEmpId);
+  const isSalaried = selectedEmp?.payType === 'salary';
+
+  // --- TAB ENFORCEMENT FOR SALARIED EMPLOYEES ---
+  useEffect(() => {
+    if (isSalaried && (activeTab === 'mileage' || activeTab === 'oop')) {
+      setActiveTab('shifts'); // We rename 'shifts' to 'salary' in the UI, but keep the state key
+    }
+  }, [selectedEmpId, isSalaried, activeTab]);
 
   // --- EMPLOYEE SPECIFIC DATA BY PAY PERIOD ---
   const empShifts = useMemo(() => safeShifts.filter(s => {
@@ -115,7 +124,7 @@ export default function ExpenseManager({
 
   const empAdjs = manualAdjustments.filter(a => a.employeeId === selectedEmpId && a.periodTime === activePeriod.start.getTime().toString());
 
-  // --- NEW: AUTO-BONUS ENGINE ---
+  // --- AUTO-BONUS ENGINE ---
   const getMonthlyLeaderboard = () => {
     const mStart = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), 1);
     const mEnd = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth() + 1, 0, 23, 59, 59);
@@ -163,9 +172,14 @@ export default function ExpenseManager({
   }, [isBonusActive, selectedEmpId, currentPeriodEnd, safeShifts, safeExpenses, safeClientExpenses, safeEmployees, safeBonusSettings]);
 
   // --- LIVE TOTAL CALCULATIONS ---
-  const approvedShiftsCost = empShifts.reduce((sum, s) => sum + (localDisputes[s.id] ? 0 : getShiftCost(selectedEmp, s)), 0);
-  const approvedMileageCost = empMileage.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.kilometers || 0) * 0.68 : 0), 0);
-  const approvedOOPCost = empOOP.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.amount || 0) : 0), 0);
+  const approvedShiftsCost = useMemo(() => {
+    if (!selectedEmp) return 0;
+    if (isSalaried) return (Number(selectedEmp.annualSalary) || 0) / 26;
+    return empShifts.reduce((sum, s) => sum + (localDisputes[s.id] ? 0 : getShiftCost(selectedEmp, s)), 0);
+  }, [selectedEmp, isSalaried, empShifts, localDisputes]);
+
+  const approvedMileageCost = isSalaried ? 0 : empMileage.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.kilometers || 0) * 0.68 : 0), 0);
+  const approvedOOPCost = isSalaried ? 0 : empOOP.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.amount || 0) : 0), 0);
   const totalAdjustments = empAdjs.reduce((sum, a) => sum + Number(a.amount || 0), 0) + autoBonusAmount;
   
   const grandTotalOwed = approvedShiftsCost + approvedMileageCost + approvedOOPCost + totalAdjustments;
@@ -177,22 +191,30 @@ export default function ExpenseManager({
     let headers = [];
     let rows = [];
     const periodName = `${currentPeriodStart.toLocaleDateString('en-US', {month:'short', day:'numeric'})}_to_${currentPeriodEnd.toLocaleDateString('en-US', {month:'short', day:'numeric'})}`.replace(/\s+/g, '_');
-    let filename = `${selectedEmp.name.replace(/\s+/g, '_')}_${activeTab}_${periodName}.csv`;
+    
+    let tabNameForFile = activeTab;
+    if (activeTab === 'shifts' && isSalaried) tabNameForFile = 'salary';
+    let filename = `${selectedEmp.name.replace(/\s+/g, '_')}_${tabNameForFile}_${periodName}.csv`;
 
     if (activeTab === 'shifts') {
-      headers = ['Date', 'Client', 'Start Time', 'End Time', 'Cost ($)', 'Status'];
-      rows = empShifts.map(s => {
-        const isDisputed = localDisputes[s.id];
-        const cost = getShiftCost(selectedEmp, s);
-        return [
-          `"${parseLocalSafe(s.date).toLocaleDateString()}"`,
-          `"${getClientName(s.clientId)}"`,
-          `"${s.startTime}"`,
-          `"${s.endTime}"`,
-          cost.toFixed(2),
-          isDisputed ? 'Disputed' : 'Approved'
-        ];
-      });
+      if (isSalaried) {
+        headers = ['Description', 'Amount ($)', 'Status'];
+        rows = [[`"Bi-Weekly Base Salary"`, approvedShiftsCost.toFixed(2), `"Approved"`]];
+      } else {
+        headers = ['Date', 'Client', 'Start Time', 'End Time', 'Cost ($)', 'Status'];
+        rows = empShifts.map(s => {
+          const isDisputed = localDisputes[s.id];
+          const cost = getShiftCost(selectedEmp, s);
+          return [
+            `"${parseLocalSafe(s.date).toLocaleDateString()}"`,
+            `"${getClientName(s.clientId)}"`,
+            `"${s.startTime}"`,
+            `"${s.endTime}"`,
+            cost.toFixed(2),
+            isDisputed ? 'Disputed' : 'Approved'
+          ];
+        });
+      }
     } else if (activeTab === 'mileage') {
       headers = ['Date', 'Client', 'Description', 'Kilometers', 'Cost ($)', 'Status'];
       rows = empMileage.map(e => [
@@ -326,7 +348,7 @@ export default function ExpenseManager({
           
           <div className="flex-1 overflow-y-auto divide-y divide-slate-200">
             {filteredEmployees.map(emp => {
-              const pendingCount = 
+              const pendingCount = emp.payType === 'salary' ? 0 :
                 safeExpenses.filter(e => e.employeeId === emp.id && e.status === 'pending').length + 
                 safeClientExpenses.filter(e => e.employeeId === emp.id && e.status === 'pending').length;
 
@@ -370,7 +392,7 @@ export default function ExpenseManager({
                 <div>
                   <h2 className="text-2xl font-black text-slate-800">{selectedEmp.name}</h2>
                   <div className="text-sm font-semibold text-slate-500 flex items-center mt-1">
-                    Pay Rate: {selectedEmp.payType === 'hourly' ? `$${selectedEmp.hourlyWage}/hr` : selectedEmp.payType === 'salary' ? 'Salaried' : `$${selectedEmp.perVisitRate}/visit`}
+                    Pay Rate: {isSalaried ? `$${(Number(selectedEmp.annualSalary)||0).toLocaleString()}/yr` : selectedEmp.payType === 'hourly' ? `$${selectedEmp.hourlyWage}/hr` : `$${selectedEmp.perVisitRate}/visit`}
                   </div>
                 </div>
                 <div className="text-right bg-emerald-50 border border-emerald-200 px-5 py-2.5 rounded-xl shadow-sm">
@@ -379,20 +401,27 @@ export default function ExpenseManager({
                 </div>
               </div>
 
-              {/* TABS WITH SUBTOTALS & DOWNLOAD BUTTON */}
+              {/* DYNAMIC TABS FOR SALARIED VS WAGE */}
               <div className="flex border-b border-slate-200 bg-slate-50 overflow-x-auto scrollbar-hide shrink-0 items-center justify-between">
                 <div className="flex">
                   <button onClick={() => setActiveTab('shifts')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'shifts' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                    <CalendarDays className="h-4 w-4 mr-2" /> Shifts ({empShifts.length}) &bull; ${approvedShiftsCost.toFixed(2)}
+                    <CalendarDays className="h-4 w-4 mr-2" /> 
+                    {isSalaried ? 'Salary' : `Shifts (${empShifts.length})`} &bull; ${approvedShiftsCost.toFixed(2)}
                   </button>
-                  <button onClick={() => setActiveTab('mileage')} className={`relative py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'mileage' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                    <Car className="h-4 w-4 mr-2" /> Mileage ({empMileage.length}) &bull; ${approvedMileageCost.toFixed(2)}
-                    {empMileage.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
-                  </button>
-                  <button onClick={() => setActiveTab('oop')} className={`relative py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'oop' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                    <Receipt className="h-4 w-4 mr-2" /> Purchases ({empOOP.length}) &bull; ${approvedOOPCost.toFixed(2)}
-                    {empOOP.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
-                  </button>
+                  
+                  {!isSalaried && (
+                    <>
+                      <button onClick={() => setActiveTab('mileage')} className={`relative py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'mileage' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                        <Car className="h-4 w-4 mr-2" /> Mileage ({empMileage.length}) &bull; ${approvedMileageCost.toFixed(2)}
+                        {empMileage.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
+                      </button>
+                      <button onClick={() => setActiveTab('oop')} className={`relative py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'oop' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                        <Receipt className="h-4 w-4 mr-2" /> Purchases ({empOOP.length}) &bull; ${approvedOOPCost.toFixed(2)}
+                        {empOOP.filter(e => e.status === 'pending').length > 0 && <span className="ml-2 h-2 w-2 rounded-full bg-rose-500"></span>}
+                      </button>
+                    </>
+                  )}
+
                   <button onClick={() => setActiveTab('adjustments')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'adjustments' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
                     <DollarSign className="h-4 w-4 mr-2" /> Adjustments ({empAdjs.length + (autoBonusAmount > 0 ? 1 : 0)}) &bull; ${totalAdjustments.toFixed(2)}
                   </button>
@@ -408,48 +437,62 @@ export default function ExpenseManager({
               {/* AUDIT CONTENT AREA */}
               <div className="flex-1 overflow-y-auto bg-slate-50/50 p-6">
                 
-                {/* 1. SHIFTS TAB */}
+                {/* 1. SHIFTS / SALARY TAB */}
                 {activeTab === 'shifts' && (
-                  <div className="space-y-3">
-                    {empShifts.length === 0 ? (
-                      <p className="text-slate-500 text-center py-8">No shifts found for this pay period.</p>
-                    ) : (
-                      empShifts.map(shift => {
-                        const isDisputed = localDisputes[shift.id];
-                        const cost = getShiftCost(selectedEmp, shift);
-                        return (
-                          <div key={shift.id} className={`flex items-center justify-between p-4 rounded-xl border transition ${isDisputed ? 'bg-red-50 border-red-200 opacity-75' : 'bg-white border-slate-200 shadow-sm'}`}>
-                            <div>
-                              <div className={`font-bold text-sm ${isDisputed ? 'text-red-900 line-through' : 'text-slate-800'}`}>
-                                {parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} &bull; {shift.startTime} to {shift.endTime}
+                  isSalaried ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-5 rounded-xl border bg-white border-emerald-200 shadow-sm">
+                        <div>
+                          <div className="font-black text-lg text-slate-800">Bi-Weekly Base Salary</div>
+                          <div className="text-sm mt-1 font-medium text-slate-500">Fixed compensation for current pay period</div>
+                        </div>
+                        <div className="text-2xl font-black text-emerald-600">
+                          ${approvedShiftsCost.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {empShifts.length === 0 ? (
+                        <p className="text-slate-500 text-center py-8">No shifts found for this pay period.</p>
+                      ) : (
+                        empShifts.map(shift => {
+                          const isDisputed = localDisputes[shift.id];
+                          const cost = getShiftCost(selectedEmp, shift);
+                          return (
+                            <div key={shift.id} className={`flex items-center justify-between p-4 rounded-xl border transition ${isDisputed ? 'bg-red-50 border-red-200 opacity-75' : 'bg-white border-slate-200 shadow-sm'}`}>
+                              <div>
+                                <div className={`font-bold text-sm ${isDisputed ? 'text-red-900 line-through' : 'text-slate-800'}`}>
+                                  {parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} &bull; {shift.startTime} to {shift.endTime}
+                                </div>
+                                <div className={`text-xs mt-1 font-medium ${isDisputed ? 'text-red-700' : 'text-slate-500'}`}>
+                                  Client: {getClientName(shift.clientId)}
+                                </div>
                               </div>
-                              <div className={`text-xs mt-1 font-medium ${isDisputed ? 'text-red-700' : 'text-slate-500'}`}>
-                                Client: {getClientName(shift.clientId)}
+                              <div className="flex items-center space-x-6">
+                                <div className={`text-lg font-black ${isDisputed ? 'text-red-400 line-through' : 'text-slate-800'}`}>
+                                  ${cost.toFixed(2)}
+                                </div>
+                                {isDisputed ? (
+                                  <button onClick={() => setLocalDisputes(prev => ({...prev, [shift.id]: false}))} className="flex items-center text-xs font-bold text-slate-600 bg-white border border-slate-300 px-3 py-1.5 rounded-md hover:bg-slate-50 transition shadow-sm">
+                                    <Undo className="h-3 w-3 mr-1.5" /> Restore
+                                  </button>
+                                ) : (
+                                  <button onClick={() => setLocalDisputes(prev => ({...prev, [shift.id]: true}))} className="flex items-center text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-3 py-1.5 rounded-md hover:bg-red-100 transition shadow-sm">
+                                    <XCircle className="h-3 w-3 mr-1.5" /> Dispute
+                                  </button>
+                                )}
                               </div>
                             </div>
-                            <div className="flex items-center space-x-6">
-                              <div className={`text-lg font-black ${isDisputed ? 'text-red-400 line-through' : 'text-slate-800'}`}>
-                                ${cost.toFixed(2)}
-                              </div>
-                              {isDisputed ? (
-                                <button onClick={() => setLocalDisputes(prev => ({...prev, [shift.id]: false}))} className="flex items-center text-xs font-bold text-slate-600 bg-white border border-slate-300 px-3 py-1.5 rounded-md hover:bg-slate-50 transition shadow-sm">
-                                  <Undo className="h-3 w-3 mr-1.5" /> Restore
-                                </button>
-                              ) : (
-                                <button onClick={() => setLocalDisputes(prev => ({...prev, [shift.id]: true}))} className="flex items-center text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-3 py-1.5 rounded-md hover:bg-red-100 transition shadow-sm">
-                                  <XCircle className="h-3 w-3 mr-1.5" /> Dispute
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  )
                 )}
 
                 {/* 2. MILEAGE TAB */}
-                {activeTab === 'mileage' && (
+                {activeTab === 'mileage' && !isSalaried && (
                   <div className="space-y-3">
                     {empMileage.length === 0 ? (
                       <p className="text-slate-500 text-center py-8">No mileage logs found for this pay period.</p>
@@ -501,7 +544,7 @@ export default function ExpenseManager({
                 )}
 
                 {/* 3. PURCHASES TAB */}
-                {activeTab === 'oop' && (
+                {activeTab === 'oop' && !isSalaried && (
                   <div className="space-y-3">
                     {empOOP.length === 0 ? (
                       <p className="text-slate-500 text-center py-8">No client purchases found for this pay period.</p>

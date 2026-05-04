@@ -5,7 +5,8 @@ import { getPastPayPeriods, parseLocal } from '../utils';
 export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], clients = [], payPeriodStart, isBonusActive, bonusSettings }) {
   const kmRate = 0.68;
   
-  const safeEmps = Array.isArray(employees) ? employees : [];
+  // --- UPDATED: GHOST THE MASTER ADMIN FROM FINANCIALS ---
+  const safeEmps = Array.isArray(employees) ? employees.filter(e => e && e.role !== 'Master Admin') : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeExp = Array.isArray(expenses) ? expenses : [];
   const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
@@ -158,7 +159,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd, isBonusActive, safeBonusSettings]);
 
   // --- PERFECTED FINANCIAL WIDGET CALCULATIONS ---
-  // (Moved up so the CSV Exporter can read them)
   const totalPayrollLiability = employeeEarnings.reduce((sum, emp) => sum + emp.totalEarnings, 0);
 
   const salariedEmployees = employeeEarnings.filter(e => e.payType === 'salary');
@@ -179,11 +179,10 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const totalUsedExpense = employeeEarnings.reduce((sum, emp) => sum + emp.kmEarnings + emp.clientExpenseEarnings, 0);
   const expensePercent = maxExpenseLiability > 0 ? Math.min((totalUsedExpense / maxExpenseLiability) * 100, 100) : 0;
 
-  // --- NEW: 2-PART NATIVE CSV EXPORT LOGIC ---
+  // --- 2-PART NATIVE CSV EXPORT LOGIC ---
   const exportToCSV = () => {
     const payPeriodDisplay = `${currentPeriodStart.toLocaleDateString('en-US')} to ${currentPeriodEnd.toLocaleDateString('en-US')}`;
     
-    // 1. Executive Summary Section
     const summaryRows = [
       ['EXECUTIVE SUMMARY'],
       ['Pay Period', `"${payPeriodDisplay}"`],
@@ -191,11 +190,10 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       ['Wage & Bonus Cost', `"$${(totalWageCost + totalBonuses).toFixed(2)}"`],
       ['Salary Cost', `"$${totalSalaryCost.toFixed(2)}"`],
       ['Expense Budget Utilized', `"$${totalUsedExpense.toFixed(2)} of $${maxExpenseLiability.toFixed(2)}"`],
-      [], // Blank Spacer Row
+      [], 
       ['LINE-BY-LINE BREAKDOWN']
     ];
 
-    // 2. Table Section
     const tableHeaders = ['Employee', 'Role', 'Base Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)'];
     if (isBonusActive) tableHeaders.push('Bonuses ($)');
     tableHeaders.push('Total Due ($)');

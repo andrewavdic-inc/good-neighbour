@@ -129,13 +129,13 @@ export default function AdminRewardsManager({
     // Only include employees who are NOT excluded
     safeEmployees.forEach(e => { 
       if (!e.excludeFromGala) {
-        scores[e.id] = { emp: e, annualActivityScore: 0 }; 
+        scores[e.id] = { emp: e, baseActivityScore: 0, kudosPts: 0, prizePts: 0, totalGalaScore: 0 }; 
       }
     });
     
     Object.values(scores).forEach(s => {
       const emp = s.emp;
-      let score = 0;
+      let baseScore = 0;
 
       // 1. Shifts & Logs for the entire year
       const empShifts = shifts.filter(sh => {
@@ -145,24 +145,29 @@ export default function AdminRewardsManager({
       });
 
       empShifts.forEach(sh => {
-        score += 100;
+        baseScore += 100;
         const hasMileage = expenses.some(e => e.employeeId === emp.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved');
-        if (hasMileage) score += 50;
+        if (hasMileage) baseScore += 50;
         const hasOop = clientExpenses.some(e => e.employeeId === emp.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved');
-        if (hasOop) score += 50;
+        if (hasOop) baseScore += 50;
       });
+      s.baseActivityScore = baseScore;
 
       // 2. Kudos for the entire year
       const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date).getFullYear() === currentYear);
-      const kPoints = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
+      s.kudosPts = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
       
-      score += kPoints;
-      s.annualActivityScore = score;
+      // 3. Prizes for the entire year
+      const empPrizes = prizes.filter(p => p.employeeId === emp.id && parseLocalSafe(p.date).getFullYear() === currentYear);
+      s.prizePts = empPrizes.length * 50;
+
+      // 4. Calculate Total
+      s.totalGalaScore = s.baseActivityScore + s.kudosPts + s.prizePts;
     });
 
     // Rank everyone eligible, highest score first
-    return Object.values(scores).sort((a, b) => b.annualActivityScore - a.annualActivityScore);
-  }, [safeEmployees, shifts, expenses, clientExpenses, kudos]);
+    return Object.values(scores).sort((a, b) => b.totalGalaScore - a.totalGalaScore);
+  }, [safeEmployees, shifts, expenses, clientExpenses, kudos, prizes]);
 
   // --- HANDLERS ---
   const handleIssueKudos = (e) => {
@@ -251,9 +256,9 @@ export default function AdminRewardsManager({
   };
 
   const exportGalaRoster = () => {
-    const headers = ['Rank', 'Employee', 'Role', 'Total Annual Activity Score'];
+    const headers = ['Rank', 'Employee', 'Role', 'Base Activity Pts', 'Kudos Pts', 'Prize Pts', 'Total Gala Score'];
     const rows = annualGalaStandings.map((r, idx) => [
-      idx + 1, `"${r.emp.name}"`, `"${r.emp.role}"`, r.annualActivityScore
+      idx + 1, `"${r.emp.name}"`, `"${r.emp.role}"`, r.baseActivityScore, r.kudosPts, r.prizePts, r.totalGalaScore
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -334,7 +339,7 @@ export default function AdminRewardsManager({
               <h2 className="text-lg font-bold text-purple-900">Award a Tangible Prize</h2>
             </div>
             <form onSubmit={handleIssuePrize} className="p-6 space-y-4 flex-1">
-              <p className="text-xs text-slate-500 font-medium mb-4">Prizes are displayed in the employee's digital wallet as a token of appreciation.</p>
+              <p className="text-xs text-slate-500 font-medium mb-4">Prizes are displayed in the employee's digital wallet and grant flat 50 Gala points.</p>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Select Employee</label>
                 <select value={prizeEmpId} onChange={(e)=>setPrizeEmpId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm">
@@ -381,7 +386,7 @@ export default function AdminRewardsManager({
           </div>
 
           {/* Recent Activity Feed */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden lg:col-span-2">
             <div className="px-6 py-3 border-b border-slate-200 bg-slate-50">
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Recent Reward Activity</h3>
             </div>
@@ -545,28 +550,39 @@ export default function AdminRewardsManager({
               <h2 className="text-2xl font-black text-amber-400 flex items-center tracking-tight">
                 <Trophy className="h-6 w-6 mr-3 text-amber-400" /> The 'Best Neighbour' Annual Awards
               </h2>
-              <p className="text-amber-200 text-sm font-bold mt-1 tracking-wider uppercase bg-amber-900/30 w-fit px-3 py-1 rounded-full border border-amber-700/50">
-                1st Place: $3000 | 2nd Place: $2000 | 3rd Place: $1000
-              </p>
+              <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                <div className="bg-amber-900/40 border border-amber-500/50 text-amber-200 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-widest text-center shadow-sm whitespace-nowrap">
+                  1st Place: Best Neighbour ($3000)
+                </div>
+                <div className="bg-slate-800/60 border border-slate-500/50 text-slate-300 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-widest text-center shadow-sm whitespace-nowrap">
+                  2nd Place: Great Neighbour ($2000)
+                </div>
+                <div className="bg-amber-900/20 border border-amber-700/30 text-amber-600 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-widest text-center shadow-sm whitespace-nowrap">
+                  3rd Place: Good Neighbour ($1000)
+                </div>
+              </div>
             </div>
             <button onClick={exportGalaRoster} className="flex items-center text-xs font-bold text-slate-900 bg-amber-400 border border-amber-300 px-4 py-2 rounded-md hover:bg-amber-300 transition shadow-[0_0_15px_rgba(251,191,36,0.3)]">
               <Download className="h-4 w-4 mr-2" /> Export Roster CSV
             </button>
           </div>
 
-          <div className="p-0 flex-1 overflow-y-auto relative z-10">
-            <table className="w-full text-left border-collapse">
+          <div className="p-0 overflow-x-auto relative z-10">
+            <table className="w-full text-left border-collapse min-w-[800px]">
               <thead className="bg-slate-800/80 backdrop-blur sticky top-0">
                 <tr className="text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-700">
                   <th className="px-6 py-4 font-bold">Rank</th>
                   <th className="px-6 py-4 font-bold">Employee</th>
                   <th className="px-6 py-4 font-bold">Role</th>
-                  <th className="px-6 py-4 font-bold text-right text-amber-400">Total Activity Points</th>
+                  <th className="px-6 py-4 font-bold text-center text-slate-300">Base Activity Pts</th>
+                  <th className="px-6 py-4 font-bold text-center text-blue-400">Kudos Pts</th>
+                  <th className="px-6 py-4 font-bold text-center text-purple-400">Prize Pts</th>
+                  <th className="px-6 py-4 font-bold text-right text-amber-400">Total Gala Score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {annualGalaStandings.length === 0 ? (
-                  <tr><td colSpan="4" className="text-center py-12 text-slate-500">No data available for the current year.</td></tr>
+                  <tr><td colSpan="7" className="text-center py-12 text-slate-500">No data available for the current year.</td></tr>
                 ) : (
                   annualGalaStandings.map((r, idx) => (
                     <tr key={r.emp.id} className="hover:bg-slate-800/50 transition">
@@ -575,7 +591,10 @@ export default function AdminRewardsManager({
                       </td>
                       <td className="px-6 py-4 font-bold text-slate-200">{r.emp.name}</td>
                       <td className="px-6 py-4 text-slate-400 font-medium">{r.emp.role}</td>
-                      <td className="px-6 py-4 text-right font-black text-amber-400 text-lg">{r.annualActivityScore.toLocaleString()} pts</td>
+                      <td className="px-6 py-4 text-center font-medium text-slate-300">{r.baseActivityScore.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-center font-medium text-blue-400">{r.kudosPts.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-center font-medium text-purple-400">{r.prizePts.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-right font-black text-amber-400 text-lg">{r.totalGalaScore.toLocaleString()} pts</td>
                     </tr>
                   ))
                 )}

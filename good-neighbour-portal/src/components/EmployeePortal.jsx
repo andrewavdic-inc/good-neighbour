@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter, Sun, CheckCircle, XCircle, Gift } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter, Sun, CheckCircle, XCircle, Gift, ExternalLink } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
@@ -83,9 +83,9 @@ const getHoliday = (dateStr) => {
   return holidays[String(dateStr)] || null;
 };
 
-// --- UPDATED: CALCULATE EARNINGS WITH KUDOS POINTS ---
+// --- UPDATED: CALCULATE EARNINGS WITH PRIVACY-SAFE "ACTIVITY SCORE" ---
 const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, kudos = []) => {
-  if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, kudosPoints: 0, total: 0 };
+  if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, activityScore: 0, totalEarnings: 0 };
   
   const empShifts = shifts.filter(s => {
     if (!s || s.employeeId !== emp.id || !s.date || !s.endTime) return false;
@@ -94,9 +94,9 @@ const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, ku
     return shiftDate >= start && shiftDate <= end && shiftDate <= new Date();
   });
   
+  // Financial Math (For Live Pay Tracker)
   let shiftEarnings = 0; 
   let totalHours = 0;
-  
   if (emp.payType === 'salary') {
     shiftEarnings = (Number(emp.annualSalary) || 0) / 12; 
   } else if (emp.payType === 'hourly') {
@@ -117,15 +117,38 @@ const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, ku
   const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
   const oop = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   
+  // Activity Score Math (For Global Leaderboard)
+  let activityScore = 0;
+  
+  empShifts.forEach(s => {
+    activityScore += 100; // Base points for working the shift
+    
+    // Check for Mileage
+    const hasMileage = expenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
+    if (hasMileage) activityScore += 50;
+
+    // Check for Client Expense
+    const hasOop = clientExpenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
+    if (hasOop) activityScore += 50;
+  });
+
   const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date) >= start && parseLocalSafe(k.date) <= end);
   const kPoints = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
 
-  const totalScore = shiftEarnings + kmEarnings + oop + kPoints;
+  activityScore += kPoints;
 
-  return { shiftCount: empShifts.length, totalHours, shiftEarnings, kmEarnings, oop, kudosPoints: kPoints, total: totalScore };
+  return { 
+    shiftCount: empShifts.length, 
+    totalHours, 
+    shiftEarnings, 
+    kmEarnings, 
+    oop, 
+    activityScore,
+    totalEarnings: shiftEarnings + kmEarnings + oop 
+  };
 };
 
-// --- UPDATED: MONTHLY LEADERBOARD CALCULATOR ---
+// --- UPDATED: ALL QUALIFIED RANKINGS ---
 const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees, kudos) => {
   if(!Array.isArray(employees)) return [];
   const start = new Date(year, month, 1); 
@@ -134,7 +157,8 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
     const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses, kudos); 
     return { emp, ...data }; 
   });
-  return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total).slice(0, 3);
+  // Return ALL employees with >= 10 shifts, sorted by Activity Score
+  return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.activityScore - a.activityScore);
 };
 
 // ==========================================
@@ -144,6 +168,7 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
 // --- DAZZLING AWARDS LEADERBOARD ---
 export function AwardsLeaderboard({ currentUser, employees, shifts, expenses, clientExpenses, kudos = [], prizes = [], isBonusActive, bonusSettings }) {
   const now = new Date();
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   
   // Exclude master admin from competing
@@ -152,42 +177,61 @@ export function AwardsLeaderboard({ currentUser, employees, shifts, expenses, cl
     return employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin');
   }, [employees]);
 
-  const currentLeaderboard = useMemo(() => getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, safeEmployees, kudos), [shifts, expenses, clientExpenses, safeEmployees, kudos, now]);
+  // Qualification Countdown Logic
+  const currentMonthShifts = useMemo(() => {
+    return shifts.filter(s => {
+      if (s.employeeId !== currentUser.id || !s.date || !s.endTime) return false;
+      const d = parseLocalSafe(s.date);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+  }, [shifts, currentUser.id, now]);
+  
+  const shiftProgress = Math.min(currentMonthShifts.length, 10);
+  const progressPercent = (shiftProgress / 10) * 100;
+  const isQualified = shiftProgress >= 10;
+
+  const fullLeaderboard = useMemo(() => getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, safeEmployees, kudos), [shifts, expenses, clientExpenses, safeEmployees, kudos, now]);
   
   const myPrizes = useMemo(() => {
     return prizes.filter(p => p.employeeId === currentUser.id).sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [prizes, currentUser.id]);
 
+  const myKudos = useMemo(() => {
+    return kudos.filter(k => k.employeeId === currentUser.id).sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [kudos, currentUser.id]);
+
   const annualStandings = useMemo(() => {
     if(safeEmployees.length === 0) return []; 
     const scores = {}; 
     safeEmployees.forEach(e => { 
-      if(e && e.id) scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, kudosTotal: 0, prizesTotal: 0, galaScore: 0 }; 
+      if(e && e.id) scores[e.id] = { emp: e, monthsWon: [], trophyPts: 0, kudosPts: 0, prizePts: 0, galaScore: 0 }; 
     });
     
     // Calculate historical months for trophies
     for (let m = 0; m <= 11; m++) {
       const lb = getMonthlyLeaderboard(now.getFullYear(), m, shifts, expenses, clientExpenses, safeEmployees, kudos);
-      if (lb[0] && scores[lb[0].emp.id]) { scores[lb[0].emp.id].gold++; scores[lb[0].emp.id].galaScore += 300; }
-      if (lb[1] && scores[lb[1].emp.id]) { scores[lb[1].emp.id].silver++; scores[lb[1].emp.id].galaScore += 200; }
-      if (lb[2] && scores[lb[2].emp.id]) { scores[lb[2].emp.id].bronze++; scores[lb[2].emp.id].galaScore += 100; }
+      if (lb[0] && scores[lb[0].emp.id]) { scores[lb[0].emp.id].trophyPts += 300; scores[lb[0].emp.id].monthsWon.push(monthNames[m]); }
+      if (lb[1] && scores[lb[1].emp.id]) { scores[lb[1].emp.id].trophyPts += 200; scores[lb[1].emp.id].monthsWon.push(monthNames[m]); }
+      if (lb[2] && scores[lb[2].emp.id]) { scores[lb[2].emp.id].trophyPts += 100; scores[lb[2].emp.id].monthsWon.push(monthNames[m]); }
     }
 
     // Add Kudos and Prizes to Gala Score
     kudos.forEach(k => {
       const d = parseLocalSafe(k.date);
       if (d.getFullYear() === now.getFullYear() && scores[k.employeeId]) {
-        scores[k.employeeId].kudosTotal++;
-        scores[k.employeeId].galaScore += Number(k.points || 0);
+        scores[k.employeeId].kudosPts += Number(k.points || 0);
       }
     });
 
     prizes.forEach(p => {
       const d = parseLocalSafe(p.date);
       if (d.getFullYear() === now.getFullYear() && scores[p.employeeId]) {
-        scores[p.employeeId].prizesTotal++;
-        scores[p.employeeId].galaScore += 50;
+        scores[p.employeeId].prizePts += 50;
       }
+    });
+
+    Object.values(scores).forEach(s => {
+      s.galaScore = s.trophyPts + s.kudosPts + s.prizePts;
     });
 
     // Only show people who actually have a score, OR the current user so they can see their rank
@@ -202,77 +246,175 @@ export function AwardsLeaderboard({ currentUser, employees, shifts, expenses, cl
     </div>
   );
 
+  const topThree = fullLeaderboard.slice(0, 3);
+  const globalRankings = fullLeaderboard.slice(3);
+  
   const badgeIcons = [<Trophy className="h-10 w-10 mb-3" />, <Medal className="h-10 w-10 mb-3" />, <Award className="h-10 w-10 mb-3" />];
   const colors = ["bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 border-yellow-400", "bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 border-slate-400", "bg-gradient-to-br from-amber-600 to-orange-800 text-white border-amber-700"];
 
   return (
     <div className="space-y-8">
       
-      {/* 1. THE MONTHLY PODIUM */}
+      {/* 1. QUALIFICATION COUNTDOWN */}
+      <div className={`bg-white rounded-xl shadow-sm border ${isQualified ? 'border-emerald-300 bg-emerald-50/30' : 'border-slate-200'} p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4`}>
+        <div className="w-full sm:w-1/3 shrink-0">
+           <h3 className="font-bold text-slate-800 flex items-center">
+             {isQualified ? <CheckCircle className="h-5 w-5 mr-2 text-emerald-500"/> : <Clock className="h-5 w-5 mr-2 text-slate-400"/>}
+             Leaderboard Qualification
+           </h3>
+           <p className="text-xs text-slate-500 mt-1">{isQualified ? 'You have qualified for the global rankings!' : 'Complete 10 shifts to enter the global rankings.'}</p>
+        </div>
+        <div className="w-full sm:w-2/3 flex items-center">
+           <div className="flex-1 bg-slate-100 rounded-full h-4 overflow-hidden shadow-inner border border-slate-200">
+             <div className={`h-4 rounded-full transition-all duration-1000 ${isQualified ? 'bg-emerald-500' : 'bg-teal-500'}`} style={{ width: `${progressPercent}%` }}></div>
+           </div>
+           <div className="ml-4 font-black text-slate-700 w-16 text-right">{shiftProgress} / 10</div>
+        </div>
+      </div>
+
+      {/* 2. THE MONTHLY PODIUM & RANKINGS */}
       <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>
         <h2 className="text-2xl font-black mb-2 relative z-10 flex items-center tracking-tight">
           <Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> {String(now.toLocaleString('default', { month: 'long' }))} Leaderboard
         </h2>
-        <p className="text-teal-100 mb-6 relative z-10 text-sm font-medium">Top 3 earners with 10+ shifts qualify for monthly cash bonuses! Kudos points are active.</p>
+        <p className="text-teal-100 mb-6 relative z-10 text-sm font-medium">Activity Scores determine rankings. 100pts per shift. 50pts per mileage/expense log.</p>
         
-        {currentLeaderboard.length === 0 ? (
+        {fullLeaderboard.length === 0 ? (
            <div className="relative z-10 bg-black/10 rounded-xl p-8 text-center border border-white/10">
              <p className="font-semibold text-teal-50">No one has qualified for the leaderboard yet this month.</p>
-             <p className="text-xs text-teal-200 mt-2">Complete 10 shifts to enter the rankings!</p>
+             <p className="text-xs text-teal-200 mt-2">Check back soon!</p>
            </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
-            {currentLeaderboard.map((winner, index) => (
-              <div key={winner.emp.id} className={`${colors[index]} rounded-xl p-4 shadow-md flex flex-col items-center text-center transform hover:-translate-y-1 transition duration-300 relative overflow-hidden`}>
-                {winner.emp.id === currentUser.id && (
-                  <div className="absolute top-0 w-full bg-black/20 text-white text-[10px] font-black uppercase tracking-widest py-1">You</div>
-                )}
-                <div className={winner.emp.id === currentUser.id ? 'mt-4' : ''}>{badgeIcons[index]}</div>
-                <div className="font-black text-lg leading-tight">{String(winner.emp.name || 'Unknown')}</div>
-                <div className="text-xs font-bold opacity-80 mb-1">{index + 1}{index===0?'st':index===1?'nd':'rd'} Place</div>
-                <div className="text-sm bg-white/30 px-3 py-1 rounded mb-4 font-bold border border-white/20 shadow-inner">
-                  {winner.total.toFixed(2)} pts
+          <div className="space-y-6 relative z-10">
+            {/* The Podium */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {topThree.map((winner, index) => (
+                <div key={winner.emp.id} className={`${colors[index]} rounded-xl p-4 shadow-md flex flex-col items-center text-center transform hover:-translate-y-1 transition duration-300 relative overflow-hidden`}>
+                  {winner.emp.id === currentUser.id && (
+                    <div className="absolute top-0 w-full bg-black/20 text-white text-[10px] font-black uppercase tracking-widest py-1">You</div>
+                  )}
+                  <div className={winner.emp.id === currentUser.id ? 'mt-4' : ''}>{badgeIcons[index]}</div>
+                  <div className="font-black text-lg leading-tight">{String(winner.emp.name || 'Unknown')}</div>
+                  <div className="text-xs font-bold opacity-80 mb-1">{index + 1}{index===0?'st':index===1?'nd':'rd'} Place</div>
+                  <div className="text-sm bg-white/30 px-3 py-1 rounded mb-4 font-bold border border-white/20 shadow-inner">
+                    {winner.activityScore} pts
+                  </div>
+                  <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm flex items-center border border-black/10">
+                    +${Number(safeBonusSettings.monthly[index] || 0).toFixed(0)} Bonus
+                  </div>
                 </div>
-                <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm flex items-center border border-black/10">
-                  +${Number(safeBonusSettings.monthly[index] || 0).toFixed(0)} Bonus
+              ))}
+            </div>
+
+            {/* Global Rankings */}
+            {globalRankings.length > 0 && (
+              <div className="mt-6 bg-black/20 rounded-xl border border-white/10 p-4 backdrop-blur-sm">
+                <h3 className="text-xs font-bold text-teal-200 uppercase tracking-widest mb-3 pl-2 border-b border-white/10 pb-2">Global Rankings</h3>
+                <div className="space-y-2">
+                  {globalRankings.map((ranked, idx) => (
+                    <div key={ranked.emp.id} className={`flex items-center justify-between p-3 rounded-lg ${ranked.emp.id === currentUser.id ? 'bg-teal-500/40 border border-teal-300/50' : 'bg-black/10 border border-transparent'}`}>
+                       <div className="flex items-center">
+                         <div className="w-8 text-center font-bold text-teal-100">{idx + 4}</div>
+                         <div className="font-semibold text-white ml-2">{ranked.emp.name} {ranked.emp.id === currentUser.id && <span className="text-[10px] uppercase tracking-wider bg-white text-teal-800 px-1.5 py-0.5 rounded ml-2">You</span>}</div>
+                       </div>
+                       <div className="font-bold text-teal-50 bg-black/20 px-3 py-1 rounded-full text-sm">
+                         {ranked.activityScore} pts
+                       </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
 
-      {/* 2. THE PRIZE WALLET */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-lg font-bold text-slate-800 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-600" /> My Prize Wallet</h2>
-          <p className="text-xs text-slate-500 mt-1 font-medium">Digital records of physical rewards or gift cards issued to you.</p>
-        </div>
-        <div className="p-6 bg-slate-50/50">
-          {myPrizes.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">
-              No prizes awarded yet. Keep up the great work!
+      {/* 3. PRIZES & KUDOS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Prize Wallet */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-600" /> Prize Wallet</h2>
+              <p className="text-xs text-slate-500 mt-1 font-medium">Digital gift cards & rewards.</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {myPrizes.map(p => (
-                <div key={p.id} className="bg-gradient-to-br from-purple-700 to-indigo-900 rounded-xl p-5 shadow-md text-white relative overflow-hidden transform hover:scale-[1.02] transition">
-                   <div className="absolute top-0 right-0 -mt-2 -mr-2 opacity-10"><Gift size={100} /></div>
-                   <div className="relative z-10">
-                     <div className="text-xs font-bold text-purple-200 mb-1 uppercase tracking-wider">{p.date}</div>
-                     <div className="text-xl font-black mb-1 leading-tight">{p.name}</div>
-                     {p.value > 0 && <div className="text-2xl font-bold mb-4 text-emerald-300">${Number(p.value).toFixed(2)}</div>}
-                     {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner">"{p.note}"</div>}
-                   </div>
-                </div>
-              ))}
+            <div className="bg-purple-100 text-purple-800 font-bold px-3 py-1 rounded-full text-xs">
+              {myPrizes.length} Items
             </div>
-          )}
+          </div>
+          <div className="p-6 bg-slate-50/50 flex-1 overflow-y-auto max-h-[400px]">
+            {myPrizes.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">
+                No prizes awarded yet. Keep up the great work!
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {myPrizes.map(p => (
+                  <div key={p.id} className="bg-gradient-to-br from-purple-700 to-indigo-900 rounded-xl p-5 shadow-md text-white relative overflow-hidden">
+                     <div className="absolute top-0 right-0 -mt-2 -mr-2 opacity-10"><Gift size={100} /></div>
+                     <div className="relative z-10">
+                       <div className="text-xs font-bold text-purple-200 mb-1 uppercase tracking-wider flex justify-between">
+                         <span>{p.date}</span>
+                         {p.value > 0 && <span className="text-emerald-300 font-black">${Number(p.value).toFixed(2)}</span>}
+                       </div>
+                       <div className="text-xl font-black mb-2 leading-tight">{p.name}</div>
+                       {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner mb-3">"{p.note}"</div>}
+                       
+                       {/* Prize Links / Codes */}
+                       {p.code && <div className="text-sm font-mono bg-black/40 px-3 py-1.5 rounded mt-2 text-center border border-white/20 font-bold tracking-wider">Code: {p.code}</div>}
+                       {p.link && <a href={p.link} target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center justify-center w-full bg-white text-purple-900 font-bold py-2 rounded text-sm hover:bg-slate-100 transition shadow-sm"><ExternalLink className="h-4 w-4 mr-1.5"/> Redeem Prize</a>}
+                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Kudos Showcase */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800 flex items-center"><Award className="h-5 w-5 mr-2 text-amber-500" /> My Badges & Kudos</h2>
+              <p className="text-xs text-slate-500 mt-1 font-medium">Recognition from administration.</p>
+            </div>
+            <div className="bg-amber-100 text-amber-800 font-bold px-3 py-1 rounded-full text-xs">
+              {myKudos.length} Badges
+            </div>
+          </div>
+          <div className="p-6 bg-slate-50/50 flex-1 overflow-y-auto max-h-[400px]">
+            {myKudos.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">
+                No badges earned yet. 
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {myKudos.map(k => (
+                  <div key={k.id} className="bg-white border border-amber-200 rounded-xl p-4 shadow-sm flex items-start space-x-4 relative overflow-hidden group">
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-400"></div>
+                    <div className="text-4xl bg-amber-50 h-14 w-14 rounded-full flex items-center justify-center shrink-0 border border-amber-100 shadow-inner">
+                      {k.badgeIcon}
+                    </div>
+                    <div className="flex-1 pr-12">
+                      <div className="font-bold text-slate-800">{k.badgeLabel}</div>
+                      <div className="text-xs text-slate-500 mb-2">{k.date}</div>
+                      <div className="text-sm text-slate-700 italic bg-slate-50 p-2 rounded border border-slate-100">"{k.message}"</div>
+                    </div>
+                    <div className="absolute top-4 right-4 bg-amber-100 text-amber-800 font-black px-2 py-1 rounded shadow-sm text-xs">
+                      +{k.points} pts
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
 
-      {/* 3. RACE TO THE GALA */}
+      {/* 4. RACE TO THE GALA */}
       <div className="bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden relative mt-8">
         <div className="absolute top-0 right-0 opacity-5 pointer-events-none"><Star size={300} /></div>
         <div className="px-6 py-6 border-b border-slate-800 bg-slate-900/80 relative z-10 backdrop-blur-sm">
@@ -282,22 +424,21 @@ export function AwardsLeaderboard({ currentUser, employees, shifts, expenses, cl
           <p className="text-slate-400 text-xs font-medium mt-2 tracking-wider uppercase">Annual Leaderboard & VIP Standings</p>
         </div>
         <div className="p-0 overflow-x-auto relative z-10">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead className="bg-slate-800/80 backdrop-blur sticky top-0">
               <tr className="text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-700">
                 <th className="px-6 py-4 font-bold">Rank</th>
                 <th className="px-6 py-4 font-bold">VIP Employee</th>
-                <th className="px-6 py-4 font-bold text-center text-yellow-500">Gold (300)</th>
-                <th className="px-6 py-4 font-bold text-center text-slate-300">Silver (200)</th>
-                <th className="px-6 py-4 font-bold text-center text-amber-600">Bronze (100)</th>
-                <th className="px-6 py-4 font-bold text-center text-blue-400">Total Kudos</th>
-                <th className="px-6 py-4 font-bold text-center text-purple-400">Prizes (50)</th>
-                <th className="px-6 py-4 font-bold text-right text-amber-400">Gala Score</th>
+                <th className="px-6 py-4 font-bold">Months Won</th>
+                <th className="px-6 py-4 font-bold text-center text-yellow-500">Trophy Pts (300)</th>
+                <th className="px-6 py-4 font-bold text-center text-blue-400">Kudos Pts (100)</th>
+                <th className="px-6 py-4 font-bold text-center text-purple-400">Prize Pts (50)</th>
+                <th className="px-6 py-4 font-bold text-right text-amber-400">Total Score</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
                {annualStandings.length === 0 ? (
-                 <tr><td colSpan="8" className="text-center py-10 text-slate-500">No gala data available yet.</td></tr>
+                 <tr><td colSpan="7" className="text-center py-10 text-slate-500">No gala data available yet.</td></tr>
                ) : (
                  annualStandings.map((s, idx) => (
                     <tr key={s.emp.id} className={`transition ${s.emp.id === currentUser.id ? 'bg-amber-900/40 border-l-4 border-amber-500' : 'hover:bg-slate-800/50 border-l-4 border-transparent'}`}>
@@ -308,11 +449,12 @@ export function AwardsLeaderboard({ currentUser, employees, shifts, expenses, cl
                         {s.emp.name} 
                         {s.emp.id === currentUser.id && <span className="ml-3 bg-amber-500 text-slate-900 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-widest font-black shadow-sm">You</span>}
                       </td>
-                      <td className="px-6 py-4 text-center font-bold text-yellow-500">{s.gold}</td>
-                      <td className="px-6 py-4 text-center font-bold text-slate-300">{s.silver}</td>
-                      <td className="px-6 py-4 text-center font-bold text-amber-600">{s.bronze}</td>
-                      <td className="px-6 py-4 text-center font-medium text-blue-400">{s.kudosTotal}</td>
-                      <td className="px-6 py-4 text-center font-medium text-purple-400">{s.prizesTotal}</td>
+                      <td className="px-6 py-4 text-slate-400 text-xs font-medium max-w-[150px] truncate" title={s.monthsWon.join(', ')}>
+                        {s.monthsWon.length > 0 ? s.monthsWon.join(', ') : '-'}
+                      </td>
+                      <td className="px-6 py-4 text-center font-bold text-yellow-500">{s.trophyPts}</td>
+                      <td className="px-6 py-4 text-center font-medium text-blue-400">{s.kudosPts}</td>
+                      <td className="px-6 py-4 text-center font-medium text-purple-400">{s.prizePts}</td>
                       <td className="px-6 py-4 text-right font-black text-amber-400 text-lg">{s.galaScore} pts</td>
                     </tr>
                  ))
@@ -337,6 +479,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
     return shiftEnd <= now && parseLocalSafe(s.date) >= periodBounds.start && parseLocalSafe(s.date) <= periodBounds.end;
   });
 
+  // Pay Tracker only cares about actual money, not activity points.
   let shiftEarnings = 0;
   if (currentUser.payType === 'salary') {
     shiftEarnings = (Number(currentUser.annualSalary) || 0) / 26; // Bi-weekly salary split

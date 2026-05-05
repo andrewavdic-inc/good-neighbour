@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Award, Gift, Trophy, Star, Medal, Download, Plus, Heart, ThumbsUp, Zap, Trash2, CalendarDays, TrendingUp } from 'lucide-react';
+import { Award, Gift, Trophy, Star, Medal, Download, Plus, Heart, ThumbsUp, Zap, Trash2, CalendarDays, TrendingUp, Link as LinkIcon, Hash } from 'lucide-react';
 
 // --- DATE HELPER ---
 const parseLocalSafe = (dateStr) => {
@@ -35,13 +35,15 @@ export default function AdminRewardsManager({
   // --- COMMAND CENTER STATE ---
   const [kudosEmpId, setKudosEmpId] = useState(safeEmployees[0]?.id || '');
   const [kudosBadge, setKudosBadge] = useState(STANDARD_BADGES[0].label);
-  const [kudosPoints, setKudosPoints] = useState(1); // Set default to 1 point
+  const [kudosPoints, setKudosPoints] = useState(100); 
   const [kudosMessage, setKudosMessage] = useState('');
 
   const [prizeEmpId, setPrizeEmpId] = useState(safeEmployees[0]?.id || '');
   const [prizeName, setPrizeName] = useState('');
   const [prizeValue, setPrizeValue] = useState('');
   const [prizeNote, setPrizeNote] = useState('');
+  const [prizeCode, setPrizeCode] = useState('');
+  const [prizeLink, setPrizeLink] = useState('');
 
   // --- MONTHLY BATTLEFIELD STATE ---
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -61,7 +63,7 @@ export default function AdminRewardsManager({
     return opts;
   }, []);
 
-  // --- MATH ENGINE: SPECIFIC MONTH LEADERBOARD ---
+  // --- MATH ENGINE: PRIVACY-SAFE "ACTIVITY SCORE" ---
   const getLeaderboardForMonth = (yearStr, monthStr) => {
     const targetYear = parseInt(yearStr, 10);
     const targetMonth = parseInt(monthStr, 10) - 1;
@@ -76,47 +78,38 @@ export default function AdminRewardsManager({
         return shiftDate >= start && shiftDate <= end;
       });
 
-      // 2. Base Earnings
-      let sEarn = 0;
-      if (emp.payType === 'salary') {
-         sEarn = (Number(emp.annualSalary) || 0) / 12; 
-      } else if (emp.payType === 'hourly') {
-        let hrs = 0;
-        empShifts.forEach(s => {
-          const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
-          const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
-          let h = (eH + eM/60) - (sH + sM/60);
-          if (h < 0) h += 24;
-          hrs += h;
-        });
-        sEarn = hrs * (Number(emp.hourlyWage) || 22.5);
-      } else {
-        sEarn = empShifts.length * (Number(emp.perVisitRate) || 45);
-      }
-      
-      const kmE = expenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
-      const oopE = clientExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + Number(e.amount), 0);
-      
+      // 2. Activity Score Calculation
+      let activityScore = 0;
+
+      empShifts.forEach(s => {
+        activityScore += 100; // Base points for shift
+        
+        // Mileage bonus
+        const hasMileage = expenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
+        if (hasMileage) activityScore += 50;
+
+        // Client Expense bonus
+        const hasOop = clientExpenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
+        if (hasOop) activityScore += 50;
+      });
+
       // 3. Kudos Points
       const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date) >= start && parseLocalSafe(k.date) <= end);
       const kPoints = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
 
-      // Score = Earnings + Points
-      const baseEarnings = sEarn + kmE + oopE;
-      const totalScore = baseEarnings + kPoints;
+      activityScore += kPoints;
 
       return { 
         emp, 
         shiftCount: empShifts.length, 
-        baseEarnings, 
         kudosPoints: kPoints, 
-        totalScore 
+        activityScore 
       };
     });
 
-    // Rank them
-    const eligible = results.filter(r => r.shiftCount >= 10).sort((a, b) => b.totalScore - a.totalScore);
-    const ineligible = results.filter(r => r.shiftCount < 10).sort((a, b) => b.totalScore - a.totalScore);
+    // Rank them by Activity Score
+    const eligible = results.filter(r => r.shiftCount >= 10).sort((a, b) => b.activityScore - a.activityScore);
+    const ineligible = results.filter(r => r.shiftCount < 10).sort((a, b) => b.activityScore - a.activityScore);
     
     return { eligible, ineligible };
   };
@@ -128,26 +121,26 @@ export default function AdminRewardsManager({
 
   // --- MATH ENGINE: RACE TO THE GALA (ANNUAL) ---
   const annualGalaStandings = useMemo(() => {
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const currentYear = new Date().getFullYear();
     const scores = {}; 
     safeEmployees.forEach(e => { 
-      scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, kudosTotal: 0, prizesTotal: 0, galaScore: 0 }; 
+      scores[e.id] = { emp: e, monthsWon: [], trophyPts: 0, kudosPts: 0, prizePts: 0, galaScore: 0 }; 
     });
     
     // Tally Monthly Trophies
-    for (let m = 1; m <= 12; m++) {
-      const lb = getLeaderboardForMonth(currentYear.toString(), m.toString().padStart(2, '0'));
-      if (lb.eligible[0] && scores[lb.eligible[0].emp.id]) { scores[lb.eligible[0].emp.id].gold++; scores[lb.eligible[0].emp.id].galaScore += 300; }
-      if (lb.eligible[1] && scores[lb.eligible[1].emp.id]) { scores[lb.eligible[1].emp.id].silver++; scores[lb.eligible[1].emp.id].galaScore += 200; }
-      if (lb.eligible[2] && scores[lb.eligible[2].emp.id]) { scores[lb.eligible[2].emp.id].bronze++; scores[lb.eligible[2].emp.id].galaScore += 100; }
+    for (let m = 0; m <= 11; m++) {
+      const lb = getLeaderboardForMonth(currentYear.toString(), String(m + 1).padStart(2, '0'));
+      if (lb.eligible[0] && scores[lb.eligible[0].emp.id]) { scores[lb.eligible[0].emp.id].trophyPts += 300; scores[lb.eligible[0].emp.id].monthsWon.push(monthNames[m]); }
+      if (lb.eligible[1] && scores[lb.eligible[1].emp.id]) { scores[lb.eligible[1].emp.id].trophyPts += 200; scores[lb.eligible[1].emp.id].monthsWon.push(monthNames[m]); }
+      if (lb.eligible[2] && scores[lb.eligible[2].emp.id]) { scores[lb.eligible[2].emp.id].trophyPts += 100; scores[lb.eligible[2].emp.id].monthsWon.push(monthNames[m]); }
     }
 
     // Tally Kudos
     kudos.forEach(k => {
       const d = parseLocalSafe(k.date);
       if (d.getFullYear() === currentYear && scores[k.employeeId]) {
-        scores[k.employeeId].kudosTotal++;
-        scores[k.employeeId].galaScore += Number(k.points || 0);
+        scores[k.employeeId].kudosPts += Number(k.points || 0);
       }
     });
 
@@ -155,12 +148,16 @@ export default function AdminRewardsManager({
     prizes.forEach(p => {
       const d = parseLocalSafe(p.date);
       if (d.getFullYear() === currentYear && scores[p.employeeId]) {
-        scores[p.employeeId].prizesTotal++;
-        scores[p.employeeId].galaScore += 50; // Flat 50 gala points per physical prize won
+        scores[p.employeeId].prizePts += 50; // Flat 50 gala points per physical prize won
       }
     });
 
-    return Object.values(scores).sort((a, b) => b.galaScore - a.galaScore);
+    Object.values(scores).forEach(s => {
+      s.galaScore = s.trophyPts + s.kudosPts + s.prizePts;
+    });
+
+    // Filter out 0 scores
+    return Object.values(scores).filter(s => s.galaScore > 0).sort((a, b) => b.galaScore - a.galaScore);
   }, [safeEmployees, shifts, expenses, clientExpenses, kudos, prizes]);
 
   // --- HANDLERS ---
@@ -177,7 +174,7 @@ export default function AdminRewardsManager({
       message: kudosMessage
     });
     setKudosMessage('');
-    setKudosPoints(1); // Reset to 1 after issuance
+    setKudosPoints(100); 
   };
 
   const handleIssuePrize = (e) => {
@@ -188,16 +185,20 @@ export default function AdminRewardsManager({
       date: new Date().toISOString().split('T')[0],
       name: prizeName,
       value: Number(prizeValue || 0),
-      note: prizeNote
+      note: prizeNote,
+      code: prizeCode,
+      link: prizeLink
     });
     setPrizeName('');
     setPrizeValue('');
     setPrizeNote('');
+    setPrizeCode('');
+    setPrizeLink('');
   };
 
   // --- CSV EXPORTERS ---
   const exportMonthlyPayout = () => {
-    const headers = ['Rank', 'Employee', 'Role', 'Completed Shifts', 'Base Earnings ($)', 'Kudos Points', 'Total Score', 'Projected Bonus ($)'];
+    const headers = ['Rank', 'Employee', 'Role', 'Completed Shifts', 'Activity Score (pts)', 'Projected Bonus ($)'];
     let rows = [];
 
     activeLeaderboard.eligible.forEach((r, idx) => {
@@ -209,17 +210,17 @@ export default function AdminRewardsManager({
       }
       rows.push([
         idx + 1, `"${r.emp.name}"`, `"${r.emp.role}"`, r.shiftCount, 
-        r.baseEarnings.toFixed(2), r.kudosPoints, r.totalScore.toFixed(2), bonus.toFixed(2)
+        r.activityScore, bonus.toFixed(2)
       ]);
     });
 
-    rows.push(['', '', '', '', '', '', '', '']);
-    rows.push(['INELIGIBLE (Under 10 Shifts)', '', '', '', '', '', '', '']);
+    rows.push(['', '', '', '', '', '']);
+    rows.push(['INELIGIBLE (Under 10 Shifts)', '', '', '', '', '']);
     
     activeLeaderboard.ineligible.forEach(r => {
       rows.push([
         'N/A', `"${r.emp.name}"`, `"${r.emp.role}"`, r.shiftCount, 
-        r.baseEarnings.toFixed(2), r.kudosPoints, r.totalScore.toFixed(2), '0.00'
+        r.activityScore, '0.00'
       ]);
     });
 
@@ -235,10 +236,10 @@ export default function AdminRewardsManager({
   };
 
   const exportGalaRoster = () => {
-    const headers = ['Rank', 'Employee', 'Role', 'Gold Trophies', 'Silver Trophies', 'Bronze Trophies', 'Kudos Received', 'Prizes Won', 'Total Gala Score'];
+    const headers = ['Rank', 'Employee', 'Role', 'Months Won', 'Trophy Pts (300)', 'Kudos Pts (100)', 'Prize Pts (50)', 'Total Gala Score'];
     const rows = annualGalaStandings.map((r, idx) => [
-      idx + 1, `"${r.emp.name}"`, `"${r.emp.role}"`, 
-      r.gold, r.silver, r.bronze, r.kudosTotal, r.prizesTotal, r.galaScore
+      idx + 1, `"${r.emp.name}"`, `"${r.emp.role}"`, `"${r.monthsWon.join(', ')}"`,
+      r.trophyPts, r.kudosPts, r.prizePts, r.galaScore
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -281,7 +282,7 @@ export default function AdminRewardsManager({
               <h2 className="text-lg font-bold text-amber-900">Issue Kudos & Points</h2>
             </div>
             <form onSubmit={handleIssueKudos} className="p-6 space-y-4 flex-1">
-              <p className="text-xs text-slate-500 font-medium mb-4">Kudos instantly boost an employee's leaderboard score for the current month.</p>
+              <p className="text-xs text-slate-500 font-medium mb-4">Kudos instantly boost an employee's Activity Score and Gala Standings.</p>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Select Employee</label>
                 <select value={kudosEmpId} onChange={(e)=>setKudosEmpId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm">
@@ -297,9 +298,9 @@ export default function AdminRewardsManager({
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1 flex justify-between">
-                    Bonus Points <span className="text-slate-400 font-normal ml-2">Max 3 points</span>
+                    Bonus Points <span className="text-slate-400 font-normal ml-2">Increments of 100</span>
                   </label>
-                  <input type="number" min="1" max="3" value={kudosPoints} onChange={(e)=>setKudosPoints(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm font-black text-amber-600" required />
+                  <input type="number" min="0" step="100" value={kudosPoints} onChange={(e)=>setKudosPoints(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm font-black text-amber-600" required />
                 </div>
               </div>
               <div>
@@ -319,7 +320,7 @@ export default function AdminRewardsManager({
               <h2 className="text-lg font-bold text-purple-900">Award a Tangible Prize</h2>
             </div>
             <form onSubmit={handleIssuePrize} className="p-6 space-y-4 flex-1">
-              <p className="text-xs text-slate-500 font-medium mb-4">Prizes are displayed in the employee's digital wallet and grant flat Gala points.</p>
+              <p className="text-xs text-slate-500 font-medium mb-4">Prizes populate in the employee's wallet and grant flat 50 Gala points.</p>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Select Employee</label>
                 <select value={prizeEmpId} onChange={(e)=>setPrizeEmpId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm">
@@ -336,12 +337,25 @@ export default function AdminRewardsManager({
                   <input type="number" min="0" step="0.01" value={prizeValue} onChange={(e)=>setPrizeValue(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm font-black text-purple-600" />
                 </div>
               </div>
+              
+              {/* DIGITAL DELIVERY FIELDS */}
+              <div className="grid grid-cols-2 gap-4 bg-purple-50/50 p-3 rounded-lg border border-purple-100">
+                <div>
+                  <label className="block text-xs font-bold text-purple-800 mb-1 flex items-center"><Hash className="h-3 w-3 mr-1"/> Promo Code</label>
+                  <input type="text" value={prizeCode} onChange={(e)=>setPrizeCode(e.target.value)} className="w-full px-3 py-1.5 border border-purple-200 rounded text-sm focus:ring-purple-500 bg-white" placeholder="Optional" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-purple-800 mb-1 flex items-center"><LinkIcon className="h-3 w-3 mr-1"/> Redemption Link</label>
+                  <input type="url" value={prizeLink} onChange={(e)=>setPrizeLink(e.target.value)} className="w-full px-3 py-1.5 border border-purple-200 rounded text-sm focus:ring-purple-500 bg-white" placeholder="https://" />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1">Private Admin Note</label>
-                <textarea value={prizeNote} onChange={(e)=>setPrizeNote(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm" rows="3" placeholder="e.g. Purchased with corporate card on May 4th" />
+                <textarea value={prizeNote} onChange={(e)=>setPrizeNote(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm" rows="2" placeholder="e.g. Purchased with corporate card" />
               </div>
               <button type="submit" className="w-full mt-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 rounded-md transition flex items-center justify-center shadow-sm">
-                <Gift className="h-4 w-4 mr-2" /> Award Prize
+                <Gift className="h-4 w-4 mr-2" /> Award Prize & Send to Wallet
               </button>
             </form>
           </div>
@@ -418,15 +432,13 @@ export default function AdminRewardsManager({
                   <th className="px-4 py-3 font-bold">Rank</th>
                   <th className="px-4 py-3 font-bold">Employee</th>
                   <th className="px-4 py-3 font-bold text-center">Shifts</th>
-                  <th className="px-4 py-3 font-bold text-right">Base Earnings</th>
-                  <th className="px-4 py-3 font-bold text-right text-amber-600">Kudos Pts</th>
-                  <th className="px-4 py-3 font-bold text-right text-slate-800">Total Score</th>
+                  <th className="px-4 py-3 font-bold text-right text-teal-700">Activity Score</th>
                   <th className="px-4 py-3 font-bold text-right text-emerald-600">Proj. Bonus</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {activeLeaderboard.eligible.length === 0 && activeLeaderboard.ineligible.length === 0 ? (
-                  <tr><td colSpan="7" className="text-center py-8 text-slate-500">No active employees found.</td></tr>
+                  <tr><td colSpan="5" className="text-center py-8 text-slate-500">No active employees found.</td></tr>
                 ) : (
                   <>
                     {activeLeaderboard.eligible.map((r, idx) => {
@@ -446,24 +458,20 @@ export default function AdminRewardsManager({
                           </td>
                           <td className="px-4 py-4 font-bold text-slate-800">{r.emp.name}</td>
                           <td className="px-4 py-4 text-center font-medium text-slate-600">{r.shiftCount}</td>
-                          <td className="px-4 py-4 text-right text-slate-600">${r.baseEarnings.toFixed(2)}</td>
-                          <td className="px-4 py-4 text-right font-black text-amber-500">+{r.kudosPoints}</td>
-                          <td className="px-4 py-4 text-right font-black text-slate-800">{r.totalScore.toFixed(2)}</td>
+                          <td className="px-4 py-4 text-right font-black text-teal-700">{r.activityScore} pts</td>
                           <td className="px-4 py-4 text-right font-black text-emerald-600">{bonus > 0 ? `+$${bonus}` : '-'}</td>
                         </tr>
                       )
                     })}
                     {activeLeaderboard.ineligible.length > 0 && (
-                      <tr><td colSpan="7" className="bg-slate-100 px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Ineligible (Under 10 Shifts)</td></tr>
+                      <tr><td colSpan="5" className="bg-slate-100 px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Ineligible (Under 10 Shifts)</td></tr>
                     )}
                     {activeLeaderboard.ineligible.map(r => (
                       <tr key={r.emp.id} className="opacity-60 bg-slate-50">
                          <td className="px-4 py-3 font-bold text-slate-400 text-xs">N/A</td>
                          <td className="px-4 py-3 font-medium text-slate-700">{r.emp.name}</td>
                          <td className="px-4 py-3 text-center font-medium text-slate-600 text-xs">{r.shiftCount}</td>
-                         <td className="px-4 py-3 text-right text-slate-600 text-xs">${r.baseEarnings.toFixed(2)}</td>
-                         <td className="px-4 py-3 text-right font-bold text-amber-500 text-xs">+{r.kudosPoints}</td>
-                         <td className="px-4 py-3 text-right font-bold text-slate-700 text-xs">{r.totalScore.toFixed(2)}</td>
+                         <td className="px-4 py-3 text-right font-bold text-teal-700 text-xs">{r.activityScore} pts</td>
                          <td className="px-4 py-3 text-right text-slate-400 text-xs">-</td>
                       </tr>
                     ))}
@@ -498,12 +506,11 @@ export default function AdminRewardsManager({
                 <tr className="text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-700">
                   <th className="px-6 py-4 font-bold">Rank</th>
                   <th className="px-6 py-4 font-bold">VIP Employee</th>
-                  <th className="px-6 py-4 font-bold text-center text-yellow-500">Gold (300)</th>
-                  <th className="px-6 py-4 font-bold text-center text-slate-300">Silver (200)</th>
-                  <th className="px-6 py-4 font-bold text-center text-amber-600">Bronze (100)</th>
-                  <th className="px-6 py-4 font-bold text-center text-blue-400">Total Kudos</th>
-                  <th className="px-6 py-4 font-bold text-center text-purple-400">Prizes (50)</th>
-                  <th className="px-6 py-4 font-bold text-right text-amber-400">Gala Score</th>
+                  <th className="px-6 py-4 font-bold">Months Won</th>
+                  <th className="px-6 py-4 font-bold text-center text-yellow-500">Trophy Pts (300)</th>
+                  <th className="px-6 py-4 font-bold text-center text-blue-400">Kudos Pts (100)</th>
+                  <th className="px-6 py-4 font-bold text-center text-purple-400">Prize Pts (50)</th>
+                  <th className="px-6 py-4 font-bold text-right text-amber-400">Total Score</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
@@ -516,11 +523,12 @@ export default function AdminRewardsManager({
                         {idx === 0 ? <span className="text-yellow-400 text-lg">1st</span> : idx === 1 ? <span className="text-slate-300 text-lg">2nd</span> : idx === 2 ? <span className="text-amber-600 text-lg">3rd</span> : `${idx + 1}th`}
                       </td>
                       <td className="px-6 py-4 font-bold text-slate-200">{r.emp.name}</td>
-                      <td className="px-6 py-4 text-center font-bold text-yellow-500">{r.gold}</td>
-                      <td className="px-6 py-4 text-center font-bold text-slate-300">{r.silver}</td>
-                      <td className="px-6 py-4 text-center font-bold text-amber-600">{r.bronze}</td>
-                      <td className="px-6 py-4 text-center font-medium text-blue-400">{r.kudosTotal}</td>
-                      <td className="px-6 py-4 text-center font-medium text-purple-400">{r.prizesTotal}</td>
+                      <td className="px-6 py-4 text-slate-400 text-xs font-medium max-w-[150px] truncate" title={r.monthsWon.join(', ')}>
+                        {r.monthsWon.length > 0 ? r.monthsWon.join(', ') : '-'}
+                      </td>
+                      <td className="px-6 py-4 text-center font-bold text-yellow-500">{r.trophyPts}</td>
+                      <td className="px-6 py-4 text-center font-medium text-blue-400">{r.kudosPts}</td>
+                      <td className="px-6 py-4 text-center font-medium text-purple-400">{r.prizePts}</td>
                       <td className="px-6 py-4 text-right font-black text-amber-400 text-lg">{r.galaScore} pts</td>
                     </tr>
                   ))

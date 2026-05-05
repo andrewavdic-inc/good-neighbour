@@ -198,7 +198,6 @@ function AdminDashboard({
   onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard,
   onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
-  // --- REWARDS PROPS ---
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -456,7 +455,7 @@ function AdminDashboard({
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
       
       // --- NEW REWARDS TAB ---
-      case 'rewards': return <AdminRewardsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} kudos={kudos} prizes={prizes} onAddKudos={onAddKudos} onRemoveKudos={onRemoveKudos} onAddPrize={onAddPrize} onRemovePrize={onRemovePrize} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
+      case 'rewards': return <AdminRewardsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} kudos={kudos} prizes={prizes} onAddKudos={onAddKudos} onRemoveKudos={onRemoveKudos} onAddPrize={onAddPrize} onRemovePrize={onRemovePrize} isBonusActive={isBonusActive} bonusSettings={bonusSettings} updateEmployee={updateEmployee} />;
 
       case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
       case 'schedule':
@@ -1136,7 +1135,14 @@ export default function App() {
             prizes={prizes}
             onAddKudos={(d) => runMutation('gn_kudos', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })}
             onRemoveKudos={(id) => runMutation('gn_kudos', id, 'delete')}
-            onAddPrize={(d) => runMutation('gn_prizes', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })}
+            
+            // --- UPDATED PRIZE MUTATION TO HANDLE UPLOADS ---
+            onAddPrize={async (d, file) => {
+              let url = d.fileUrl || '';
+              if (file) url = await handleFileUpload(file, 'documents'); // Securely upload the prize PDF/Image
+              runMutation('gn_prizes', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
+            }}
+            
             onRemovePrize={(id) => runMutation('gn_prizes', id, 'delete')}
           />
         ) : (

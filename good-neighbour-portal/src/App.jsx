@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File, BookOpen } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File, BookOpen, Award } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -24,6 +24,7 @@ import DocumentManager from './components/DocumentManager';
 import EmployeeDashboard from './components/EmployeePortal'; 
 import ClientProfileModal from './components/ClientProfileModal';
 import AdminDesk from './components/AdminDesk';
+import AdminRewardsManager from './components/AdminRewardsManager';
 
 // --- PHOTO CLEANER ---
 const getValidPhoto = (url) => {
@@ -196,8 +197,9 @@ function AdminDashboard({
   onAddNote, onUpdateNote, onRemoveNote, onAddBusinessExpense, onRemoveBusinessExpense, onAddDrawerFile, onRemoveDrawerFile, onUpdateDeskPicture,
   onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard,
   onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
-  // --- NEW FEED PROPS ---
-  onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture
+  onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
+  // --- REWARDS PROPS ---
+  kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -446,18 +448,16 @@ function AdminDashboard({
       case 'employees': return <EmployeeManager employees={safeEmployees} shifts={safeShifts} payPeriodStart={payPeriodStart} onEmployeeFileUpload={onEmployeeFileUpload} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
       case 'client-funds': return <AdminClientFundsManager clients={safeClients} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} onAddClientExpense={onAddClientExpense} />;      
-      
       case 'expenses': return <ExpenseManager shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} employees={safeEmployees} clients={safeClients} onUpdateExpense={onUpdateExpense} onUpdateClientExpense={onUpdateClientExpense} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
-      
       case 'earnings': return <AdminEarningsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} clients={safeClients} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
-      
       case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={onApproveTimeOff} onReject={onRejectTimeOff} onRemoveTimeOff={onRemoveTimeOffLog} />;
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
-      
-      // --- UPDATED: FEED PROPS PIPED INTO ANNOUNCEMENTS ---
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
       
+      // --- NEW REWARDS TAB ---
+      case 'rewards': return <AdminRewardsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} kudos={kudos} prizes={prizes} onAddKudos={onAddKudos} onRemoveKudos={onRemoveKudos} onAddPrize={onAddPrize} onRemovePrize={onRemovePrize} isBonusActive={isBonusActive} bonusSettings={bonusSettings} />;
+
       case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
       case 'schedule':
       default: return (
@@ -638,7 +638,8 @@ function AdminDashboard({
     {id: 'timeoff', icon: CalendarDays, label: 'Time Off'}, 
     {id: 'paystubs', icon: FileText, label: 'Paystubs'}, 
     {id: 'documents', icon: BookOpen, label: 'Documents'}, 
-    {id: 'announcements', icon: MessageSquare, label: 'Announcements'}
+    {id: 'announcements', icon: MessageSquare, label: 'Announcements'},
+    {id: 'rewards', icon: Award, label: 'Rewards'}
   ];
 
   if (isMasterAdmin) {
@@ -720,13 +721,15 @@ export default function App() {
   const [cabinetDocuments, setCabinetDocuments] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
+  // NEW DATABASES FOR REWARDS
+  const [kudos, setKudos] = useState([]);
+  const [prizes, setPrizes] = useState([]);
+
   // Settings State
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
   const [isBonusActive, setIsBonusActive] = useState(false);
   const [bonusSettings, setBonusSettings] = useState({ monthly: [100, 50, 20], annual: [3000, 2000, 1000] });
   const [officeLocation, setOfficeLocation] = useState('Port Colborne, ON');
-  
-  // --- NEW: ANNOUNCEMENT SETTINGS ---
   const [announcementPictureUrl, setAnnouncementPictureUrl] = useState('');
 
   // Setup Firebase Auth
@@ -764,12 +767,14 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_documents'), snap => setDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
-    // DESK LISTENERS
+    // DESK & REWARDS LISTENERS
     unsubs.push(onSnapshot(getCol('gn_notes'), snap => setNotes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_businessExpenses'), snap => setBusinessExpenses(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_adminDrawer'), snap => setAdminDrawer(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_cabinetDocuments'), snap => setCabinetDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_appointments'), snap => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_kudos'), snap => setKudos(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_prizes'), snap => setPrizes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
 
     unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
       if (snap.exists()) {
@@ -778,8 +783,6 @@ export default function App() {
         if (data.isBonusActive !== undefined) setIsBonusActive(data.isBonusActive);
         if (data.bonusAmounts) setBonusSettings(data.bonusAmounts);
         if (data.officeLocation) setOfficeLocation(data.officeLocation);
-        
-        // --- NEW: SYNC PICTURE STATE ---
         if (data.announcementPictureUrl !== undefined) setAnnouncementPictureUrl(data.announcementPictureUrl);
       }
     }, handleError));
@@ -861,8 +864,6 @@ export default function App() {
     if (field === 'isBonusActive') setIsBonusActive(value);
     if (field === 'bonusAmounts') setBonusSettings(value);
     if (field === 'officeLocation') setOfficeLocation(value);
-    
-    // --- NEW: SYNC PICTURE URL ---
     if (field === 'announcementPictureUrl') setAnnouncementPictureUrl(value);
     
     const payload = { 
@@ -915,7 +916,6 @@ export default function App() {
     runMutation('gn_timeOffLogs', requestId, 'update', { status: 'rejected' });
   };
 
-  // --- NEW FEED ACTION HELPERS ---
   const handleUpdateAnnouncementPicture = async (file) => {
     if (!file) return;
     const url = await handleFileUpload(file, 'documents');
@@ -1042,7 +1042,6 @@ export default function App() {
             documents={documents} 
             messages={messages} 
             
-            // --- UPDATED: FEED ACTIONS ---
             onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
             onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
             onAcknowledgeMessage={handleAcknowledgeMessage}
@@ -1083,7 +1082,6 @@ export default function App() {
             onApproveTimeOff={handleApproveTimeOff}
             onRejectTimeOff={handleRejectTimeOff}
 
-            // --- DESK PROPS ---
             notes={notes}
             businessExpenses={businessExpenses}
             onAddNote={(data) => runMutation('gn_notes', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })}
@@ -1130,10 +1128,16 @@ export default function App() {
             onUpdateAppointment={(id, data) => runMutation('gn_appointments', id, 'update', data)}
             onRemoveAppointment={(id) => runMutation('gn_appointments', id, 'delete')}
             
-            // --- CANCEL SHIFT MUTATIONS ---
             onApproveShiftCancelDelete={(shiftId) => runMutation('gn_shifts', shiftId, 'delete')}
             onApproveShiftCancelOpen={(shiftId) => runMutation('gn_shifts', shiftId, 'update', { employeeId: 'unassigned', cancelRequest: null })}
             onDenyShiftCancel={(shiftId) => runMutation('gn_shifts', shiftId, 'update', { cancelRequest: null })}
+
+            kudos={kudos}
+            prizes={prizes}
+            onAddKudos={(d) => runMutation('gn_kudos', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })}
+            onRemoveKudos={(id) => runMutation('gn_kudos', id, 'delete')}
+            onAddPrize={(d) => runMutation('gn_prizes', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })}
+            onRemovePrize={(id) => runMutation('gn_prizes', id, 'delete')}
           />
         ) : (
           <EmployeeDashboard 
@@ -1154,7 +1158,6 @@ export default function App() {
             messages={messages} 
             documents={documents} 
             
-            // --- UPDATED: FEED ACTIONS ---
             onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
             onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
             onAcknowledgeMessage={handleAcknowledgeMessage}
@@ -1189,7 +1192,6 @@ export default function App() {
               setCurrentUser(prev => ({ ...prev, uploadedFiles: [...currentUploads, newFileRecord] }));
             }}
             onAddTimeOff={(req) => runMutation('gn_timeOffLogs', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
-            // --- CANCEL REQUEST MUTATION ---
             onRequestShiftCancel={(shiftId, reason) => runMutation('gn_shifts', shiftId, 'update', { cancelRequest: { pending: true, reason } })}
           />
         )}

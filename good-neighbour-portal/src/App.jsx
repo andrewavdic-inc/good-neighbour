@@ -1193,6 +1193,9 @@ export default function App() {
             }}
             onAddTimeOff={(req) => runMutation('gn_timeOffLogs', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
             onRequestShiftCancel={(shiftId, reason) => runMutation('gn_shifts', shiftId, 'update', { cancelRequest: { pending: true, reason } })}
+            
+            kudos={kudos}
+            prizes={prizes}
           />
         )}
       </main>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter, Sun, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter, Sun, CheckCircle, XCircle, Gift } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
@@ -83,8 +83,9 @@ const getHoliday = (dateStr) => {
   return holidays[String(dateStr)] || null;
 };
 
-const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses) => {
-  if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, total: 0 };
+// --- UPDATED: CALCULATE EARNINGS WITH KUDOS POINTS ---
+const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, kudos = []) => {
+  if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, kudosPoints: 0, total: 0 };
   
   const empShifts = shifts.filter(s => {
     if (!s || s.employeeId !== emp.id || !s.date || !s.endTime) return false;
@@ -97,7 +98,7 @@ const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses) =>
   let totalHours = 0;
   
   if (emp.payType === 'salary') {
-    shiftEarnings = (Number(emp.annualSalary) || 0) / 12; // Approximation for leaderboard
+    shiftEarnings = (Number(emp.annualSalary) || 0) / 12; 
   } else if (emp.payType === 'hourly') {
     empShifts.forEach(s => {
       const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
@@ -116,15 +117,21 @@ const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses) =>
   const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
   const oop = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   
-  return { shiftCount: empShifts.length, totalHours, shiftEarnings, kmEarnings, oop, total: shiftEarnings + kmEarnings + oop };
+  const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date) >= start && parseLocalSafe(k.date) <= end);
+  const kPoints = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
+
+  const totalScore = shiftEarnings + kmEarnings + oop + kPoints;
+
+  return { shiftCount: empShifts.length, totalHours, shiftEarnings, kmEarnings, oop, kudosPoints: kPoints, total: totalScore };
 };
 
-const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees) => {
+// --- UPDATED: MONTHLY LEADERBOARD CALCULATOR ---
+const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees, kudos) => {
   if(!Array.isArray(employees)) return [];
   const start = new Date(year, month, 1); 
   const end = new Date(year, month + 1, 0, 23, 59, 59);
   let results = employees.map(emp => { 
-    const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses); 
+    const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses, kudos); 
     return { emp, ...data }; 
   });
   return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total).slice(0, 3);
@@ -133,44 +140,65 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
 // ==========================================
 // SUB-COMPONENTS
 // ==========================================
-export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses, isBonusActive, bonusSettings }) {
+
+// --- DAZZLING AWARDS LEADERBOARD ---
+export function AwardsLeaderboard({ currentUser, employees, shifts, expenses, clientExpenses, kudos = [], prizes = [], isBonusActive, bonusSettings }) {
   const now = new Date();
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
-  const currentLeaderboard = useMemo(() => getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, employees), [shifts, expenses, clientExpenses, employees, now]);
-  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   
+  // Exclude master admin from competing
+  const safeEmployees = useMemo(() => {
+    if (!Array.isArray(employees)) return [];
+    return employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin');
+  }, [employees]);
+
+  const currentLeaderboard = useMemo(() => getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, safeEmployees, kudos), [shifts, expenses, clientExpenses, safeEmployees, kudos, now]);
+  
+  const myPrizes = useMemo(() => {
+    return prizes.filter(p => p.employeeId === currentUser.id).sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [prizes, currentUser.id]);
+
   const annualStandings = useMemo(() => {
-    if(!Array.isArray(employees)) return []; 
+    if(safeEmployees.length === 0) return []; 
     const scores = {}; 
-    employees.forEach(e => { 
-      if(e && e.id) scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, totalScore: 0, monthsWon: [] }; 
+    safeEmployees.forEach(e => { 
+      if(e && e.id) scores[e.id] = { emp: e, gold: 0, silver: 0, bronze: 0, kudosTotal: 0, prizesTotal: 0, galaScore: 0 }; 
     });
     
-    for (let m = 0; m <= now.getMonth(); m++) {
-      const lb = getMonthlyLeaderboard(now.getFullYear(), m, shifts, expenses, clientExpenses, employees);
-      if (lb[0] && scores[lb[0].emp.id]) { 
-        scores[lb[0].emp.id].gold++; 
-        scores[lb[0].emp.id].totalScore += 3; 
-        scores[lb[0].emp.id].monthsWon.push(monthNames[m]); 
-      }
-      if (lb[1] && scores[lb[1].emp.id]) { 
-        scores[lb[1].emp.id].silver++; 
-        scores[lb[1].emp.id].totalScore += 2; 
-        scores[lb[1].emp.id].monthsWon.push(monthNames[m]); 
-      }
-      if (lb[2] && scores[lb[2].emp.id]) { 
-        scores[lb[2].emp.id].bronze++; 
-        scores[lb[2].emp.id].totalScore += 1; 
-        scores[lb[2].emp.id].monthsWon.push(monthNames[m]); 
-      }
+    // Calculate historical months for trophies
+    for (let m = 0; m <= 11; m++) {
+      const lb = getMonthlyLeaderboard(now.getFullYear(), m, shifts, expenses, clientExpenses, safeEmployees, kudos);
+      if (lb[0] && scores[lb[0].emp.id]) { scores[lb[0].emp.id].gold++; scores[lb[0].emp.id].galaScore += 300; }
+      if (lb[1] && scores[lb[1].emp.id]) { scores[lb[1].emp.id].silver++; scores[lb[1].emp.id].galaScore += 200; }
+      if (lb[2] && scores[lb[2].emp.id]) { scores[lb[2].emp.id].bronze++; scores[lb[2].emp.id].galaScore += 100; }
     }
-    return Object.values(scores).filter(s => s.totalScore > 0).sort((a, b) => b.totalScore - a.totalScore);
-  }, [shifts, expenses, clientExpenses, employees, now]);
+
+    // Add Kudos and Prizes to Gala Score
+    kudos.forEach(k => {
+      const d = parseLocalSafe(k.date);
+      if (d.getFullYear() === now.getFullYear() && scores[k.employeeId]) {
+        scores[k.employeeId].kudosTotal++;
+        scores[k.employeeId].galaScore += Number(k.points || 0);
+      }
+    });
+
+    prizes.forEach(p => {
+      const d = parseLocalSafe(p.date);
+      if (d.getFullYear() === now.getFullYear() && scores[p.employeeId]) {
+        scores[p.employeeId].prizesTotal++;
+        scores[p.employeeId].galaScore += 50;
+      }
+    });
+
+    // Only show people who actually have a score, OR the current user so they can see their rank
+    return Object.values(scores).filter(s => s.galaScore > 0 || s.emp.id === currentUser.id).sort((a, b) => b.galaScore - a.galaScore);
+  }, [shifts, expenses, clientExpenses, safeEmployees, kudos, prizes, now, currentUser.id]);
 
   if (!isBonusActive) return (
     <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-slate-200">
       <Award className="h-12 w-12 text-slate-300 mx-auto mb-3" />
       <h3 className="text-lg font-semibold text-slate-600">Bonus System Inactive</h3>
+      <p className="text-sm text-slate-500 mt-2">The rewards platform has been paused by administration.</p>
     </div>
   );
 
@@ -178,66 +206,127 @@ export function AwardsLeaderboard({ employees, shifts, expenses, clientExpenses,
   const colors = ["bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 border-yellow-400", "bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 border-slate-400", "bg-gradient-to-br from-amber-600 to-orange-800 text-white border-amber-700"];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      
+      {/* 1. THE MONTHLY PODIUM */}
       <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>
-        <h2 className="text-2xl font-bold mb-2 relative z-10 flex items-center">
+        <h2 className="text-2xl font-black mb-2 relative z-10 flex items-center tracking-tight">
           <Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> {String(now.toLocaleString('default', { month: 'long' }))} Leaderboard
         </h2>
-        <p className="text-teal-100 mb-6 relative z-10 text-sm">Top 3 earners with 10+ shifts qualify for monthly cash bonuses!</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
-          {currentLeaderboard.map((winner, index) => (
-            <div key={winner.emp.id} className={`${colors[index]} rounded-xl p-4 shadow-md flex flex-col items-center text-center transform hover:-translate-y-1 transition duration-300`}>
-              {badgeIcons[index]}
-              <div className="font-bold text-lg leading-tight">{String(winner.emp.name || 'Unknown')}</div>
-              <div className="text-sm font-semibold opacity-90 mb-3">{index + 1}{index===0?'st':index===1?'nd':'rd'} Place</div>
-              <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm flex items-center">+${Number(safeBonusSettings.monthly[index] || 0).toFixed(0)} Bonus</div>
-            </div>
-          ))}
-        </div>
+        <p className="text-teal-100 mb-6 relative z-10 text-sm font-medium">Top 3 earners with 10+ shifts qualify for monthly cash bonuses! Kudos points are active.</p>
+        
+        {currentLeaderboard.length === 0 ? (
+           <div className="relative z-10 bg-black/10 rounded-xl p-8 text-center border border-white/10">
+             <p className="font-semibold text-teal-50">No one has qualified for the leaderboard yet this month.</p>
+             <p className="text-xs text-teal-200 mt-2">Complete 10 shifts to enter the rankings!</p>
+           </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
+            {currentLeaderboard.map((winner, index) => (
+              <div key={winner.emp.id} className={`${colors[index]} rounded-xl p-4 shadow-md flex flex-col items-center text-center transform hover:-translate-y-1 transition duration-300 relative overflow-hidden`}>
+                {winner.emp.id === currentUser.id && (
+                  <div className="absolute top-0 w-full bg-black/20 text-white text-[10px] font-black uppercase tracking-widest py-1">You</div>
+                )}
+                <div className={winner.emp.id === currentUser.id ? 'mt-4' : ''}>{badgeIcons[index]}</div>
+                <div className="font-black text-lg leading-tight">{String(winner.emp.name || 'Unknown')}</div>
+                <div className="text-xs font-bold opacity-80 mb-1">{index + 1}{index===0?'st':index===1?'nd':'rd'} Place</div>
+                <div className="text-sm bg-white/30 px-3 py-1 rounded mb-4 font-bold border border-white/20 shadow-inner">
+                  {winner.total.toFixed(2)} pts
+                </div>
+                <div className="mt-auto bg-black/20 rounded-full px-4 py-1.5 font-bold text-sm shadow-sm flex items-center border border-black/10">
+                  +${Number(safeBonusSettings.monthly[index] || 0).toFixed(0)} Bonus
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* 2. THE PRIZE WALLET */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <h2 className="text-lg font-semibold text-slate-800 flex items-center"><Trophy className="h-5 w-5 mr-2 text-yellow-500" /> Annual Trophy Standings</h2>
+          <h2 className="text-lg font-bold text-slate-800 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-600" /> My Prize Wallet</h2>
+          <p className="text-xs text-slate-500 mt-1 font-medium">Digital records of physical rewards or gift cards issued to you.</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="p-6 bg-slate-50/50">
+          {myPrizes.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">
+              No prizes awarded yet. Keep up the great work!
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {myPrizes.map(p => (
+                <div key={p.id} className="bg-gradient-to-br from-purple-700 to-indigo-900 rounded-xl p-5 shadow-md text-white relative overflow-hidden transform hover:scale-[1.02] transition">
+                   <div className="absolute top-0 right-0 -mt-2 -mr-2 opacity-10"><Gift size={100} /></div>
+                   <div className="relative z-10">
+                     <div className="text-xs font-bold text-purple-200 mb-1 uppercase tracking-wider">{p.date}</div>
+                     <div className="text-xl font-black mb-1 leading-tight">{p.name}</div>
+                     {p.value > 0 && <div className="text-2xl font-bold mb-4 text-emerald-300">${Number(p.value).toFixed(2)}</div>}
+                     {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner">"{p.note}"</div>}
+                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 3. RACE TO THE GALA */}
+      <div className="bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden relative mt-8">
+        <div className="absolute top-0 right-0 opacity-5 pointer-events-none"><Star size={300} /></div>
+        <div className="px-6 py-6 border-b border-slate-800 bg-slate-900/80 relative z-10 backdrop-blur-sm">
+          <h2 className="text-2xl font-black text-amber-400 flex items-center tracking-tight">
+            <Trophy className="h-6 w-6 mr-3 text-amber-400" /> The Race to the Gala
+          </h2>
+          <p className="text-slate-400 text-xs font-medium mt-2 tracking-wider uppercase">Annual Leaderboard & VIP Standings</p>
+        </div>
+        <div className="p-0 overflow-x-auto relative z-10">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
-                <th className="px-6 py-3 font-semibold">Employee</th>
-                <th className="px-6 py-3 font-semibold text-center">Golds (3pt)</th>
-                <th className="px-6 py-3 font-semibold text-center">Silvers (2pt)</th>
-                <th className="px-6 py-3 font-semibold text-center">Bronzes (1pt)</th>
-                <th className="px-6 py-3 font-semibold">Months Awarded</th>
-                <th className="px-6 py-3 font-semibold text-right">Total Score</th>
+            <thead className="bg-slate-800/80 backdrop-blur sticky top-0">
+              <tr className="text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-700">
+                <th className="px-6 py-4 font-bold">Rank</th>
+                <th className="px-6 py-4 font-bold">VIP Employee</th>
+                <th className="px-6 py-4 font-bold text-center text-yellow-500">Gold (300)</th>
+                <th className="px-6 py-4 font-bold text-center text-slate-300">Silver (200)</th>
+                <th className="px-6 py-4 font-bold text-center text-amber-600">Bronze (100)</th>
+                <th className="px-6 py-4 font-bold text-center text-blue-400">Total Kudos</th>
+                <th className="px-6 py-4 font-bold text-center text-purple-400">Prizes (50)</th>
+                <th className="px-6 py-4 font-bold text-right text-amber-400">Gala Score</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {annualStandings.map((s, idx) => (
-                <tr key={s.emp.id} className={idx < 3 ? 'bg-yellow-50/30 hover:bg-yellow-50' : 'hover:bg-slate-50 transition'}>
-                  <td className="px-6 py-4 font-bold text-slate-800 flex items-center">
-                    {idx === 0 && <Trophy className="h-4 w-4 mr-2 text-yellow-500"/>}
-                    {idx === 1 && <Medal className="h-4 w-4 mr-2 text-slate-400"/>}
-                    {idx === 2 && <Award className="h-4 w-4 mr-2 text-amber-600"/>}
-                    {idx > 2 && <span className="w-6 font-normal text-slate-400 text-xs">{idx+1}.</span>}
-                    {String(s.emp.name)}
-                  </td>
-                  <td className="px-6 py-4 text-center font-semibold text-yellow-600">{s.gold}</td>
-                  <td className="px-6 py-4 text-center font-semibold text-slate-500">{s.silver}</td>
-                  <td className="px-6 py-4 text-center font-semibold text-amber-700">{s.bronze}</td>
-                  <td className="px-6 py-4 text-xs font-medium text-slate-600 max-w-[150px] truncate" title={s.monthsWon.join(', ')}>{s.monthsWon.join(', ') || '-'}</td>
-                  <td className="px-6 py-4 text-right font-black text-slate-800">{s.totalScore} pts</td>
-                </tr>
-              ))}
+            <tbody className="divide-y divide-slate-800/50">
+               {annualStandings.length === 0 ? (
+                 <tr><td colSpan="8" className="text-center py-10 text-slate-500">No gala data available yet.</td></tr>
+               ) : (
+                 annualStandings.map((s, idx) => (
+                    <tr key={s.emp.id} className={`transition ${s.emp.id === currentUser.id ? 'bg-amber-900/40 border-l-4 border-amber-500' : 'hover:bg-slate-800/50 border-l-4 border-transparent'}`}>
+                      <td className="px-6 py-4 font-black text-slate-500">
+                        {idx === 0 ? <span className="text-yellow-400 text-lg">1st</span> : idx === 1 ? <span className="text-slate-300 text-lg">2nd</span> : idx === 2 ? <span className="text-amber-600 text-lg">3rd</span> : `${idx + 1}th`}
+                      </td>
+                      <td className="px-6 py-4 font-bold text-slate-200 flex items-center">
+                        {s.emp.name} 
+                        {s.emp.id === currentUser.id && <span className="ml-3 bg-amber-500 text-slate-900 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-widest font-black shadow-sm">You</span>}
+                      </td>
+                      <td className="px-6 py-4 text-center font-bold text-yellow-500">{s.gold}</td>
+                      <td className="px-6 py-4 text-center font-bold text-slate-300">{s.silver}</td>
+                      <td className="px-6 py-4 text-center font-bold text-amber-600">{s.bronze}</td>
+                      <td className="px-6 py-4 text-center font-medium text-blue-400">{s.kudosTotal}</td>
+                      <td className="px-6 py-4 text-center font-medium text-purple-400">{s.prizesTotal}</td>
+                      <td className="px-6 py-4 text-right font-black text-amber-400 text-lg">{s.galaScore} pts</td>
+                    </tr>
+                 ))
+               )}
             </tbody>
           </table>
         </div>
       </div>
+
     </div>
   );
 }
 
-export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart, isBonusActive, employees, bonusSettings }) {
+export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart, isBonusActive, employees, bonusSettings, kudos = [] }) {
   const now = new Date(); 
   const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
@@ -272,7 +361,8 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
 
   let bonusEarnings = 0;
   if (isBonusActive && Array.isArray(employees)) {
-    const lb = getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, employees);
+    const safeEmployees = employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin');
+    const lb = getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, safeEmployees, kudos);
     if (lb[0]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[0] || 0); 
     else if (lb[1]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[1] || 0); 
     else if (lb[2]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[2] || 0);
@@ -576,8 +666,8 @@ export default function EmployeeDashboard({
   timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, 
   onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, 
   onEmployeeFileUpload, onAddTimeOff, onRequestShiftCancel,
-  // --- NEW: FEED ACTIONS PASSED IN FROM APP.JSX ---
-  onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture
+  onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
+  kudos = [], prizes = []
 }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
@@ -933,7 +1023,17 @@ export default function EmployeeDashboard({
             </div>
           </div>
 
-          <EmployeePayTracker currentUser={currentUser} shifts={shifts} expenses={expenses} clientExpenses={clientExpenses} payPeriodStart={payPeriodStart} isBonusActive={isBonusActive} employees={employees} bonusSettings={bonusSettings} />
+          <EmployeePayTracker 
+            currentUser={currentUser} 
+            shifts={shifts} 
+            expenses={expenses} 
+            clientExpenses={clientExpenses} 
+            payPeriodStart={payPeriodStart} 
+            isBonusActive={isBonusActive} 
+            employees={employees} 
+            bonusSettings={bonusSettings} 
+            kudos={kudos}
+          />
           
           {nextShift && (
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -1246,10 +1346,13 @@ export default function EmployeeDashboard({
               {activeTab === 'awards' && isBonusActive && (
                 <div className="p-6">
                   <AwardsLeaderboard 
+                    currentUser={currentUser}
                     employees={employees} 
                     shifts={shifts} 
                     expenses={expenses} 
                     clientExpenses={clientExpenses} 
+                    kudos={kudos}
+                    prizes={prizes}
                     isBonusActive={isBonusActive} 
                     bonusSettings={bonusSettings}
                   />

@@ -35,7 +35,7 @@ export default function AdminRewardsManager({
   // --- COMMAND CENTER STATE ---
   const [kudosEmpId, setKudosEmpId] = useState(safeEmployees[0]?.id || '');
   const [kudosBadge, setKudosBadge] = useState(STANDARD_BADGES[0].label);
-  const [kudosPoints, setKudosPoints] = useState(10);
+  const [kudosPoints, setKudosPoints] = useState(1); // Set default to 1 point
   const [kudosMessage, setKudosMessage] = useState('');
 
   const [prizeEmpId, setPrizeEmpId] = useState(safeEmployees[0]?.id || '');
@@ -177,7 +177,7 @@ export default function AdminRewardsManager({
       message: kudosMessage
     });
     setKudosMessage('');
-    setKudosPoints(10);
+    setKudosPoints(1); // Reset to 1 after issuance
   };
 
   const handleIssuePrize = (e) => {
@@ -296,8 +296,10 @@ export default function AdminRewardsManager({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">Bonus Points</label>
-                  <input type="number" min="0" value={kudosPoints} onChange={(e)=>setKudosPoints(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm font-black text-amber-600" required />
+                  <label className="block text-sm font-bold text-slate-700 mb-1 flex justify-between">
+                    Bonus Points <span className="text-slate-400 font-normal ml-2">Max 3 points</span>
+                  </label>
+                  <input type="number" min="1" max="3" value={kudosPoints} onChange={(e)=>setKudosPoints(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm font-black text-amber-600" required />
                 </div>
               </div>
               <div>

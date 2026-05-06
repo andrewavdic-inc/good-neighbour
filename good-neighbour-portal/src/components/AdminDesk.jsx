@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter, Info } from 'lucide-react';
+import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter, Info, CheckCircle, AlertTriangle, CircleDollarSign, FileCheck } from 'lucide-react';
 
-// --- DATE HELPER ---
+// --- DATE HELPERS ---
 const parseLocalSafe = (dateStr) => {
   if (!dateStr) return new Date();
   try {
@@ -11,6 +11,17 @@ const parseLocalSafe = (dateStr) => {
   } catch (e) {
     return new Date();
   }
+};
+
+const getPayPeriodBounds = (anchorDateStr) => {
+  const now = new Date(); 
+  const anchor = parseLocalSafe(anchorDateStr); 
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (today < anchor) return { start: anchor, end: new Date(anchor.getTime() + 13 * 86400000) };
+  const diffDays = Math.floor((today - anchor) / 86400000); 
+  const cycles = Math.floor(diffDays / 14);
+  const start = new Date(anchor.getTime() + cycles * 14 * 86400000); 
+  return { start, end: new Date(start.getTime() + 13 * 86400000) };
 };
 
 // --- STANDARDIZED CATEGORIES ---
@@ -36,7 +47,11 @@ export default function AdminDesk({
   onAddBusinessExpense, onRemoveBusinessExpense, employees = [], officeLocation, 
   adminDrawer = [], onAddDrawerFile, onRemoveDrawerFile, 
   cabinetDocuments = [], onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskPicture,
-  onUpdateDeskBoard, appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment
+  onUpdateDeskBoard, appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment,
+  
+  // --- PAYROLL PROPS ---
+  payPeriodStart, shifts = [], expenses = [], clientExpenses = [], isBonusActive, bonusSettings,
+  kudos = [], payrollLogs = [], onFinalizePayroll
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -87,7 +102,7 @@ export default function AdminDesk({
   
   const [expFilterCategory, setExpFilterCategory] = useState('All');
   const [expFilterMonth, setExpFilterMonth] = useState('');
-  const [expSort, setExpSort] = useState('desc'); // 'desc' = Newest, 'asc' = Oldest
+  const [expSort, setExpSort] = useState('desc');
 
   // --- Bottom Cabinet & Drawer State ---
   const [cabinetTab, setCabinetTab] = useState('expenses');
@@ -102,6 +117,158 @@ export default function AdminDesk({
   const [cabFilterCategory, setCabFilterCategory] = useState('All');
   const [cabFilterMonth, setCabFilterMonth] = useState('');
   const [isCategoryGuideOpen, setIsCategoryGuideOpen] = useState(false);
+
+  // --- PAYROLL STATE & LOGIC ---
+  const [payrollForms, setPayrollForms] = useState({});
+  const [isPayrollFinalizing, setIsPayrollFinalizing] = useState(false);
+  const [payrollHistoryMonth, setPayrollHistoryMonth] = useState('');
+
+  const safeEmployees = Array.isArray(employees) ? employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
+  const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
+  const paydayStr = periodBounds.end.toISOString().split('T')[0];
+  const startStr = periodBounds.start.toISOString().split('T')[0];
+  
+  const isPayrollFinalized = (payrollLogs || []).some(log => log.payoutDate === paydayStr);
+  
+  const todayTime = new Date(new Date().toISOString().split('T')[0]).getTime();
+  const paydayTime = new Date(paydayStr).getTime();
+  const daysToPayday = Math.ceil((paydayTime - todayTime) / 86400000);
+  const needsPayrollAlert = !isPayrollFinalized && daysToPayday <= 1 && daysToPayday >= -3; // Alert shows 1 day before, and lingers until finalized
+
+  // Helper for System Gross
+  const getMonthlyLeaderboard = (year, month) => {
+    const start = new Date(year, month, 1); 
+    const end = new Date(year, month + 1, 0, 23, 59, 59);
+    let results = safeEmployees.map(emp => { 
+        const empShifts = shifts.filter(s => {
+            if (!s || s.employeeId !== emp.id || !s.date || !s.endTime) return false;
+            const shiftDate = new Date(`${s.date}T${s.endTime}`);
+            return shiftDate >= start && shiftDate <= end;
+        });
+        let activityScore = 0;
+        empShifts.forEach(s => {
+            activityScore += 100;
+            if (expenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved')) activityScore += 50;
+            if (clientExpenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved')) activityScore += 50;
+        });
+        const kPoints = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date) >= start && parseLocalSafe(k.date) <= end).reduce((sum, k) => sum + Number(k.points || 0), 0);
+        return { emp, shiftCount: empShifts.length, activityScore: activityScore + kPoints };
+    });
+    return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.activityScore - a.activityScore);
+  };
+
+  const getSystemGross = (emp) => {
+    const empShifts = shifts.filter(s => s.employeeId === emp.id && s.date >= startStr && s.date <= paydayStr);
+    let shiftPay = 0;
+    if (emp.payType === 'salary') {
+      shiftPay = (Number(emp.annualSalary) || 0) / 26;
+    } else if (emp.payType === 'hourly') {
+      let hrs = 0;
+      empShifts.forEach(s => {
+        const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number);
+        const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number);
+        if (!isNaN(sH) && !isNaN(eH)) {
+          let h = (eH + eM/60) - (sH + sM/60);
+          if (h < 0) h += 24;
+          hrs += h;
+        }
+      });
+      shiftPay = hrs * (Number(emp.hourlyWage) || 22.5);
+    } else {
+      shiftPay = empShifts.length * (Number(emp.perVisitRate) || 45);
+    }
+
+    const kmPay = expenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && e.date >= startStr && e.date <= paydayStr).reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
+    const oopPay = clientExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && e.date >= startStr && e.date <= paydayStr).reduce((sum, e) => sum + (Number(e.amount || 0)), 0);
+
+    let bonusEarnings = 0;
+    if (isBonusActive) {
+      const now = new Date();
+      const lb = getMonthlyLeaderboard(now.getFullYear(), now.getMonth());
+      if (lb[0]?.emp?.id === emp.id) bonusEarnings = Number(bonusSettings?.monthly[0] || 0); 
+      else if (lb[1]?.emp?.id === emp.id) bonusEarnings = Number(bonusSettings?.monthly[1] || 0); 
+      else if (lb[2]?.emp?.id === emp.id) bonusEarnings = Number(bonusSettings?.monthly[2] || 0);
+    }
+
+    return shiftPay + kmPay + oopPay + bonusEarnings;
+  };
+
+  const handlePayrollFormChange = (empId, field, value) => {
+    setPayrollForms(prev => ({
+      ...prev,
+      [empId]: { ...(prev[empId] || {}), [field]: value }
+    }));
+  };
+
+  const handleFinalizeAndArchive = async () => {
+    if (!window.confirm(`Are you sure you want to finalize payroll for the period ending ${paydayStr}?\n\nThis will lock the ledger and distribute attached paystubs to employees.`)) return;
+    
+    setIsPayrollFinalizing(true);
+    const records = {};
+    const paystubFiles = {};
+    let totalGross = 0;
+    let totalNet = 0;
+
+    safeEmployees.forEach(emp => {
+      const form = payrollForms[emp.id] || {};
+      const sys = getSystemGross(emp);
+      const acc = Number(form.accGross || 0);
+      const net = Number(form.netPay || 0);
+      
+      records[emp.id] = {
+        name: emp.name,
+        role: emp.role,
+        systemGross: sys,
+        accountantGross: acc,
+        netPay: net
+      };
+      
+      if (form.paystubFile) {
+        paystubFiles[emp.id] = form.paystubFile;
+      }
+      
+      totalGross += acc;
+      totalNet += net;
+    });
+
+    const payrollData = {
+      payoutDate: paydayStr,
+      periodStart: startStr,
+      periodEnd: paydayStr,
+      totalGross,
+      totalNet,
+      records
+    };
+
+    await onFinalizePayroll(payrollData, paystubFiles);
+    setIsPayrollFinalizing(false);
+    setPayrollForms({});
+    alert("Payroll finalized and archived successfully!");
+  };
+
+  const exportPayrollCSV = (log) => {
+    const headers = ['Employee', 'Role', 'System Gross ($)', 'Accountant Gross ($)', 'Actual Net Pay ($)'];
+    const rows = Object.values(log.records || {}).map(r => [
+      `"${r.name}"`,
+      `"${r.role}"`,
+      Number(r.systemGross).toFixed(2),
+      Number(r.accountantGross).toFixed(2),
+      Number(r.netPay).toFixed(2)
+    ]);
+    
+    rows.push(['', '', '', '', '']);
+    rows.push(['"TOTAL COMPANY PAYOUT"', '', '', Number(log.totalGross).toFixed(2), Number(log.totalNet).toFixed(2)]);
+
+    const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Payroll_Ledger_${log.payoutDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // --- Widget State ---
   const [time, setTime] = useState(new Date());
@@ -153,7 +320,6 @@ export default function AdminDesk({
       });
   }, [businessExpenses, expFilterCategory, expFilterMonth, expSort]);
 
-  // --- NEW: Dynamic Ledger Total ---
   const currentLedgerTotal = useMemo(() => {
     return filteredAndSortedExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
   }, [filteredAndSortedExpenses]);
@@ -164,7 +330,7 @@ export default function AdminDesk({
       if (cabFilterCategory !== 'All' && doc.category !== cabFilterCategory) return false;
       if (cabFilterMonth && doc.uploadDate && !doc.uploadDate.startsWith(cabFilterMonth)) return false;
       return true;
-    }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate)); // Newest first
+    }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate)); 
   }, [safeCabinetDocs, cabFilterCategory, cabFilterMonth]);
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -279,7 +445,6 @@ export default function AdminDesk({
     setIsBoardEditing(false);
   };
 
-  // Basic list manipulators
   const updateNoteItem = (id, text) => {
     setNoteItems(prev => prev.map(item => item.id === id ? { ...item, text } : item));
     if (text.trim() !== '' && noteItems[noteItems.length - 1].id === id) {
@@ -345,8 +510,7 @@ export default function AdminDesk({
       ];
     });
 
-    // --- NEW: Add the dynamic total to the exported CSV ---
-    rows.push(['', '', '', '', '']); // Blank spacer row
+    rows.push(['', '', '', '', '']); 
     rows.push(['', '', '"TOTAL SPENT:"', currentLedgerTotal.toFixed(2), '']);
 
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -365,19 +529,39 @@ export default function AdminDesk({
   return (
     <div className="bg-slate-100 p-6 rounded-2xl border border-slate-300 shadow-inner min-h-[900px] flex flex-col">
       
+      {/* PAYROLL SMART ALERT BANNER */}
+      {needsPayrollAlert && (
+        <div className={`p-4 rounded-xl flex items-center justify-between mb-6 shadow-md animate-pulse ${daysToPayday <= 0 ? 'bg-red-600 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
+          <div className="flex items-center">
+            <CircleDollarSign className="h-6 w-6 mr-3 shrink-0" />
+            <div>
+              <div className="font-black text-lg leading-tight">
+                {daysToPayday <= 0 ? 'Payroll Due Today!' : 'Payroll Processing Tomorrow'}
+              </div>
+              <div className={`text-sm ${daysToPayday <= 0 ? 'text-red-100' : 'text-yellow-800'}`}>
+                The period ending {paydayStr} is ready for processing in the Filing Cabinet.
+              </div>
+            </div>
+          </div>
+          <button onClick={() => setCabinetTab('payroll')} className={`font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm whitespace-nowrap ml-4 ${daysToPayday <= 0 ? 'bg-white text-red-700 hover:bg-red-50' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}>
+            Process Payroll
+          </button>
+        </div>
+      )}
+
       {/* URGENT BANNER WITH MUTE */}
       {(urgentAlerts.length > 0 || todayAppts.length > 0) && !isBannerMuted && (
-        <div className="bg-red-600 text-white p-4 rounded-xl flex items-start sm:items-center justify-between mb-6 shadow-md animate-pulse">
+        <div className="bg-slate-800 text-white p-4 rounded-xl flex items-start sm:items-center justify-between mb-6 shadow-md">
           <div className="flex items-center">
-            <AlertCircle className="h-6 w-6 mr-3 shrink-0" />
+            <AlertCircle className="h-6 w-6 mr-3 shrink-0 text-red-400" />
             <div>
               <div className="font-bold text-lg leading-tight">Requires Attention</div>
-              <div className="text-sm text-red-100">You have {urgentAlerts.length} urgent note(s) and {todayAppts.length} appointment(s) today.</div>
+              <div className="text-sm text-slate-300">You have {urgentAlerts.length} urgent note(s) and {todayAppts.length} appointment(s) today.</div>
             </div>
           </div>
           <div className="flex items-center space-x-3 mt-3 sm:mt-0 ml-4 shrink-0">
-            <button onClick={() => handleDayClick(new Date().getDate())} className="bg-white text-red-700 hover:bg-red-50 font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm whitespace-nowrap">View Today</button>
-            <button onClick={() => setIsBannerMuted(true)} className="text-red-200 hover:text-white transition p-1" title="Dismiss Alert">
+            <button onClick={() => handleDayClick(new Date().getDate())} className="bg-teal-600 hover:bg-teal-500 font-bold px-4 py-2 rounded-lg text-sm transition shadow-sm whitespace-nowrap">View Today</button>
+            <button onClick={() => setIsBannerMuted(true)} className="text-slate-400 hover:text-white transition p-1" title="Dismiss Alert">
               <XCircle className="h-6 w-6" />
             </button>
           </div>
@@ -613,6 +797,16 @@ export default function AdminDesk({
             >
               Company Ledger
             </button>
+            
+            {/* NEW PAYROLL TAB */}
+            <button 
+              onClick={() => setCabinetTab('payroll')} 
+              className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${cabinetTab === 'payroll' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'} relative`}
+            >
+              Payroll & Earnings
+              {needsPayrollAlert && <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-amber-400 rounded-full animate-pulse border border-white"></span>}
+            </button>
+
             {isMasterAdmin && (
               <button 
                 onClick={() => setCabinetTab('documents')} 
@@ -664,7 +858,7 @@ export default function AdminDesk({
                 </button>
               </div>
 
-              {/* --- NEW: SUMMARY TOTAL BAR --- */}
+              {/* SUMMARY TOTAL BAR */}
               <div className="px-6 py-3 bg-emerald-50/50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm z-10">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 sm:mb-0">
                   {expFilterCategory === 'All' ? 'Total Spent (All Categories)' : `Total Spent (${expFilterCategory})`}
@@ -717,7 +911,175 @@ export default function AdminDesk({
             </div>
           )}
 
-          {/* TAB 2: PRIVATE COMPANY DOCUMENTS (MASTER ADMIN ONLY) */}
+          {/* TAB 2: NEW PAYROLL LEDGER */}
+          {cabinetTab === 'payroll' && (
+             <div className="flex flex-col h-full bg-emerald-50/20">
+                <div className="px-6 py-4 border-b border-slate-200 bg-emerald-800 text-white flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold flex items-center"><CircleDollarSign className="h-5 w-5 mr-2 text-emerald-300" /> Payroll Processing Ledger</h2>
+                    <p className="text-xs text-emerald-200 mt-1">Current Period: {startStr} to {paydayStr}</p>
+                  </div>
+                  {isPayrollFinalized ? (
+                     <div className="bg-emerald-700 text-emerald-100 px-3 py-1.5 rounded-full text-xs font-bold flex items-center shadow-inner border border-emerald-600">
+                       <CheckCircle className="h-4 w-4 mr-1.5" /> Period Finalized
+                     </div>
+                  ) : (
+                     <button 
+                       onClick={handleFinalizeAndArchive}
+                       disabled={isPayrollFinalizing}
+                       className="bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-bold px-4 py-2 rounded-md text-sm transition shadow-sm flex items-center"
+                     >
+                       {isPayrollFinalizing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Archiving...</> : <><Archive className="h-4 w-4 mr-2"/> Finalize & Archive</>}
+                     </button>
+                  )}
+                </div>
+
+                {/* THE DUAL-INPUT CHECKLIST */}
+                {!isPayrollFinalized && (
+                  <div className="flex-1 overflow-y-auto p-6">
+                    <div className="mb-4 flex items-start p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
+                      <Info className="h-5 w-5 text-blue-600 mr-3 shrink-0" />
+                      <p className="text-sm text-blue-900 leading-relaxed font-medium">
+                        <strong>Dual-Input Verification:</strong> Type the Gross amount provided by the accountant to verify it matches the system's tracked Gross. Attach the paystub PDF, and it will be sent directly to the employee's personal tab upon finalization.
+                      </p>
+                    </div>
+
+                    <div className="space-y-4">
+                      {safeEmployees.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">No active employees found for payroll.</div>
+                      ) : (
+                        safeEmployees.map(emp => {
+                          const sysGross = getSystemGross(emp);
+                          const form = payrollForms[emp.id] || { accGross: '', netPay: '', paystubFile: null };
+                          
+                          // Floating point safe comparison (within 2 cents)
+                          const isGrossMatch = form.accGross !== '' && Math.abs(Number(form.accGross) - sysGross) <= 0.02;
+                          const isGrossMismatch = form.accGross !== '' && !isGrossMatch;
+
+                          return (
+                            <div key={emp.id} className={`p-5 bg-white border rounded-xl shadow-sm transition ${isGrossMatch ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-slate-200 hover:border-slate-300'}`}>
+                              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                                
+                                <div className="w-full lg:w-1/4">
+                                  <div className="font-bold text-slate-800 text-lg">{emp.name}</div>
+                                  <div className="text-xs text-slate-500 font-medium">{emp.role}</div>
+                                  <div className="mt-2 text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 w-fit">
+                                    System Gross: <span className="font-black text-slate-800">${sysGross.toFixed(2)}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {/* Accountant Gross Input */}
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                      Accountant's Gross
+                                      {isGrossMatch && <CheckCircle className="h-4 w-4 text-emerald-500" />}
+                                      {isGrossMismatch && <AlertTriangle className="h-4 w-4 text-amber-500" title="Does not match system calculation" />}
+                                    </label>
+                                    <div className="relative">
+                                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><span className="text-slate-400 sm:text-sm">$</span></div>
+                                      <input 
+                                        type="number" min="0" step="0.01" 
+                                        value={form.accGross} 
+                                        onChange={(e) => handlePayrollFormChange(emp.id, 'accGross', e.target.value)} 
+                                        className={`block w-full pl-7 pr-3 py-2 border rounded-md text-sm focus:outline-none font-bold ${isGrossMatch ? 'bg-emerald-50 border-emerald-300 text-emerald-900 focus:ring-emerald-500' : isGrossMismatch ? 'bg-amber-50 border-amber-300 text-amber-900 focus:ring-amber-500' : 'border-slate-300 focus:ring-teal-500'}`} 
+                                        placeholder="0.00" 
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Net Pay Input */}
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">Final Net Payout</label>
+                                    <div className="relative">
+                                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><span className="text-slate-400 sm:text-sm">$</span></div>
+                                      <input 
+                                        type="number" min="0" step="0.01" 
+                                        value={form.netPay} 
+                                        onChange={(e) => handlePayrollFormChange(emp.id, 'netPay', e.target.value)} 
+                                        className="block w-full pl-7 pr-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-teal-500 font-bold text-slate-900" 
+                                        placeholder="0.00" 
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Direct Paystub Upload */}
+                                  <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">Attach Paystub PDF</label>
+                                    <div className={`flex justify-center px-3 py-1.5 border-2 border-slate-300 border-dashed rounded-md bg-slate-50 transition cursor-pointer hover:bg-slate-100 h-[38px]`} onClick={() => document.getElementById(`ps-upload-${emp.id}`).click()}>
+                                      <div className="text-center text-xs font-bold text-teal-600 truncate flex items-center h-full">
+                                        {form.paystubFile ? <><FileCheck className="h-4 w-4 mr-1.5 text-emerald-600"/>{form.paystubFile.name}</> : <><Upload className="h-3 w-3 mr-1.5"/> Select PDF</>}
+                                      </div>
+                                      <input id={`ps-upload-${emp.id}`} type="file" accept=".pdf" className="sr-only" onChange={(e) => handlePayrollFormChange(emp.id, 'paystubFile', e.target.files[0])} />
+                                    </div>
+                                  </div>
+
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {isPayrollFinalized && (
+                  <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-emerald-50/50">
+                    <CheckCircle className="h-16 w-16 text-emerald-400 mb-4" />
+                    <h3 className="text-2xl font-black text-slate-800">Payroll is Complete</h3>
+                    <p className="text-slate-500 mt-2 max-w-md">The active period has been locked and archived. Paystubs have been distributed to the employee portals.</p>
+                  </div>
+                )}
+
+                {/* HISTORICAL PAYROLL LEDGER */}
+                <div className="border-t border-slate-200 bg-slate-100 flex flex-col max-h-[350px]">
+                  <div className="px-6 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-200/50">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center"><Archive className="h-4 w-4 mr-2"/> Payroll History</span>
+                    <div className="flex items-center bg-white border border-slate-300 rounded px-2 focus-within:ring-1 focus-within:ring-teal-500 transition">
+                      <Filter className="h-3 w-3 mr-1.5 text-slate-400" />
+                      <input type="month" value={payrollHistoryMonth} onChange={(e) => setPayrollHistoryMonth(e.target.value)} className="text-xs py-1 border-none focus:outline-none text-slate-600 bg-transparent w-32" title="Filter by Month" />
+                    </div>
+                  </div>
+                  <div className="p-4 flex-1 overflow-y-auto space-y-3">
+                    {payrollLogs.filter(log => !payrollHistoryMonth || log.payoutDate.startsWith(payrollHistoryMonth)).length === 0 ? (
+                      <div className="text-center py-6 text-slate-400 text-sm font-medium italic">No historical payroll records found.</div>
+                    ) : (
+                      payrollLogs.filter(log => !payrollHistoryMonth || log.payoutDate.startsWith(payrollHistoryMonth))
+                      .sort((a,b) => new Date(b.payoutDate) - new Date(a.payoutDate))
+                      .map(log => (
+                        <div key={log.id} className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:border-teal-300 transition">
+                          <div className="flex items-center space-x-4">
+                            <div className="h-10 w-10 bg-slate-100 text-slate-500 rounded-full flex items-center justify-center shrink-0 group-hover:bg-teal-50 group-hover:text-teal-600 transition">
+                              <Archive className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-800">Period Ending: {log.payoutDate}</div>
+                              <div className="text-xs text-slate-500 font-medium mt-0.5">Processed {new Date(log.dateProcessed).toLocaleString()}</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-6">
+                            <div className="text-right">
+                              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Gross</div>
+                              <div className="font-bold text-slate-700">${Number(log.totalGross).toFixed(2)}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Net Pay</div>
+                              <div className="font-black text-emerald-700">${Number(log.totalNet).toFixed(2)}</div>
+                            </div>
+                            <button onClick={() => exportPayrollCSV(log)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded transition flex items-center" title="Export Ledger to CSV">
+                              <Download className="h-5 w-5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+             </div>
+          )}
+
+          {/* TAB 3: PRIVATE COMPANY DOCUMENTS (MASTER ADMIN ONLY) */}
           {cabinetTab === 'documents' && isMasterAdmin && (
             <div className="flex flex-col h-full">
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">

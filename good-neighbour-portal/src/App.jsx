@@ -198,8 +198,8 @@ function AdminDashboard({
   onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard,
   onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
-  // --- REWARDS PROPS ---
-  kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize
+  kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
+  payrollLogs = [], onFinalizePayroll
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -444,6 +444,17 @@ function AdminDashboard({
                  onAddAppointment={onAddAppointment}
                  onUpdateAppointment={onUpdateAppointment}
                  onRemoveAppointment={onRemoveAppointment}
+                 
+                 // --- NEW PAYROLL PIPES ---
+                 payPeriodStart={payPeriodStart}
+                 shifts={shifts}
+                 expenses={expenses}
+                 clientExpenses={clientExpenses}
+                 isBonusActive={isBonusActive}
+                 bonusSettings={bonusSettings}
+                 kudos={kudos}
+                 payrollLogs={payrollLogs}
+                 onFinalizePayroll={onFinalizePayroll}
                />;
       case 'employees': return <EmployeeManager employees={safeEmployees} shifts={safeShifts} payPeriodStart={payPeriodStart} onEmployeeFileUpload={onEmployeeFileUpload} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
@@ -724,6 +735,9 @@ export default function App() {
   // NEW DATABASES FOR REWARDS
   const [kudos, setKudos] = useState([]);
   const [prizes, setPrizes] = useState([]);
+  
+  // --- NEW DATABASE FOR PAYROLL ---
+  const [payrollLogs, setPayrollLogs] = useState([]);
 
   // Settings State
   const [payPeriodStart, setPayPeriodStart] = useState('2026-04-01');
@@ -775,6 +789,9 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_appointments'), snap => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_kudos'), snap => setKudos(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_prizes'), snap => setPrizes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    
+    // --- PAYROLL LOGS LISTENER ---
+    unsubs.push(onSnapshot(getCol('gn_payroll_logs'), snap => setPayrollLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
 
     unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'gn_settings', 'global'), snap => {
       if (snap.exists()) {
@@ -857,6 +874,36 @@ export default function App() {
     }
   };
 
+  // --- THE NEW PAYROLL PIPELINE ENGINE ---
+  const handleFinalizePayroll = async (payrollData, paystubFiles) => {
+    if (!firebaseUser) return;
+    const payrollId = Date.now().toString();
+
+    // 1. Process Paystubs Securely
+    for (const [empId, file] of Object.entries(paystubFiles)) {
+      if (file) {
+        const url = await handleFileUpload(file, 'paystubs');
+        if (url) {
+          const stubId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+          await setDoc(getDocRef('gn_paystubs', stubId), {
+            id: stubId,
+            employeeId: empId,
+            date: payrollData.payoutDate, // Automatically assigns to the payout date
+            fileUrl: url,
+            fileName: file.name
+          });
+        }
+      }
+    }
+
+    // 2. Lock the Master Payroll Record into the Database
+    await setDoc(getDocRef('gn_payroll_logs', payrollId), {
+      ...payrollData,
+      id: payrollId,
+      dateProcessed: new Date().toISOString()
+    });
+  };
+
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
     
@@ -934,7 +981,6 @@ export default function App() {
     }
   };
 
-  // --- THE NEW REWARDS ACKNOWLEDGEMENT PIPE ---
   const handleAcknowledgeReward = (collectionName, id) => {
     runMutation(collectionName, id, 'update', { acknowledged: true });
   };
@@ -1149,6 +1195,10 @@ export default function App() {
             }}
             
             onRemovePrize={(id) => runMutation('gn_prizes', id, 'delete')}
+            
+            // --- NEW PAYROLL PIPES ---
+            payrollLogs={payrollLogs}
+            onFinalizePayroll={handleFinalizePayroll}
           />
         ) : (
           <EmployeeDashboard 

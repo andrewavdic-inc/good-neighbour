@@ -198,6 +198,7 @@ function AdminDashboard({
   onAddCabinetDocument, onRemoveCabinetDocument, onUpdateDeskBoard,
   onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
+  // --- REWARDS PROPS ---
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -819,7 +820,7 @@ export default function App() {
       const foundEmp = safeEmployees.find(e => e && e.email && String(e.email).toLowerCase() === String(secureEmail).toLowerCase());
       
       if (foundEmp) {
-        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, annualSalary: foundEmp.annualSalary, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, deskPictureUrl: foundEmp.deskPictureUrl, deskBoard: foundEmp.deskBoard, hireDate: foundEmp.hireDate });
+        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, annualSalary: foundEmp.annualSalary, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, deskPictureUrl: foundEmp.deskPictureUrl, deskBoard: foundEmp.deskBoard, hireDate: foundEmp.hireDate, pastTrophies: foundEmp.pastTrophies });
         setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
       } else { 
         alert("Login successful, but this email is not assigned to an employee profile in the directory. Please contact the administrator."); 
@@ -931,6 +932,11 @@ export default function App() {
         runMutation('gn_messages', msgId, 'update', { acknowledgements: [...acks, empId] });
       }
     }
+  };
+
+  // --- THE NEW REWARDS ACKNOWLEDGEMENT PIPE ---
+  const handleAcknowledgeReward = (collectionName, id) => {
+    runMutation(collectionName, id, 'update', { acknowledged: true });
   };
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={Boolean(isDbReady)} hasData={Boolean(Array.isArray(employees) && employees.length > 0)} onSeedData={handleSeedData} />;
@@ -1136,10 +1142,9 @@ export default function App() {
             onAddKudos={(d) => runMutation('gn_kudos', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })}
             onRemoveKudos={(id) => runMutation('gn_kudos', id, 'delete')}
             
-            // --- UPDATED PRIZE MUTATION TO HANDLE UPLOADS ---
             onAddPrize={async (d, file) => {
               let url = d.fileUrl || '';
-              if (file) url = await handleFileUpload(file, 'documents'); // Securely upload the prize PDF/Image
+              if (file) url = await handleFileUpload(file, 'documents'); 
               runMutation('gn_prizes', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
             }}
             
@@ -1202,6 +1207,7 @@ export default function App() {
             
             kudos={kudos}
             prizes={prizes}
+            onAcknowledgeReward={handleAcknowledgeReward}
           />
         )}
       </main>

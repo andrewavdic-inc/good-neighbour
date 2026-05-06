@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter, Sun, CheckCircle, XCircle, Gift, ExternalLink } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, CalendarDays, Trash2, Heart, Coins, Star, Car, Receipt, AlertCircle, Phone, FileText, Info, Wallet, Image as ImageIcon, Mail, MapPin, UserMinus, Download, TrendingUp, Trophy, Medal, Award, Activity, BookOpen, Camera, Loader2, Upload, Filter, Sun, CheckCircle, XCircle, Gift, ExternalLink, PartyPopper } from 'lucide-react';
 import Announcements from './Announcements';
 import DocumentManager from './DocumentManager';
 
@@ -83,7 +83,7 @@ const getHoliday = (dateStr) => {
   return holidays[String(dateStr)] || null;
 };
 
-// --- UPDATED: CALCULATE EARNINGS WITH PRIVACY-SAFE "ACTIVITY SCORE" ---
+// --- CALCULATE EARNINGS WITH PRIVACY-SAFE "ACTIVITY SCORE" ---
 const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, kudos = []) => {
   if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, activityScore: 0, totalEarnings: 0 };
   
@@ -122,12 +122,8 @@ const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, ku
   
   empShifts.forEach(s => {
     activityScore += 100; // Base points for working the shift
-    
-    // Check for Mileage
     const hasMileage = expenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
     if (hasMileage) activityScore += 50;
-
-    // Check for Client Expense
     const hasOop = clientExpenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
     if (hasOop) activityScore += 50;
   });
@@ -157,7 +153,6 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
     const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses, kudos); 
     return { emp, ...data }; 
   });
-  // Return ALL employees with >= 10 shifts, sorted by Activity Score
   return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.activityScore - a.activityScore);
 };
 
@@ -343,6 +338,9 @@ export function AwardsLeaderboard({ currentUser, employees, shifts, expenses, cl
   const badgeIcons = [<Trophy className="h-10 w-10 mb-3" />, <Medal className="h-10 w-10 mb-3" />, <Award className="h-10 w-10 mb-3" />];
   const colors = ["bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 border-yellow-400", "bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 border-slate-400", "bg-gradient-to-br from-amber-600 to-orange-800 text-white border-amber-700"];
 
+  // Past Trophies UI Logic
+  const pastTrophies = currentUser?.pastTrophies || [];
+
   return (
     <div className="space-y-8">
       
@@ -448,6 +446,32 @@ export function AwardsLeaderboard({ currentUser, employees, shifts, expenses, cl
           </div>
         )}
       </div>
+
+      {/* THE TROPHY CASE (HALL OF FAME) */}
+      {pastTrophies.length > 0 && (
+        <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-800 overflow-hidden p-6 relative">
+          <div className="absolute top-0 right-0 opacity-10 pointer-events-none"><Trophy size={200} /></div>
+          <div className="relative z-10">
+            <h2 className="text-xl font-bold text-amber-400 flex items-center mb-1"><Award className="h-5 w-5 mr-2" /> Hall of Fame</h2>
+            <p className="text-xs text-slate-400 mb-6 uppercase tracking-widest">Your Annual Award Victories</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {pastTrophies.sort((a,b) => b.year - a.year).map(t => {
+                const colorClasses = 
+                  t.color === 'gold' ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 border-yellow-400' :
+                  t.color === 'silver' ? 'bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 border-slate-400' :
+                  'bg-gradient-to-br from-amber-600 to-orange-800 text-white border-amber-700';
+                return (
+                  <div key={t.id} className={`${colorClasses} rounded-xl p-5 shadow-lg flex flex-col items-center text-center transform hover:scale-105 transition`}>
+                    <Trophy className="h-12 w-12 mb-3 drop-shadow-md" />
+                    <div className="font-black text-lg leading-tight drop-shadow-sm">{t.title}</div>
+                    <div className="text-sm font-bold opacity-80 mt-1 bg-black/20 px-3 py-1 rounded-full">{t.year} Gala</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 3. PRIZES & KUDOS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -947,7 +971,7 @@ export default function EmployeeDashboard({
   onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, 
   onEmployeeFileUpload, onAddTimeOff, onRequestShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
-  kudos = [], prizes = []
+  kudos = [], prizes = [], onAcknowledgeReward
 }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('list');
@@ -990,6 +1014,18 @@ export default function EmployeeDashboard({
   const todayStr = now.toISOString().split('T')[0];
   const upcomingShifts = safeShiftsSort(myShifts.filter(s => s && s.date && s.endTime && new Date(`${s.date}T${s.endTime}`) > now));
   const nextShift = upcomingShifts[0];
+
+  // --- REWARDS UNBOXING LOGIC ---
+  const unackedKudos = useMemo(() => kudos.filter(k => k.employeeId === currentUser.id && k.acknowledged === false), [kudos, currentUser.id]);
+  const unackedPrizes = useMemo(() => prizes.filter(p => p.employeeId === currentUser.id && p.acknowledged === false), [prizes, currentUser.id]);
+  const activeReward = unackedKudos[0] ? { ...unackedKudos[0], _type: 'kudo' } : (unackedPrizes[0] ? { ...unackedPrizes[0], _type: 'prize' } : null);
+  const hasUnreadRewards = unackedKudos.length > 0 || unackedPrizes.length > 0;
+
+  const handleClaimReward = () => {
+    if (activeReward && onAcknowledgeReward) {
+      onAcknowledgeReward(activeReward._type === 'kudo' ? 'gn_kudos' : 'gn_prizes', activeReward.id);
+    }
+  };
 
   // --- Feed Ping Logic ---
   useEffect(() => {
@@ -1245,6 +1281,49 @@ export default function EmployeeDashboard({
   return (
     <div className="space-y-6">
       
+      {/* REWARDS UNBOXING MODAL */}
+      {activeReward && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all scale-100 animate-in zoom-in-95 duration-300">
+            <div className={`px-6 py-8 text-center relative overflow-hidden ${activeReward._type === 'kudo' ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-amber-950' : 'bg-gradient-to-b from-purple-500 to-purple-700 text-white'}`}>
+               <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-20">
+                 {activeReward._type === 'kudo' ? <Award size={150} /> : <Gift size={150} />}
+               </div>
+               <PartyPopper className="h-12 w-12 mx-auto mb-4 relative z-10 animate-bounce" />
+               <h2 className="text-2xl font-black relative z-10">You've been recognized!</h2>
+               <p className="text-sm font-medium mt-1 relative z-10 opacity-90">Administration has sent you a new reward.</p>
+            </div>
+            
+            <div className="p-8 text-center flex flex-col items-center">
+               <div className={`h-24 w-24 rounded-full flex items-center justify-center text-5xl mb-4 shadow-inner border-4 ${activeReward._type === 'kudo' ? 'bg-amber-50 border-amber-100 text-amber-500' : 'bg-purple-50 border-purple-100 text-purple-600'}`}>
+                 {activeReward._type === 'kudo' ? activeReward.badgeIcon : <Gift className="h-10 w-10" />}
+               </div>
+               
+               <h3 className="text-xl font-bold text-slate-800 mb-2">
+                 {activeReward._type === 'kudo' ? activeReward.badgeLabel : activeReward.name}
+               </h3>
+               
+               <div className="text-slate-600 italic bg-slate-50 p-4 rounded-lg border border-slate-100 w-full mb-6 relative">
+                 <span className="text-2xl text-slate-300 absolute top-2 left-2">"</span>
+                 {activeReward._type === 'kudo' ? activeReward.message : activeReward.note}
+                 <span className="text-2xl text-slate-300 absolute bottom-0 right-2">"</span>
+               </div>
+               
+               <div className={`w-full py-3 rounded-xl font-black text-lg shadow-sm border ${activeReward._type === 'kudo' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
+                 {activeReward._type === 'kudo' ? `+${activeReward.points} Gala Points` : `+50 Gala Points`}
+               </div>
+               
+               <button 
+                 onClick={handleClaimReward} 
+                 className={`mt-6 w-full py-3.5 rounded-lg font-bold text-white shadow-md transition transform hover:scale-105 ${activeReward._type === 'kudo' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+               >
+                 Claim Reward
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CANCELLATION REASON MODAL */}
       {isCancelModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -1367,8 +1446,9 @@ export default function EmployeeDashboard({
                 Logs & Expenses
               </button>
               {isBonusActive && (
-                <button onClick={() => setActiveTab('awards')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
+                <button onClick={() => setActiveTab('awards')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
                   Awards
+                  {hasUnreadRewards && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-amber-500 rounded-full border-2 border-white animate-pulse" title="New Reward!"></span>}
                 </button>
               )}
               <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'documents' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>

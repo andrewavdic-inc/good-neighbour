@@ -143,7 +143,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
 
   let shiftEarnings = 0;
   
-  // New Split Earnings Logic
+  // Split Earnings Logic
   let standardShiftCount = 0;
   let standardEarnings = 0;
   let hourlyHours = 0;
@@ -282,7 +282,8 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
               <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
-                <option value="" disabled>Select client</option>
+                <option value="" disabled>Select client / task</option>
+                <option value="internal" className="font-bold text-indigo-700">🏢 Internal Company Task</option>
                 {safeClients.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -318,15 +319,18 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
         </div>
       </div>
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {displayExpenses.map(exp => (
-          <div key={exp.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-            <div>
-              <div className="font-semibold text-sm text-slate-800">{parseLocalSafe(exp.date).toLocaleDateString()}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{exp.kilometers} km &bull; {safeClients.find(c => c.id === exp.clientId)?.name}</div>
+        {displayExpenses.map(exp => {
+          const clientNameDisplay = exp.clientId === 'internal' ? '🏢 Internal Task' : safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown';
+          return (
+            <div key={exp.id} className={`flex justify-between items-center p-3 border rounded-lg ${exp.clientId === 'internal' ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 bg-slate-50'}`}>
+              <div>
+                <div className="font-semibold text-sm text-slate-800">{parseLocalSafe(exp.date).toLocaleDateString()}</div>
+                <div className={`text-xs mt-0.5 ${exp.clientId === 'internal' ? 'text-indigo-600 font-medium' : 'text-slate-500'}`}>{exp.kilometers} km &bull; {clientNameDisplay}</div>
+              </div>
+              <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
             </div>
-            <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -373,7 +377,8 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
               <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white" required disabled={isUploading}>
-                <option value="" disabled>Select Client</option>
+                <option value="" disabled>Select Client / Task</option>
+                <option value="internal" className="font-bold text-indigo-700">🏢 Internal Company Task</option>
                 {clients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
               </select>
             </div>
@@ -416,22 +421,25 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
       </div>
 
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
-        {displayExpenses.map(exp => (
-          <div key={exp.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-            <div>
-              <div className="font-semibold text-sm text-slate-800">{parseLocalSafe(exp.date).toLocaleDateString()}</div>
-              <div className="text-xs text-slate-500 mt-0.5">${Number(exp.amount || 0).toFixed(2)} &bull; {clients.find(c => c.id === exp.clientId)?.name}</div>
+        {displayExpenses.map(exp => {
+          const clientNameDisplay = exp.clientId === 'internal' ? '🏢 Internal Task' : clients.find(c => c.id === exp.clientId)?.name || 'Unknown';
+          return (
+            <div key={exp.id} className={`flex justify-between items-center p-3 border rounded-lg ${exp.clientId === 'internal' ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 bg-slate-50'}`}>
+              <div>
+                <div className="font-semibold text-sm text-slate-800">{parseLocalSafe(exp.date).toLocaleDateString()}</div>
+                <div className={`text-xs mt-0.5 ${exp.clientId === 'internal' ? 'text-indigo-600 font-medium' : 'text-slate-500'}`}>${Number(exp.amount || 0).toFixed(2)} &bull; {clientNameDisplay}</div>
+              </div>
+              <div className="flex items-center space-x-2">
+                {exp.receiptUrl && (
+                  <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:bg-teal-100 p-1 rounded" title="View Receipt">
+                    <FileText className="h-4 w-4" />
+                  </a>
+                )}
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              {exp.receiptUrl && (
-                <a href={exp.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:bg-teal-100 p-1 rounded" title="View Receipt">
-                  <FileText className="h-4 w-4" />
-                </a>
-              )}
-              <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

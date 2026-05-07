@@ -81,6 +81,10 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const [isHourlyOverride, setIsHourlyOverride] = useState(false);
   const [hourlyRate, setHourlyRate] = useState('');
 
+  // Internal Task State
+  const [isInternal, setIsInternal] = useState(false);
+  const [internalTask, setInternalTask] = useState('');
+
   // Soft Warning State
   const [showOverlapWarning, setShowOverlapWarning] = useState(false);
   const [overlapDetails, setOverlapDetails] = useState([]);
@@ -120,6 +124,12 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
     e.preventDefault();
     if (isTimeOffBlocked) return; 
 
+    // Validation for internal tasks
+    if (isInternal && !internalTask.trim()) {
+      alert("Please provide a task description for this internal shift.");
+      return;
+    }
+
     // --- OVERLAP CONFLICT DETECTION (Soft Warning) ---
     if (!showOverlapWarning) {
       const conflicting = safeShifts.filter(s => {
@@ -150,7 +160,15 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
     const startDate = parseLocalSafe(selectedDate);
     
     // Base Shift object with override data
-    const baseShift = { employeeId, clientId, startTime, endTime };
+    const baseShift = { employeeId, startTime, endTime };
+    
+    if (isInternal) {
+      baseShift.isInternal = true;
+      baseShift.internalTask = internalTask;
+    } else {
+      baseShift.clientId = clientId;
+    }
+
     if (isHourlyOverride) {
       baseShift.isHourlyOverride = true;
       baseShift.hourlyRate = Number(hourlyRate);
@@ -180,6 +198,14 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
           <h3 className="text-lg font-bold text-slate-800">Assign New Shift</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition text-2xl leading-none">&times;</button>
         </div>
+        
+        <div className="px-6 pt-4">
+          <div className="flex bg-slate-100 p-1 rounded-lg w-full border border-slate-200 shadow-inner">
+            <button type="button" onClick={() => setIsInternal(false)} className={`flex-1 px-4 py-1.5 text-xs font-bold rounded-md transition ${!isInternal ? 'bg-white shadow-sm text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}>Client Visit</button>
+            <button type="button" onClick={() => setIsInternal(true)} className={`flex-1 px-4 py-1.5 text-xs font-bold rounded-md transition ${isInternal ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500 hover:text-slate-700'}`}>Internal Task</button>
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" value={selectedDate} readOnly className="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-500 cursor-not-allowed focus:outline-none" /></div>
           
@@ -199,19 +225,26 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
             <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setShowOverlapWarning(false); }} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
           </div>
           
-          <div>
-            <div className="flex justify-between items-end mb-1">
-              <label className="block text-sm font-medium text-slate-700">Client</label>
-              {clientId && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-sm ${isOverbooked ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
-                  {remainingShifts} Visits Left in {baseDate.toLocaleDateString('en-US', { month: 'short' })}
-                </span>
-              )}
+          {!isInternal ? (
+            <div>
+              <div className="flex justify-between items-end mb-1">
+                <label className="block text-sm font-medium text-slate-700">Client</label>
+                {clientId && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-sm ${isOverbooked ? 'bg-red-100 text-red-800 border border-red-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
+                    {remainingShifts} Visits Left in {baseDate.toLocaleDateString('en-US', { month: 'short' })}
+                  </span>
+                )}
+              </div>
+              <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 transition ${isOverbooked ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-300'}`} required={!isInternal}>
+                {safeClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
+              </select>
             </div>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 transition ${isOverbooked ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-300'}`} required>
-              {safeClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
-            </select>
-          </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Internal Task / Duty *</label>
+              <input type="text" value={internalTask} onChange={(e) => setInternalTask(e.target.value)} placeholder="e.g. Party Planning, Admin Help, etc." className="w-full px-3 py-2 border border-indigo-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30" required={isInternal} />
+            </div>
+          )}
           
           <div className="pt-2 border-t border-slate-200">
             {/* ATYPICAL PAY OVERRIDE TOGGLE */}
@@ -252,8 +285,8 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
               <p className="text-xs text-yellow-800 mb-2 font-medium">This employee is already scheduled during this exact time block:</p>
               <ul className="text-xs text-yellow-900 font-bold list-disc pl-5 space-y-1 mb-3">
                 {overlapDetails.map(c => {
-                   const cl = safeClients.find(client => client.id === c.clientId);
-                   return <li key={c.id}>{cl?.name || 'Unknown Client'} ({c.startTime} - {c.endTime})</li>
+                   const clName = c.isInternal ? c.internalTask : safeClients.find(client => client.id === c.clientId)?.name;
+                   return <li key={c.id}>{clName || 'Unknown Client'} ({c.startTime} - {c.endTime})</li>
                 })}
               </ul>
               <p className="text-[11px] text-yellow-700 font-bold uppercase tracking-wider border-t border-yellow-200 pt-2">Are you intentionally double-booking them for a group outing?</p>
@@ -264,7 +297,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
             {showOverlapWarning ? (
                <>
                  <button type="button" onClick={() => setShowOverlapWarning(false)} className="px-4 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition shadow-sm">Cancel / Fix Time</button>
-                 <button type="submit" className="px-4 py-2.5 text-sm font-black text-yellow-900 bg-yellow-400 rounded-md hover:bg-yellow-500 transition shadow-[0_0_10px_rgba(250,204,21,0.5)]">Yes, Approve Group Outing</button>
+                 <button type="submit" className="px-4 py-2.5 text-sm font-black text-yellow-900 bg-yellow-400 rounded-md hover:bg-yellow-500 transition shadow-[0_0_10px_rgba(250,204,21,0.5)]">Yes, Approve Double Booking</button>
                </>
             ) : (
                <>
@@ -420,10 +453,18 @@ function AdminDashboard({
     if (scheduleSearch === 'unassigned') return s.employeeId === 'unassigned';
     if (!scheduleSearch.trim()) return true;
     const emp = safeEmployees.find(e => e && e.id === s.employeeId);
-    const client = safeClients.find(c => c && c.id === s.clientId);
+    
+    // Check if internal task matches search, otherwise check client name
+    const clientMatch = s.isInternal 
+      ? String(s.internalTask).toLowerCase().includes(scheduleSearch.toLowerCase())
+      : (() => {
+          const c = safeClients.find(client => client && client.id === s.clientId);
+          return c && c.name && String(c.name).toLowerCase().includes(scheduleSearch.toLowerCase());
+        })();
+        
     const searchLower = scheduleSearch.toLowerCase();
     const empMatch = emp && emp.name && String(emp.name).toLowerCase().includes(searchLower);
-    const clientMatch = client && client.name && String(client.name).toLowerCase().includes(searchLower);
+    
     return empMatch || clientMatch;
   });
 
@@ -484,14 +525,23 @@ function AdminDashboard({
           {visibleShifts.map(shift => {
             const isOpen = shift.employeeId === 'unassigned';
             const emp = isOpen ? null : safeEmployees.find(e => e && e.id === shift.employeeId);
-            const client = safeClients.find(c => c && c.id === shift.clientId);
+            const client = shift.isInternal ? null : safeClients.find(c => c && c.id === shift.clientId);
+            
             const empNameDisplay = isOpen ? '🚨 OPEN SHIFT' : String(emp?.name || 'Unknown').split(' ')[0];
-            const clientNameDisplay = String(client?.name || 'Unknown Client').split(' ')[0];
+            const clientNameDisplay = shift.isInternal ? shift.internalTask : String(client?.name || 'Unknown Client').split(' ')[0];
+            
+            // Visual logic for internal vs standard client shifts
+            const bgBorderClass = isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 
+                                  shift.isInternal ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 
+                                  'bg-teal-100 text-teal-800 border-teal-200';
             
             return (
-              <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 'bg-teal-100 text-teal-800 border-teal-200'}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${String(client?.name || 'Unknown')}: ${shift.startTime}-${shift.endTime}`}>
+              <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${bgBorderClass}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${clientNameDisplay}: ${shift.startTime}-${shift.endTime}`}>
                 <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{empNameDisplay}</div>
-                <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : 'text-teal-700'}`}><Heart className="h-2.5 w-2.5 mr-1 shrink-0" /><span className="truncate">{clientNameDisplay}</span></div>
+                <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : shift.isInternal ? 'text-indigo-700' : 'text-teal-700'}`}>
+                  {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0" /> : <Heart className="h-2.5 w-2.5 mr-1 shrink-0" />}
+                  <span className="truncate">{clientNameDisplay}</span>
+                </div>
                 <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
                 
                 {shift.cancelRequest?.pending && (
@@ -579,11 +629,13 @@ function AdminDashboard({
                 {pendingCancellations.map(shift => {
                   const emp = safeEmployees.find(e => e.id === shift.employeeId);
                   const client = safeClients.find(c => c.id === shift.clientId);
+                  const clientNameDisplay = shift.isInternal ? shift.internalTask : (client?.name || 'Unknown');
+                  
                   return (
                     <div key={`cancel_${shift.id}`} className="bg-white rounded-lg p-5 border border-red-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-sm hover:shadow-md transition">
                       <div className="flex-1">
                         <div className="font-bold text-slate-800 text-lg">
-                          {emp?.name || 'Unknown'} <span className="text-slate-500 font-medium text-base mx-1">requested to cancel shift with</span> {client?.name || 'Unknown'}
+                          {emp?.name || 'Unknown'} <span className="text-slate-500 font-medium text-base mx-1">requested to cancel shift with</span> {clientNameDisplay}
                         </div>
                         <div className="text-sm text-slate-600 mt-2 flex items-center font-medium">
                           <CalendarDays className="h-4 w-4 mr-1.5 text-slate-400" /> {parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })} at {shift.startTime} - {shift.endTime}
@@ -704,33 +756,19 @@ function AdminDashboard({
               </>
             )}
 
-            {/* NEW SWIMLANE TIMELINE (DAY VIEW) */}
+            {/* NEW SWIMLANE TIMELINE (DAY VIEW) WITH COLLISION DETECTION */}
             {calendarView === 'day' && (() => {
               const dayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
               const dayViewShifts = filteredShifts.filter(s => s && s.date === dayStr);
               
-              // 24 Hour columns for absolute robustness
               const swimlaneHours = Array.from({length: 24}, (_, i) => i);
               
-              const getShiftStyle = (startTime, endTime) => {
-                try {
-                  const [sH, sM] = startTime.split(':').map(Number);
-                  const [eH, eM] = endTime.split(':').map(Number);
-                  const startVal = sH + (sM / 60);
-                  let endVal = eH + (eM / 60);
-                  if (endVal <= startVal) endVal += 24; // Handles overnight shifts seamlessly
-                  
-                  const left = (startVal / 24) * 100;
-                  const width = ((endVal - startVal) / 24) * 100;
-                  return { left: `${left}%`, width: `${width}%` };
-                } catch(e) { return { display: 'none' }; }
-              };
-
-              // Put Unassigned Shifts at the very top, then all active employees
-              const renderRows = [{ id: 'unassigned', name: '🚨 OPEN SHIFTS' }, ...safeEmployees];
+              // Filter out Master Admin to save space
+              const swimlaneEmployees = safeEmployees.filter(e => e.id !== 'admin1' && e.role !== 'Master Admin');
+              const renderRows = [{ id: 'unassigned', name: '🚨 OPEN SHIFTS' }, ...swimlaneEmployees];
 
               return (
-                <div className="bg-slate-50 overflow-x-auto min-h-[600px]">
+                <div className="bg-slate-50 overflow-x-auto">
                    <div className="min-w-[1440px] bg-white relative">
                       
                       {/* Timeline Header (Sticky) */}
@@ -750,11 +788,46 @@ function AdminDashboard({
                       {/* Employee Rows */}
                       <div className="flex flex-col relative z-10 divide-y divide-slate-200">
                          {renderRows.map(emp => {
-                            const empShifts = dayViewShifts.filter(s => s.employeeId === emp.id);
+                            // Sort shifts to process collisions chronologically
+                            const empShifts = dayViewShifts.filter(s => s.employeeId === emp.id).sort((a,b) => String(a.startTime).localeCompare(String(b.startTime)));
                             const isUnassignedRow = emp.id === 'unassigned';
                             
+                            // Collision Detection Algorithm
+                            const levels = [];
+                            const positionedShifts = empShifts.map(shift => {
+                               const [sH, sM] = String(shift.startTime || '00:00').split(':').map(Number);
+                               const [eH, eM] = String(shift.endTime || '00:00').split(':').map(Number);
+                               const startVal = sH + (sM / 60);
+                               let endVal = eH + (eM / 60);
+                               if (endVal <= startVal) endVal += 24; // Handle overnights
+                               
+                               let level = 0;
+                               // Find the first level where this shift's start time is after the level's current end time
+                               while (levels[level] !== undefined && levels[level] > startVal) {
+                                 level++;
+                               }
+                               levels[level] = endVal; // Update the end time for this level
+                               
+                               const left = (startVal / 24) * 100;
+                               const width = ((endVal - startVal) / 24) * 100;
+                               
+                               return {
+                                  ...shift,
+                                  style: {
+                                     left: `${left}%`,
+                                     width: `${width}%`,
+                                     top: `${level * 36 + 8}px`, // Stack downwards based on level
+                                     height: '28px' // Fixed height for blocks
+                                  },
+                                  level
+                               };
+                            });
+                            
+                            const maxLevel = levels.length > 0 ? levels.length - 1 : 0;
+                            const rowMinHeight = Math.max(65, (maxLevel + 1) * 36 + 16); // Dynamically stretch row height
+                            
                             return (
-                               <div key={emp.id} className={`flex relative min-h-[65px] group ${isUnassignedRow ? 'bg-amber-50/30' : 'bg-white hover:bg-slate-50 transition'}`}>
+                               <div key={emp.id} style={{ minHeight: `${rowMinHeight}px` }} className={`flex relative group ${isUnassignedRow ? 'bg-amber-50/30' : 'bg-white hover:bg-slate-50 transition'}`}>
                                   {/* Left Sticky Column */}
                                   <div className={`w-48 shrink-0 border-r border-slate-300 p-3 flex flex-col justify-center sticky left-0 z-30 ${isUnassignedRow ? 'bg-amber-100 border-b-amber-200' : 'bg-white group-hover:bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.05)]'}`}>
                                      <div className={`font-bold text-sm leading-tight truncate ${isUnassignedRow ? 'text-amber-800' : 'text-slate-800'}`}>{emp.name}</div>
@@ -763,29 +836,38 @@ function AdminDashboard({
 
                                   {/* Right Scrolling Timeline */}
                                   <div className="flex-1 relative">
-                                     {/* Background Grid Lines */}
+                                     {/* Background Grid Lines (Absolute inset stretches to fill dynamic height) */}
                                      <div className="absolute inset-0 flex pointer-events-none opacity-40">
                                        {swimlaneHours.map(h => <div key={h} className="flex-1 border-l border-slate-300 h-full"></div>)}
                                      </div>
 
-                                     {/* Render Shifts */}
-                                     {empShifts.map(shift => {
-                                        const client = safeClients.find(c => c.id === shift.clientId);
-                                        const style = getShiftStyle(shift.startTime, shift.endTime);
+                                     {/* Render Positioned Shifts */}
+                                     {positionedShifts.map(shift => {
+                                        const client = shift.isInternal ? null : safeClients.find(c => c.id === shift.clientId);
+                                        const clientNameDisplay = shift.isInternal ? shift.internalTask : (client?.name || 'Unknown');
+                                        
+                                        const shiftClass = isUnassignedRow ? 'bg-amber-100 border-amber-400 text-amber-900 ring-amber-500' : 
+                                                           shift.cancelRequest?.pending ? 'bg-slate-200 border-slate-400 text-slate-600 ring-slate-500 line-through' : 
+                                                           shift.isInternal ? 'bg-indigo-50 border-indigo-300 text-indigo-900 ring-indigo-500' :
+                                                           'bg-teal-100 border-teal-400 text-teal-900 ring-teal-500';
+                                                           
                                         return (
                                            <div 
                                               key={shift.id} 
-                                              style={style} 
-                                              className={`absolute top-1.5 bottom-1.5 rounded-md p-1.5 shadow-sm text-xs overflow-hidden leading-tight cursor-pointer hover:ring-2 hover:ring-offset-1 hover:z-20 transition-all group/shift border ${isUnassignedRow ? 'bg-amber-100 border-amber-400 text-amber-900 ring-amber-500' : shift.cancelRequest?.pending ? 'bg-slate-200 border-slate-400 text-slate-600 ring-slate-500 line-through' : 'bg-teal-100 border-teal-400 text-teal-900 ring-teal-500'}`}
-                                              title={`${client?.name || 'Unknown'} (${shift.startTime} - ${shift.endTime})`}
+                                              style={shift.style} 
+                                              className={`absolute rounded-md p-1 shadow-sm text-[10px] overflow-hidden leading-tight cursor-pointer hover:ring-2 hover:ring-offset-1 hover:z-20 transition-all group/shift border ${shiftClass}`}
+                                              title={`${clientNameDisplay} (${shift.startTime} - ${shift.endTime})`}
                                            >
-                                              <div className="font-bold truncate">{client?.name || 'Unknown'}</div>
-                                              <div className="text-[10px] font-medium opacity-80 mt-0.5 truncate">{shift.startTime} - {shift.endTime}</div>
+                                              <div className="font-bold truncate flex items-center">
+                                                {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0"/> : null}
+                                                {clientNameDisplay}
+                                              </div>
+                                              <div className="font-medium opacity-80 truncate">{shift.startTime} - {shift.endTime}</div>
 
                                               {/* Hover Action Menu */}
-                                              <div className="absolute right-1 top-1 bottom-1 opacity-0 group-hover/shift:opacity-100 flex items-center space-x-1 bg-white/90 px-1 rounded shadow-sm backdrop-blur-sm transition-opacity">
-                                                {!isUnassignedRow && <button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 p-1 rounded hover:bg-amber-50" title="Mark Open"><UserMinus className="h-3.5 w-3.5"/></button>}
-                                                <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50" title="Delete"><Trash2 className="h-3.5 w-3.5"/></button>
+                                              <div className="absolute right-1 top-0 bottom-0 flex items-center space-x-1 bg-white/90 px-1 shadow-sm backdrop-blur-sm opacity-0 group-hover/shift:opacity-100 transition-opacity">
+                                                {!isUnassignedRow && <button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 p-0.5 rounded hover:bg-amber-50" title="Mark Open"><UserMinus className="h-3.5 w-3.5"/></button>}
+                                                <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-600 hover:text-red-800 p-0.5 rounded hover:bg-red-50" title="Delete"><Trash2 className="h-3.5 w-3.5"/></button>
                                               </div>
                                            </div>
                                         )
@@ -834,7 +916,7 @@ function AdminDashboard({
         {activeAdminTab === 'schedule' && (
           <button 
              onClick={() => {
-               const d = new Date();
+               const d = currentDate;
                const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                setSelectedDateStr(formattedDate);
                setIsModalOpen(true);
@@ -864,6 +946,7 @@ function AdminDashboard({
           <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
             {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
+            {/* --- ADMIN SCHEDULE TAB DOT --- */}
             {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0 || urgentOpenShifts.length > 0) && (
               <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${urgentOpenShifts.length > 0 ? 'bg-red-600' : pendingCancellations.length > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
             )}

@@ -713,7 +713,7 @@ export default function EmployeeDashboard({
         <div className="md:w-2/3 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             
-            {/* TABS NAVIGATION */}
+            {/* TABS NAVIGATION - REORDERED */}
             <div className="flex border-b border-slate-200 overflow-x-auto scrollbar-hide">
               <button onClick={() => setActiveTab('schedule')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'schedule' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
                 My Schedule 
@@ -726,18 +726,18 @@ export default function EmployeeDashboard({
               <button onClick={() => setActiveTab('expenses')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
                 Logs & Expenses
               </button>
-              {isBonusActive && (
-                <button onClick={() => setActiveTab('awards')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
-                  Awards
-                  {hasUnreadRewards && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-amber-500 rounded-full border-2 border-white animate-pulse" title="New Reward!"></span>}
-                </button>
-              )}
               <button onClick={() => setActiveTab('documents')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'documents' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
                 Documents
               </button>
               <button onClick={() => setActiveTab('paystubs')} className={`flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'paystubs' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
                 Paystubs
               </button>
+              {isBonusActive && (
+                <button onClick={() => setActiveTab('awards')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'awards' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
+                  Awards
+                  {hasUnreadRewards && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-amber-500 rounded-full border-2 border-white animate-pulse" title="New Reward!"></span>}
+                </button>
+              )}
               <button onClick={() => setActiveTab('announcements')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
                 Team Feed {hasNewFeed && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-rose-500 rounded-full border-2 border-white"></span>}
               </button>
@@ -998,24 +998,7 @@ export default function EmployeeDashboard({
                 </div>
               )}
 
-              {/* TAB 5: AWARDS (REFACTORED COMPONENT) */}
-              {activeTab === 'awards' && isBonusActive && (
-                <div className="p-6">
-                  <EmployeeRewardsTab 
-                    currentUser={currentUser}
-                    employees={employees} 
-                    shifts={shifts} 
-                    expenses={expenses} 
-                    clientExpenses={clientExpenses} 
-                    kudos={kudos}
-                    prizes={prizes}
-                    isBonusActive={isBonusActive} 
-                    bonusSettings={bonusSettings}
-                  />
-                </div>
-              )}
-
-              {/* TAB 6: DOCUMENTS */}
+              {/* TAB 5: DOCUMENTS */}
               {activeTab === 'documents' && (
                 <div className="p-6 space-y-6">
                   <DocumentManager documents={documents} isAdmin={false} />
@@ -1062,8 +1045,27 @@ export default function EmployeeDashboard({
                 </div>
               )}
 
-              {/* TAB 7 & 8: PAYSTUBS AND ANNOUNCEMENTS */}
+              {/* TAB 6: PAYSTUBS */}
               {activeTab === 'paystubs' && <EmployeePaystubs myPaystubs={myPaystubs} />}
+
+              {/* TAB 7: AWARDS (REFACTORED COMPONENT) */}
+              {activeTab === 'awards' && isBonusActive && (
+                <div className="p-6">
+                  <EmployeeRewardsTab 
+                    currentUser={currentUser}
+                    employees={employees} 
+                    shifts={shifts} 
+                    expenses={expenses} 
+                    clientExpenses={clientExpenses} 
+                    kudos={kudos}
+                    prizes={prizes}
+                    isBonusActive={isBonusActive} 
+                    bonusSettings={bonusSettings}
+                  />
+                </div>
+              )}
+
+              {/* TAB 8: ANNOUNCEMENTS */}
               {activeTab === 'announcements' && (
                 <Announcements 
                   messages={messages} 

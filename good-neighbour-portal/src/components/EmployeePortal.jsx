@@ -3,7 +3,7 @@ import {
   Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, 
   CalendarDays, Trash2, Heart, Coins, Star, AlertCircle, Phone, FileText, 
   Info, Image as ImageIcon, MapPin, UserMinus, Activity, BookOpen, Camera, 
-  Loader2, Upload, Sun, CheckCircle, XCircle, Gift, PartyPopper, Briefcase 
+  Loader2, Upload, Sun, CheckCircle, XCircle, Gift, PartyPopper, Briefcase, Award  
 } from 'lucide-react';
 
 // --- SUB-COMPONENT IMPORTS ---

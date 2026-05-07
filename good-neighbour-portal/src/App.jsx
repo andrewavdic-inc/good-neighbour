@@ -640,6 +640,7 @@ function AdminDashboard({
     switch (activeAdminTab) {
       case 'desk': 
         return <AdminDesk 
+                clients={safeClients}
                  notes={notes} 
                  businessExpenses={businessExpenses} 
                  currentUser={currentUser} 

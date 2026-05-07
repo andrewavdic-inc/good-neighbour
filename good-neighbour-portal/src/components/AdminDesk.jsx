@@ -707,18 +707,27 @@ export default function AdminDesk({
                 </div>
               </div>
 
+              {/* UPDATED: URGENT NOTES OVERRIDE */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-bold text-yellow-900 flex items-center"><FileText className="h-4 w-4 mr-1.5 text-yellow-600"/> Sticky Notes & Tasks</h4>
                   <button onClick={() => openNewNoteModal(selectedDateStr)} className="text-xs font-bold bg-yellow-200 text-yellow-800 hover:bg-yellow-300 px-3 py-1.5 rounded transition">+ Add Note</button>
                 </div>
                 <div className="space-y-2">
-                  {myNotes.filter(n => n.reminderDate === selectedDateStr).length === 0 ? (
+                  {myNotes.filter(n => n.reminderDate === selectedDateStr || n.isUrgent).length === 0 ? (
                     <div className="text-sm text-slate-500 italic p-4 border border-dashed border-slate-300 rounded-lg text-center">No notes for this day.</div>
                   ) : (
-                    myNotes.filter(n => n.reminderDate === selectedDateStr).map(note => (
+                    myNotes.filter(n => n.reminderDate === selectedDateStr || n.isUrgent).map(note => (
                       <div key={note.id} className={`p-3 rounded-lg border shadow-sm group flex justify-between items-start ${note.isUrgent ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}>
                         <div className="flex-1">
+                          
+                          {/* NEW: CONTEXT BADGE FOR INJECTED URGENT NOTES */}
+                          {note.isUrgent && note.reminderDate !== selectedDateStr && (
+                            <div className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-1.5 flex items-center">
+                              <AlertCircle className="h-3 w-3 mr-1" /> Originally: {note.reminderDate}
+                            </div>
+                          )}
+
                           {note.type === 'list' ? (
                             <div className="space-y-1.5">
                               {(note.items || []).map(item => (

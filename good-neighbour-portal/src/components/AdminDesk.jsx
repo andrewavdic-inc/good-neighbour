@@ -133,7 +133,23 @@ export default function AdminDesk({
   const todayTime = new Date(new Date().toISOString().split('T')[0]).getTime();
   const paydayTime = new Date(paydayStr).getTime();
   const daysToPayday = Math.ceil((paydayTime - todayTime) / 86400000);
-  const needsPayrollAlert = !isPayrollFinalized && daysToPayday <= 1 && daysToPayday >= -3; // Alert shows 1 day before, and lingers until finalized
+  const needsPayrollAlert = !isPayrollFinalized && daysToPayday <= 1 && daysToPayday >= -3; 
+
+  // --- CRITICAL DESK ALERTS MATH ---
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  const myNotes = useMemo(() => notes.filter(n => n.authorId === currentUser.id), [notes, currentUser.id]);
+  const myAppointments = useMemo(() => appointments.filter(a => a.authorId === currentUser.id), [appointments, currentUser.id]);
+  
+  const urgentAlerts = myNotes.filter(n => n.isUrgent === true);
+  const todayAppts = myAppointments.filter(a => a.date === todayStr);
+  
+  // Directly flag any unassigned shifts happening today or tomorrow
+  const urgentOpenShifts = (shifts || []).filter(s => s.employeeId === 'unassigned' && (s.date === todayStr || s.date === tomorrowStr));
+
 
   // Helper for System Gross
   const getMonthlyLeaderboard = (year, month) => {
@@ -293,9 +309,7 @@ export default function AdminDesk({
     fetchWeather();
   }, [officeLocation]);
 
-  // --- Scoped Data ---
-  const myNotes = useMemo(() => notes.filter(n => n.authorId === currentUser.id), [notes, currentUser.id]);
-  const myAppointments = useMemo(() => appointments.filter(a => a.authorId === currentUser.id), [appointments, currentUser.id]);
+  // --- Scoped Data (Continued) ---
   const myDrawerFiles = useMemo(() => adminDrawer.filter(f => f.authorId === currentUser.id), [adminDrawer, currentUser.id]);
   const safeCabinetDocs = Array.isArray(cabinetDocuments) ? cabinetDocuments : [];
 
@@ -332,10 +346,6 @@ export default function AdminDesk({
       return true;
     }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate)); 
   }, [safeCabinetDocs, cabFilterCategory, cabFilterMonth]);
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const urgentAlerts = myNotes.filter(n => n.isUrgent === true);
-  const todayAppts = myAppointments.filter(a => a.date === todayStr);
 
   const upcomingItinerary = useMemo(() => {
     return [...myAppointments].filter(a => a.date >= todayStr).sort((a, b) => {
@@ -550,13 +560,17 @@ export default function AdminDesk({
       )}
 
       {/* URGENT BANNER WITH MUTE */}
-      {(urgentAlerts.length > 0 || todayAppts.length > 0) && !isBannerMuted && (
-        <div className="bg-slate-800 text-white p-4 rounded-xl flex items-start sm:items-center justify-between mb-6 shadow-md">
+      {(urgentAlerts.length > 0 || todayAppts.length > 0 || urgentOpenShifts.length > 0) && !isBannerMuted && (
+        <div className="bg-slate-800 text-white p-4 rounded-xl flex items-start sm:items-center justify-between mb-6 shadow-md border-l-4 border-red-500">
           <div className="flex items-center">
-            <AlertCircle className="h-6 w-6 mr-3 shrink-0 text-red-400" />
+            <AlertCircle className={`h-6 w-6 mr-3 shrink-0 ${urgentOpenShifts.length > 0 ? 'text-amber-400' : 'text-red-400'}`} />
             <div>
               <div className="font-bold text-lg leading-tight">Requires Attention</div>
-              <div className="text-sm text-slate-300">You have {urgentAlerts.length} urgent note(s) and {todayAppts.length} appointment(s) today.</div>
+              <div className="text-sm text-slate-300 flex flex-wrap gap-1">
+                <span>You have {urgentAlerts.length} urgent note(s),</span>
+                <span>{todayAppts.length} appointment(s) today,</span>
+                <span className={urgentOpenShifts.length > 0 ? "text-amber-400 font-bold" : ""}>and {urgentOpenShifts.length} critical open shift(s).</span>
+              </div>
             </div>
           </div>
           <div className="flex items-center space-x-3 mt-3 sm:mt-0 ml-4 shrink-0">

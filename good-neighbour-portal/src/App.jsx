@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File, BookOpen, Award } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File, BookOpen, Award, AlertTriangle } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -63,11 +63,12 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-// --- ADD SHIFT MODAL WITH MONTHLY TRACKER ---
-function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], onSave }) {
+// --- ADD SHIFT MODAL WITH MONTHLY TRACKER & CONFLICT ENGINE ---
+function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], timeOffLogs = [], onSave }) {
   const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
+  const safeTimeOff = Array.isArray(timeOffLogs) ? timeOffLogs : [];
   
   const [employeeId, setEmployeeId] = useState(safeEmps[0]?.id || '');
   const [clientId, setClientId] = useState(safeClients[0]?.id || '');
@@ -75,6 +76,10 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const [endTime, setEndTime] = useState('17:00');
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(4);
+
+  // Soft Warning State
+  const [showOverlapWarning, setShowOverlapWarning] = useState(false);
+  const [overlapDetails, setOverlapDetails] = useState([]);
 
   // --- DYNAMIC OVERBOOKING MATH ---
   const baseDate = parseLocalSafe(selectedDate);
@@ -90,14 +95,53 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const baseShifts = selectedClientData?.autoRenew ? (Number(selectedClientData?.baseMonthlyShifts) || 0) : 0;
   const extraShifts = selectedClientData?.extraShifts?.[shiftMonthKey] || 0;
   const targetThisMonth = baseShifts + extraShifts;
-
   const remainingShifts = targetThisMonth - clientShiftsThisMonth;
   const isOverbooked = remainingShifts <= 0;
+
+  // --- HARD BLOCK: TIME OFF ---
+  const isTimeOffBlocked = React.useMemo(() => {
+    if (!employeeId || !selectedDate) return false;
+    return safeTimeOff.some(log => {
+      if (log.employeeId !== employeeId || log.status !== 'approved') return false;
+      const logStart = parseLocalSafe(log.startDate);
+      const logEnd = parseLocalSafe(log.endDate);
+      const checkDate = parseLocalSafe(selectedDate);
+      return checkDate >= logStart && checkDate <= logEnd;
+    });
+  }, [employeeId, selectedDate, safeTimeOff]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (isTimeOffBlocked) return; // Completely block saving
+
+    // --- OVERLAP CONFLICT DETECTION (Soft Warning) ---
+    if (!showOverlapWarning) {
+      const conflicting = safeShifts.filter(s => {
+         if (s.employeeId !== employeeId || s.date !== selectedDate || !s.startTime || !s.endTime) return false;
+         
+         const [sH, sM] = s.startTime.split(':').map(Number);
+         const [eH, eM] = s.endTime.split(':').map(Number);
+         const [nH, nM] = startTime.split(':').map(Number);
+         const [neH, neM] = endTime.split(':').map(Number);
+         
+         const sStartM = sH * 60 + sM;
+         const sEndM = eH * 60 + eM;
+         const nStartM = nH * 60 + nM;
+         const nEndM = neH * 60 + neM;
+         
+         return (nStartM < sEndM && nEndM > sStartM); // Time blocks intersect
+      });
+      
+      if (conflicting.length > 0) {
+         setOverlapDetails(conflicting);
+         setShowOverlapWarning(true);
+         return; // Pause save process to show warning
+      }
+    }
+
+    // --- PROCEED WITH SAVE ---
     const newShifts = [];
     const startDate = parseLocalSafe(selectedDate);
 
@@ -129,18 +173,21 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Date</label><input type="date" value={selectedDate} readOnly className="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-50 text-slate-500 cursor-not-allowed focus:outline-none" /></div>
           
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Employee</label>
-            <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required>
+            <div className="flex justify-between items-end mb-1">
+              <label className="block text-sm font-medium text-slate-700">Employee</label>
+              {isTimeOffBlocked && <span className="text-[10px] font-bold bg-red-100 text-red-800 px-2 py-0.5 rounded shadow-sm border border-red-200">ON VACATION / LEAVE</span>}
+            </div>
+            <select value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setShowOverlapWarning(false); }} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 ${isTimeOffBlocked ? 'bg-red-50 border-red-300 text-red-900' : 'border-slate-300'}`} required>
               {safeEmps.map(emp => <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>)}
             </select>
+            {isTimeOffBlocked && <p className="text-xs font-bold text-red-600 mt-1.5 flex items-center"><XCircle className="h-3.5 w-3.5 mr-1" /> This employee is on approved leave. You cannot schedule them.</p>}
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Start</label><input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Start</label><input type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setShowOverlapWarning(false); }} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setShowOverlapWarning(false); }} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
           </div>
           
-          {/* --- OVERBOOKING WARNING UI --- */}
           <div>
             <div className="flex justify-between items-end mb-1">
               <label className="block text-sm font-medium text-slate-700">Client</label>
@@ -153,11 +200,6 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
             <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 transition ${isOverbooked ? 'border-red-300 bg-red-50 text-red-900' : 'border-slate-300'}`} required>
               {safeClients.map(client => <option key={client.id} value={client.id}>{client.name}</option>)}
             </select>
-            {isOverbooked && clientId && (
-              <p className="text-[11px] text-red-600 mt-1.5 font-bold flex items-center bg-red-50 p-1.5 rounded border border-red-100">
-                <AlertCircle className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Warning: This client has exhausted their visits for {baseDate.toLocaleDateString('en-US', { month: 'long' })}!
-              </p>
-            )}
           </div>
           
           <div className="pt-2 border-t border-slate-200">
@@ -174,9 +216,34 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
               </select>
             )}
           </div>
+
+          {/* --- SOFT WARNING OVERRIDE UI --- */}
+          {showOverlapWarning && (
+            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mt-2 shadow-inner">
+              <h4 className="text-yellow-900 font-bold flex items-center mb-2 text-sm"><AlertTriangle className="h-4 w-4 mr-1.5" /> Anomaly Detected: Double-Booking</h4>
+              <p className="text-xs text-yellow-800 mb-2 font-medium">This employee is already scheduled during this exact time block:</p>
+              <ul className="text-xs text-yellow-900 font-bold list-disc pl-5 space-y-1 mb-3">
+                {overlapDetails.map(c => {
+                   const cl = safeClients.find(client => client.id === c.clientId);
+                   return <li key={c.id}>{cl?.name || 'Unknown Client'} ({c.startTime} - {c.endTime})</li>
+                })}
+              </ul>
+              <p className="text-[11px] text-yellow-700 font-bold uppercase tracking-wider border-t border-yellow-200 pt-2">Are you intentionally double-booking them for a group outing?</p>
+            </div>
+          )}
+
           <div className="pt-4 flex justify-end space-x-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Cancel</button>
-            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-teal-600 rounded-md hover:bg-teal-700 transition">Save Shift</button>
+            {showOverlapWarning ? (
+               <>
+                 <button type="button" onClick={() => setShowOverlapWarning(false)} className="px-4 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition shadow-sm">Cancel / Fix Time</button>
+                 <button type="submit" className="px-4 py-2.5 text-sm font-black text-yellow-900 bg-yellow-400 rounded-md hover:bg-yellow-500 transition shadow-[0_0_10px_rgba(250,204,21,0.5)]">Yes, Approve Group Outing</button>
+               </>
+            ) : (
+               <>
+                 <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Cancel</button>
+                 <button type="submit" disabled={isTimeOffBlocked} className="px-4 py-2 text-sm font-bold text-white bg-teal-600 rounded-md hover:bg-teal-700 disabled:bg-slate-400 transition shadow-sm">Save Shift</button>
+               </>
+            )}
           </div>
         </form>
       </div>
@@ -204,16 +271,12 @@ function AdminDashboard({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
-  const [activeAdminTab, setActiveAdminTab] = useState('desk');
+  const [activeAdminTab, setActiveAdminTab] = useState('schedule');
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [calendarView, setCalendarView] = useState('month'); 
 
   const [isDeskPingMuted, setIsDeskPingMuted] = useState(false);
   
-  // Admin Smart Notification State
-  const [adminScheduleUpdates, setAdminScheduleUpdates] = useState([]);
-  const [showAdminUpdateBanner, setShowAdminUpdateBanner] = useState(false);
-
   const isMasterAdmin = currentUser.role === 'Master Admin' || currentUser.id === 'admin1';
 
   // --- Scoped Data ---
@@ -229,42 +292,11 @@ function AdminDashboard({
 
   const pendingCancellations = safeShifts.filter(s => s.cancelRequest?.pending === true);
 
-  // Admin Smart Schedule Tracker
-  useEffect(() => {
-    const saved = localStorage.getItem('gn_admin_shift_snapshot');
-    if (saved) {
-      const snapshot = JSON.parse(saved);
-      const changes = [];
-      
-      safeShifts.forEach(liveShift => {
-        const snapShift = snapshot.find(s => s.id === liveShift.id);
-        if (snapShift && snapShift.employeeId === 'unassigned' && liveShift.employeeId !== 'unassigned') {
-          const emp = safeEmployees.find(e => e.id === liveShift.employeeId);
-          const client = safeClients.find(c => c.id === liveShift.clientId);
-          const dateStr = parseLocalSafe(liveShift.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          changes.push(`🟢 CLAIMED: ${emp?.name || 'An employee'} picked up the open shift with ${client?.name || 'Unknown'} on ${dateStr}`);
-        }
-      });
-
-      if (changes.length > 0) {
-        setAdminScheduleUpdates(changes);
-        setShowAdminUpdateBanner(true);
-      } else {
-        setAdminScheduleUpdates([]);
-        setShowAdminUpdateBanner(false);
-      }
-    } else {
-      const snapshot = safeShifts.map(s => ({ id: s.id, employeeId: s.employeeId }));
-      localStorage.setItem('gn_admin_shift_snapshot', JSON.stringify(snapshot));
-    }
-  }, [safeShifts, safeEmployees, safeClients]);
-
-  const acknowledgeAdminScheduleUpdates = () => {
-    setAdminScheduleUpdates([]);
-    setShowAdminUpdateBanner(false);
-    const snapshot = safeShifts.map(s => ({ id: s.id, employeeId: s.employeeId }));
-    localStorage.setItem('gn_admin_shift_snapshot', JSON.stringify(snapshot));
-  };
+  // --- CRITICAL ALERT: UNASSIGNED SHIFTS TODAY/TOMORROW ---
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const urgentOpenShifts = safeShifts.filter(s => s.employeeId === 'unassigned' && (s.date === todayStr || s.date === tomorrowStr));
 
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
@@ -283,12 +315,6 @@ function AdminDashboard({
   };
 
   const jumpToToday = () => setCurrentDate(new Date());
-
-  const handleDayClick = (day) => {
-    const formattedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    setSelectedDateStr(formattedDate);
-    setIsModalOpen(true);
-  };
 
   const handleDayObjectClick = (d) => {
     const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -323,6 +349,7 @@ function AdminDashboard({
   
   const filteredShifts = safeShifts.filter(s => {
     if (!s) return false;
+    if (scheduleSearch === 'unassigned') return s.employeeId === 'unassigned';
     if (!scheduleSearch.trim()) return true;
     const emp = safeEmployees.find(e => e && e.id === s.employeeId);
     const client = safeClients.find(c => c && c.id === s.clientId);
@@ -332,15 +359,8 @@ function AdminDashboard({
     return empMatch || clientMatch;
   });
 
-  let dayViewShifts = [];
-  if (calendarView === 'day') {
-    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
-    dayViewShifts = filteredShifts
-      .filter(s => s && s.date === dateStr)
-      .sort((a, b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
-  }
-
-  const renderCalendarCell = (d, minHeight = "min-h-[120px]") => {
+  // --- MONTH & WEEK RENDER ENGINE (With +X More UI) ---
+  const renderCalendarCell = (d, minHeight = "min-h-[120px]", isWeekView = false) => {
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
@@ -362,6 +382,11 @@ function AdminDashboard({
       const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
       return cellTime >= sTime && cellTime <= eTime;
     });
+
+    // Capping Logic for Month View
+    const maxShifts = isWeekView ? 999 : 3;
+    const visibleShifts = dayShifts.slice(0, maxShifts);
+    const hiddenCount = dayShifts.length - maxShifts;
     
     return (
       <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'} ${isToday ? 'border-2 border-teal-500 shadow-sm z-10' : ''}`}>
@@ -384,12 +409,11 @@ function AdminDashboard({
                   {isSick ? <Activity className="h-3 w-3 mr-1" /> : isVacation ? <Sun className="h-3 w-3 mr-1" /> : <CalendarDays className="h-3 w-3 mr-1" />}
                   {String(emp?.name || 'Unknown').split(' ')[0]}
                 </div>
-                <div className="text-[9px] mt-0.5 opacity-90 uppercase tracking-wider">{isSick ? 'Sick Day' : isVacation ? 'Vacation' : 'Unpaid Leave'}</div>
               </div>
             );
           })}
 
-          {dayShifts.map(shift => {
+          {visibleShifts.map(shift => {
             const isOpen = shift.employeeId === 'unassigned';
             const emp = isOpen ? null : safeEmployees.find(e => e && e.id === shift.employeeId);
             const client = safeClients.find(c => c && c.id === shift.clientId);
@@ -413,6 +437,13 @@ function AdminDashboard({
               </div>
             );
           })}
+          
+          {/* THE +X MORE BUTTON FOR MONTH VIEW */}
+          {hiddenCount > 0 && (
+             <div className="w-full text-center text-[10px] font-bold text-slate-500 hover:text-teal-600 mt-1 py-1 bg-slate-100/80 hover:bg-teal-50 rounded transition shadow-inner">
+                +{hiddenCount} more...
+             </div>
+          )}
         </div>
       </div>
     );
@@ -445,7 +476,6 @@ function AdminDashboard({
                  onUpdateAppointment={onUpdateAppointment}
                  onRemoveAppointment={onRemoveAppointment}
                  
-                 // --- NEW PAYROLL PIPES ---
                  payPeriodStart={payPeriodStart}
                  shifts={shifts}
                  expenses={expenses}
@@ -465,16 +495,13 @@ function AdminDashboard({
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
-      
-      // --- NEW REWARDS TAB ---
       case 'rewards': return <AdminRewardsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} kudos={kudos} prizes={prizes} onAddKudos={onAddKudos} onRemoveKudos={onRemoveKudos} onAddPrize={onAddPrize} onRemovePrize={onRemovePrize} isBonusActive={isBonusActive} bonusSettings={bonusSettings} updateEmployee={updateEmployee} />;
-
       case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
       case 'schedule':
       default: return (
         <div className="space-y-4">
           
-          {/* --- HIGH PRIORITY CANCELLATION BANNER --- */}
+          {/* HIGH PRIORITY CANCELLATION BANNER */}
           {pendingCancellations.length > 0 && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-6 shadow-sm mb-4">
               <h3 className="font-bold text-red-800 flex items-center mb-4 text-lg">
@@ -509,26 +536,19 @@ function AdminDashboard({
             </div>
           )}
 
-          {/* --- ADMIN EXPLICIT ACKNOWLEDGEMENT BANNER (CLAIMED SHIFTS) --- */}
-          {showAdminUpdateBanner && adminScheduleUpdates.length > 0 && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-              <div className="flex items-start">
-                <div className="h-2.5 w-2.5 bg-emerald-500 rounded-full animate-pulse mr-3 shrink-0 mt-1"></div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800 mb-2">Open Shifts Claimed</h3>
-                  <ul className="space-y-1.5">
-                    {adminScheduleUpdates.map((msg, i) => (
-                      <li key={i} className="text-xs text-slate-700 font-medium bg-white px-3 py-2 rounded border border-emerald-100 shadow-sm flex items-start">
-                        <span className="mr-2 mt-0.5">{msg.substring(0,2)}</span>
-                        <span>{msg.substring(3)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              <button onClick={acknowledgeAdminScheduleUpdates} className="w-full sm:w-auto px-4 py-2 text-sm font-bold bg-white text-emerald-700 border border-emerald-300 rounded-md hover:bg-emerald-100 transition shadow-sm whitespace-nowrap shrink-0">
-                Acknowledge & Clear
-              </button>
+          {/* CRITICAL OPEN SHIFT BANNER */}
+          {urgentOpenShifts.length > 0 && (
+            <div className="bg-red-500 text-white border border-red-600 rounded-xl p-4 shadow-lg mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in slide-in-from-top-4">
+               <div className="flex items-center">
+                 <AlertTriangle className="h-8 w-8 mr-4 shrink-0 text-yellow-300" />
+                 <div>
+                   <h3 className="font-black text-lg leading-tight tracking-wide">Critical Coverage Warning!</h3>
+                   <p className="text-sm text-red-100 font-medium">There are <span className="font-black text-white">{urgentOpenShifts.length} unassigned shifts</span> happening today or tomorrow. Please assign coverage immediately to prevent missed visits.</p>
+                 </div>
+               </div>
+               <button onClick={() => { setActiveAdminTab('schedule'); setScheduleSearch('unassigned'); }} className="w-full sm:w-auto bg-white text-red-700 hover:bg-red-50 px-5 py-2.5 font-black rounded-lg text-sm shadow-sm transition whitespace-nowrap uppercase tracking-wider">
+                 View Open Shifts
+               </button>
             </div>
           )}
 
@@ -554,7 +574,7 @@ function AdminDashboard({
               
               <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 w-full lg:w-auto justify-between lg:justify-end">
                 <div className="flex bg-slate-200 p-1 rounded-lg w-full sm:w-auto overflow-x-auto">
-                  <button onClick={() => setCalendarView('day')} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${calendarView === 'day' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Day</button>
+                  <button onClick={() => setCalendarView('day')} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${calendarView === 'day' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Timeline (Day)</button>
                   <button onClick={() => setCalendarView('week')} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${calendarView === 'week' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Week</button>
                   <button onClick={() => setCalendarView('month')} className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${calendarView === 'month' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Month</button>
                 </div>
@@ -566,6 +586,7 @@ function AdminDashboard({
               </div>
             </div>
 
+            {/* MONTH VIEW */}
             {calendarView === 'month' && (
               <>
                 <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
@@ -573,11 +594,12 @@ function AdminDashboard({
                 </div>
                 <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
                   {blanksArray.map(blank => (<div key={`blank-${blank}`} className="bg-white min-h-[120px] opacity-50 p-2"></div>))}
-                  {monthDaysArray.map(d => renderCalendarCell(d))}
+                  {monthDaysArray.map(d => renderCalendarCell(d, "min-h-[120px]", false))}
                 </div>
               </>
             )}
 
+            {/* WEEK VIEW */}
             {calendarView === 'week' && (
               <>
                 <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-100">
@@ -586,52 +608,106 @@ function AdminDashboard({
                   ))}
                 </div>
                 <div className="grid grid-cols-7 auto-rows-fr bg-slate-200 gap-px">
-                  {weekDaysArray.map(d => renderCalendarCell(d, "min-h-[300px]"))}
+                  {weekDaysArray.map(d => renderCalendarCell(d, "min-h-[300px]", true))}
                 </div>
               </>
             )}
 
-            {calendarView === 'day' && (
-              <div className="p-6 bg-slate-50 min-h-[400px]">
-                {dayViewShifts.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-slate-500">
-                    <CalendarIcon className="h-16 w-16 text-slate-300 mb-4" />
-                    <p className="text-lg font-medium">No shifts scheduled for this day.</p>
-                    <button onClick={() => handleDayClick(currentDate.getDate() || 1)} className="mt-4 text-teal-600 hover:text-teal-800 font-medium">Add a shift</button>
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-w-4xl mx-auto">
-                    {dayViewShifts.map(shift => {
-                      const isOpen = shift.employeeId === 'unassigned';
-                      const emp = isOpen ? null : safeEmployees.find(e => e.id === shift.employeeId);
-                      const client = safeClients.find(c => c.id === shift.clientId);
-                      return (
-                        <div key={shift.id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:border-teal-300 hover:shadow-md transition gap-4">
-                          <div className="flex items-center gap-5 w-full sm:w-auto">
-                            <div className={`px-4 py-3 rounded-lg text-center font-bold text-sm shrink-0 border ${isOpen ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-teal-50 text-teal-800 border-teal-100'}`}>
-                              {shift.startTime} <br/><span className="text-[10px] font-normal opacity-80 uppercase tracking-widest">to</span><br/> {shift.endTime}
-                            </div>
-                            <div className="overflow-hidden">
-                              <h4 className="text-lg font-bold text-slate-800 flex items-center truncate">
-                                {isOpen ? <><AlertCircle className="w-5 h-5 mr-1.5 text-amber-500" /> OPEN SHIFT</> : String(emp?.name || 'Unknown')}
-                              </h4>
-                              <div className="text-sm text-slate-600 flex items-center mt-1.5 font-medium truncate">
-                                <Heart className="h-4 w-4 mr-1.5 text-teal-500 shrink-0" />
-                                Client: {String(client?.name || 'Unknown')}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex flex-row sm:flex-col gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                            {!isOpen && (<button onClick={() => onMarkShiftOpen(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-amber-50 text-amber-700 border border-amber-200 rounded-md hover:bg-amber-100 transition font-medium flex items-center justify-center"><UserMinus className="h-4 w-4 mr-1.5 shrink-0" /> Mark Open</button>)}
-                            <button onClick={() => onRemoveShift(shift.id)} className="w-full sm:w-auto px-4 py-2 text-sm bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-100 transition font-medium flex items-center justify-center"><Trash2 className="h-4 w-4 mr-1.5 shrink-0"/> Delete Shift</button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* NEW SWIMLANE TIMELINE (DAY VIEW) */}
+            {calendarView === 'day' && (() => {
+              const dayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+              const dayViewShifts = filteredShifts.filter(s => s && s.date === dayStr);
+              
+              // 24 Hour columns for absolute robustness
+              const swimlaneHours = Array.from({length: 24}, (_, i) => i);
+              
+              const getShiftStyle = (startTime, endTime) => {
+                try {
+                  const [sH, sM] = startTime.split(':').map(Number);
+                  const [eH, eM] = endTime.split(':').map(Number);
+                  const startVal = sH + (sM / 60);
+                  let endVal = eH + (eM / 60);
+                  if (endVal <= startVal) endVal += 24; // Handles overnight shifts seamlessly
+                  
+                  const left = (startVal / 24) * 100;
+                  const width = ((endVal - startVal) / 24) * 100;
+                  return { left: `${left}%`, width: `${width}%` };
+                } catch(e) { return { display: 'none' }; }
+              };
+
+              // Put Unassigned Shifts at the very top, then all active employees
+              const renderRows = [{ id: 'unassigned', name: '🚨 OPEN SHIFTS' }, ...safeEmployees];
+
+              return (
+                <div className="bg-slate-50 overflow-x-auto min-h-[600px]">
+                   <div className="min-w-[1440px] bg-white relative">
+                      
+                      {/* Timeline Header (Sticky) */}
+                      <div className="flex border-b border-slate-300 bg-slate-100 sticky top-0 z-40">
+                         <div className="w-48 shrink-0 bg-slate-200 border-r border-slate-300 p-3 flex items-center justify-center font-bold text-slate-600 uppercase tracking-widest text-xs z-50">
+                           Employee Lane
+                         </div>
+                         <div className="flex-1 flex relative">
+                           {swimlaneHours.map(h => (
+                             <div key={h} className="flex-1 border-l border-slate-300 text-center py-2 text-[10px] font-black text-slate-500">
+                               {h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h-12} PM`}
+                             </div>
+                           ))}
+                         </div>
+                      </div>
+
+                      {/* Employee Rows */}
+                      <div className="flex flex-col relative z-10 divide-y divide-slate-200">
+                         {renderRows.map(emp => {
+                            const empShifts = dayViewShifts.filter(s => s.employeeId === emp.id);
+                            const isUnassignedRow = emp.id === 'unassigned';
+                            
+                            return (
+                               <div key={emp.id} className={`flex relative min-h-[65px] group ${isUnassignedRow ? 'bg-amber-50/30' : 'bg-white hover:bg-slate-50 transition'}`}>
+                                  {/* Left Sticky Column */}
+                                  <div className={`w-48 shrink-0 border-r border-slate-300 p-3 flex flex-col justify-center sticky left-0 z-30 ${isUnassignedRow ? 'bg-amber-100 border-b-amber-200' : 'bg-white group-hover:bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.05)]'}`}>
+                                     <div className={`font-bold text-sm leading-tight truncate ${isUnassignedRow ? 'text-amber-800' : 'text-slate-800'}`}>{emp.name}</div>
+                                     {!isUnassignedRow && <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">{emp.role}</div>}
+                                  </div>
+
+                                  {/* Right Scrolling Timeline */}
+                                  <div className="flex-1 relative">
+                                     {/* Background Grid Lines */}
+                                     <div className="absolute inset-0 flex pointer-events-none opacity-40">
+                                       {swimlaneHours.map(h => <div key={h} className="flex-1 border-l border-slate-300 h-full"></div>)}
+                                     </div>
+
+                                     {/* Render Shifts */}
+                                     {empShifts.map(shift => {
+                                        const client = safeClients.find(c => c.id === shift.clientId);
+                                        const style = getShiftStyle(shift.startTime, shift.endTime);
+                                        return (
+                                           <div 
+                                              key={shift.id} 
+                                              style={style} 
+                                              className={`absolute top-1.5 bottom-1.5 rounded-md p-1.5 shadow-sm text-xs overflow-hidden leading-tight cursor-pointer hover:ring-2 hover:ring-offset-1 hover:z-20 transition-all group/shift border ${isUnassignedRow ? 'bg-amber-100 border-amber-400 text-amber-900 ring-amber-500' : shift.cancelRequest?.pending ? 'bg-slate-200 border-slate-400 text-slate-600 ring-slate-500 line-through' : 'bg-teal-100 border-teal-400 text-teal-900 ring-teal-500'}`}
+                                              title={`${client?.name || 'Unknown'} (${shift.startTime} - ${shift.endTime})`}
+                                           >
+                                              <div className="font-bold truncate">{client?.name || 'Unknown'}</div>
+                                              <div className="text-[10px] font-medium opacity-80 mt-0.5 truncate">{shift.startTime} - {shift.endTime}</div>
+
+                                              {/* Hover Action Menu */}
+                                              <div className="absolute right-1 top-1 bottom-1 opacity-0 group-hover/shift:opacity-100 flex items-center space-x-1 bg-white/90 px-1 rounded shadow-sm backdrop-blur-sm transition-opacity">
+                                                {!isUnassignedRow && <button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 p-1 rounded hover:bg-amber-50" title="Mark Open"><UserMinus className="h-3.5 w-3.5"/></button>}
+                                                <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50" title="Delete"><Trash2 className="h-3.5 w-3.5"/></button>
+                                              </div>
+                                           </div>
+                                        )
+                                     })}
+                                  </div>
+                               </div>
+                            )
+                         })}
+                      </div>
+                   </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       );
@@ -689,9 +765,8 @@ function AdminDashboard({
           <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
             {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
-            {/* --- ADMIN SCHEDULE TAB DOT --- */}
-            {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0) && (
-              <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${pendingCancellations.length > 0 ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+            {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0 || urgentOpenShifts.length > 0) && (
+              <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${urgentOpenShifts.length > 0 ? 'bg-red-600' : pendingCancellations.length > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
             )}
           </button>
         ))}
@@ -699,9 +774,18 @@ function AdminDashboard({
       
       {renderAdminTab()}
 
-      {/* --- RENDER ADD SHIFT MODAL WITH PASSED SHIFTS --- */}
+      {/* --- RENDER ADD SHIFT MODAL WITH PASSED SHIFTS AND TIMEOFF --- */}
       {isModalOpen && (
-        <AddShiftModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} selectedDate={selectedDateStr} employees={safeEmployees} clients={safeClients} shifts={safeShifts} onSave={onAddShift} />
+        <AddShiftModal 
+          isOpen={isModalOpen} 
+          onClose={() => setIsModalOpen(false)} 
+          selectedDate={selectedDateStr} 
+          employees={safeEmployees} 
+          clients={safeClients} 
+          shifts={safeShifts} 
+          timeOffLogs={timeOffLogs}
+          onSave={onAddShift} 
+        />
       )}
     </div>
   );
@@ -1196,7 +1280,6 @@ export default function App() {
             
             onRemovePrize={(id) => runMutation('gn_prizes', id, 'delete')}
             
-            // --- NEW PAYROLL PIPES ---
             payrollLogs={payrollLogs}
             onFinalizePayroll={handleFinalizePayroll}
           />

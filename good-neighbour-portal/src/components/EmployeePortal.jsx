@@ -985,10 +985,13 @@ export default function EmployeeDashboard({
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   
-  // Cancellation Modal State
+  // Modal States
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelShiftId, setCancelShiftId] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  
+  const [isDayAgendaOpen, setIsDayAgendaOpen] = useState(false);
+  const [agendaDateStr, setAgendaDateStr] = useState('');
 
   // Time Off State
   const [toStartDate, setToStartDate] = useState(''); 
@@ -1190,6 +1193,12 @@ export default function EmployeeDashboard({
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blanksArray = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
+  const handleDayClick = (day) => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setAgendaDateStr(dateStr);
+    setIsDayAgendaOpen(true);
+  };
+
   const renderSchedule = () => {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6">
@@ -1212,7 +1221,7 @@ export default function EmployeeDashboard({
             const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
             const holiday = getHoliday(dateStr);
             const isToday = dateStr === todayStr;
-            const dayShifts = myShifts.filter(s => s && s.date === dateStr);
+            const dayShifts = myShifts.filter(s => s && s.date === dateStr).sort((a,b) => String(a.startTime || '').localeCompare(String(b.startTime || '')));
             
             const cellTime = new Date(year, month, day).getTime();
             const dayTimeOff = myTimeOffLogs.filter(log => {
@@ -1226,8 +1235,13 @@ export default function EmployeeDashboard({
               return cellTime >= sTime && cellTime <= eTime;
             });
             
+            // Capping Logic for Month View
+            const maxShifts = 3;
+            const visibleShifts = dayShifts.slice(0, maxShifts);
+            const hiddenCount = dayShifts.length - maxShifts;
+
             return (
-              <div key={day} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative ${holiday ? 'bg-purple-50/50' : ''} ${isToday ? 'border-2 border-teal-500 shadow-sm z-10' : ''}`}>
+              <div key={day} onClick={() => handleDayClick(day)} className={`bg-white min-h-[100px] p-2 hover:bg-teal-50 transition group relative cursor-pointer ${holiday ? 'bg-purple-50/50' : ''} ${isToday ? 'border-2 border-teal-500 shadow-sm z-10' : ''}`}>
                 <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
                   <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : isToday ? 'text-teal-700 font-bold' : 'text-slate-600'}`}>{day}</span>
                   <div className="flex flex-col items-end gap-1">
@@ -1251,10 +1265,10 @@ export default function EmployeeDashboard({
                     );
                   })}
 
-                  {dayShifts.map(shift => {
+                  {visibleShifts.map(shift => {
                     const client = clients.find(c => c && c.id === shift.clientId);
                     return (
-                      <div key={shift.id} onClick={() => setSelectedClient(client)} className={`text-xs p-1.5 rounded cursor-pointer transition shadow-sm ${shift.cancelRequest?.pending ? 'bg-slate-200 text-slate-500 border border-slate-300' : 'bg-teal-100 text-teal-800 border border-teal-200 hover:bg-teal-200'}`}>
+                      <div key={shift.id} className={`text-xs p-1.5 rounded transition shadow-sm ${shift.cancelRequest?.pending ? 'bg-slate-200 text-slate-500 border border-slate-300' : 'bg-teal-100 text-teal-800 border border-teal-200 group-hover:bg-teal-200'}`}>
                         <div className="font-semibold truncate flex items-center">
                           <Heart className={`h-2.5 w-2.5 mr-1 shrink-0 ${shift.cancelRequest?.pending ? 'text-slate-400' : 'text-teal-600'}`} />
                           {client?.name?.split(' ')[0] || 'Unknown'}
@@ -1269,6 +1283,13 @@ export default function EmployeeDashboard({
                       </div>
                     );
                   })}
+
+                  {/* THE +X MORE BUTTON FOR MONTH VIEW */}
+                  {hiddenCount > 0 && (
+                     <div className="w-full text-center text-[10px] font-bold text-slate-500 group-hover:text-teal-600 mt-1 py-1 bg-slate-100/80 group-hover:bg-teal-50 rounded transition shadow-inner">
+                        +{hiddenCount} more...
+                     </div>
+                  )}
                 </div>
               </div>
             );
@@ -1350,6 +1371,64 @@ export default function EmployeeDashboard({
                 <button type="submit" className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-md hover:bg-red-700 transition shadow-sm">Submit Request</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DAILY AGENDA MODAL (EMPLOYEE DAY VIEW) */}
+      {isDayAgendaOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-slate-200 bg-teal-700 text-white flex justify-between items-center">
+              <h3 className="text-lg font-bold flex items-center"><CalendarIcon className="h-5 w-5 mr-2 text-teal-200"/> Daily Agenda: {parseLocalSafe(agendaDateStr).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</h3>
+              <button onClick={() => setIsDayAgendaOpen(false)} className="hover:text-teal-200 transition text-2xl leading-none">&times;</button>
+            </div>
+            <div className="p-0 bg-slate-50 flex-1 overflow-y-auto">
+              <div className="divide-y divide-slate-100">
+                {myShifts.filter(s => s.date === agendaDateStr).length === 0 ? (
+                  <div className="p-8 text-center text-slate-500">No shifts scheduled for this day.</div>
+                ) : (
+                  myShifts.filter(s => s.date === agendaDateStr).sort((a,b) => String(a.startTime).localeCompare(String(b.startTime))).map(shift => {
+                    const client = clients.find(c => c && c.id === shift.clientId);
+                    return (
+                      <div key={shift.id} className="p-4 hover:bg-slate-100 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
+                        <div className="flex items-start space-x-4">
+                          <div className={`bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px] ${shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}`}>
+                            <div className="text-xs font-bold text-teal-600 uppercase">{parseLocalSafe(shift.date).toLocaleDateString('en-US', { month: 'short' })}</div>
+                            <div className="text-xl font-extrabold text-teal-800">{parseLocalSafe(shift.date).getDate()}</div>
+                          </div>
+                          <div className={shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}>
+                            <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
+                            <div className="text-sm text-slate-600 flex items-center mt-1">
+                              <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col space-y-2 w-full sm:w-auto">
+                          <button onClick={() => { setSelectedClient(client); setIsDayAgendaOpen(false); }} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
+                            Care Plan
+                          </button>
+                          
+                          {/* CANCELLATION BUTTON LOGIC */}
+                          {shift.cancelRequest?.pending ? (
+                            <button disabled className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded cursor-not-allowed text-center w-full sm:w-auto border border-slate-200">
+                              Cancellation Pending
+                            </button>
+                          ) : (
+                            <button onClick={() => { initiateCancellation(shift.id); setIsDayAgendaOpen(false); }} className="text-xs font-medium text-slate-500 hover:text-red-500 hover:underline text-center w-full sm:w-auto">
+                              Request Cancellation
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end">
+              <button onClick={() => setIsDayAgendaOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-100 transition shadow-sm">Close Agenda</button>
+            </div>
           </div>
         </div>
       )}

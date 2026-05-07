@@ -3,7 +3,7 @@ import {
   Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, 
   CalendarDays, Trash2, Heart, Coins, Star, AlertCircle, Phone, FileText, 
   Info, Image as ImageIcon, MapPin, UserMinus, Activity, BookOpen, Camera, 
-  Loader2, Upload, Sun, CheckCircle, XCircle, Gift, PartyPopper 
+  Loader2, Upload, Sun, CheckCircle, XCircle, Gift, PartyPopper, Briefcase 
 } from 'lucide-react';
 
 // --- SUB-COMPONENT IMPORTS ---
@@ -171,21 +171,21 @@ export default function EmployeeDashboard({
       snapshot.forEach(snapShift => {
         const stillExists = myShifts.find(s => s.id === snapShift.id);
         if (!stillExists) {
-          const client = safeClients.find(c => c.id === snapShift.clientId);
+          const clientName = snapShift.isInternal ? snapShift.internalTask : safeClients.find(c => c.id === snapShift.clientId)?.name;
           const dateStr = parseLocalSafe(snapShift.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          changes.push(`🚨 REMOVED: Shift with ${client?.name || 'Unknown'} on ${dateStr} from ${snapShift.startTime} to ${snapShift.endTime}`);
+          changes.push(`🚨 REMOVED: Shift for ${clientName || 'Unknown'} on ${dateStr} from ${snapShift.startTime} to ${snapShift.endTime}`);
         }
       });
 
       myShifts.forEach(shift => {
         const found = snapshot.find(s => s.id === shift.id);
-        const client = safeClients.find(c => c.id === shift.clientId);
+        const clientName = shift.isInternal ? shift.internalTask : safeClients.find(c => c.id === shift.clientId)?.name;
         const dateStr = parseLocalSafe(shift.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
         if (!found) {
-          changes.push(`🟢 ADDED: Shift with ${client?.name || 'Unknown'} on ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
+          changes.push(`🟢 ADDED: Shift for ${clientName || 'Unknown'} on ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
         } else if (found.date !== shift.date || found.startTime !== shift.startTime || found.endTime !== shift.endTime) {
-          changes.push(`🔄 CHANGED: Shift with ${client?.name || 'Unknown'} moved to ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
+          changes.push(`🔄 CHANGED: Shift for ${clientName || 'Unknown'} moved to ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
         }
       });
 
@@ -194,7 +194,7 @@ export default function EmployeeDashboard({
         setShowUpdateBanner(true);
       }
     } else {
-      const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, clientId: s.clientId }));
+      const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, clientId: s.clientId, isInternal: s.isInternal, internalTask: s.internalTask }));
       localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
     }
   }, [myShifts, currentUser.id, safeClients]);
@@ -202,7 +202,7 @@ export default function EmployeeDashboard({
   const acknowledgeScheduleUpdates = () => {
     setScheduleChanges([]);
     setShowUpdateBanner(false);
-    const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, clientId: s.clientId }));
+    const snapshot = myShifts.map(s => ({ id: s.id, date: s.date, startTime: s.startTime, endTime: s.endTime, clientId: s.clientId, isInternal: s.isInternal, internalTask: s.internalTask }));
     localStorage.setItem(`gn_shift_snapshot_${currentUser.id}`, JSON.stringify(snapshot));
   };
 
@@ -386,12 +386,22 @@ export default function EmployeeDashboard({
                   })}
 
                   {visibleShifts.map(shift => {
-                    const client = clients.find(c => c && c.id === shift.clientId);
+                    const client = shift.isInternal ? null : clients.find(c => c && c.id === shift.clientId);
+                    const clientNameDisplay = shift.isInternal ? (shift.internalTask || 'Internal Task') : String(client?.name || 'Unknown Client').split(' ')[0];
+                    
+                    const bgBorderClass = shift.cancelRequest?.pending ? 'bg-slate-200 text-slate-500 border border-slate-300' : 
+                                          shift.isInternal ? 'bg-indigo-50 text-indigo-800 border border-indigo-200 group-hover:bg-indigo-100' : 
+                                          'bg-teal-100 text-teal-800 border border-teal-200 group-hover:bg-teal-200';
+
                     return (
-                      <div key={shift.id} className={`text-xs p-1.5 rounded transition shadow-sm ${shift.cancelRequest?.pending ? 'bg-slate-200 text-slate-500 border border-slate-300' : 'bg-teal-100 text-teal-800 border border-teal-200 group-hover:bg-teal-200'}`}>
+                      <div key={shift.id} className={`text-xs p-1.5 rounded transition shadow-sm ${bgBorderClass}`}>
                         <div className="font-semibold truncate flex items-center">
-                          <Heart className={`h-2.5 w-2.5 mr-1 shrink-0 ${shift.cancelRequest?.pending ? 'text-slate-400' : 'text-teal-600'}`} />
-                          {client?.name?.split(' ')[0] || 'Unknown'}
+                          {shift.isInternal ? (
+                            <Briefcase className={`h-2.5 w-2.5 mr-1 shrink-0 ${shift.cancelRequest?.pending ? 'text-slate-400' : 'text-indigo-600'}`} />
+                          ) : (
+                            <Heart className={`h-2.5 w-2.5 mr-1 shrink-0 ${shift.cancelRequest?.pending ? 'text-slate-400' : 'text-teal-600'}`} />
+                          )}
+                          {clientNameDisplay}
                         </div>
                         <div className="text-[10px] mt-0.5 opacity-90 flex items-center">
                           <Clock className="h-2.5 w-2.5 mr-1 shrink-0" />
@@ -509,7 +519,9 @@ export default function EmployeeDashboard({
                   <div className="p-8 text-center text-slate-500">No shifts scheduled for this day.</div>
                 ) : (
                   myShifts.filter(s => s.date === agendaDateStr).sort((a,b) => String(a.startTime).localeCompare(String(b.startTime))).map(shift => {
-                    const client = clients.find(c => c && c.id === shift.clientId);
+                    const client = shift.isInternal ? null : clients.find(c => c && c.id === shift.clientId);
+                    const clientNameDisplay = shift.isInternal ? (shift.internalTask || 'Internal Task') : (client?.name || 'Unknown Client');
+
                     return (
                       <div key={shift.id} className="p-4 hover:bg-slate-100 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white">
                         <div className="flex items-start space-x-4">
@@ -518,16 +530,21 @@ export default function EmployeeDashboard({
                             <div className="text-xl font-extrabold text-teal-800">{parseLocalSafe(shift.date).getDate()}</div>
                           </div>
                           <div className={shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}>
-                            <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
+                            <h4 className="font-bold text-slate-800 flex items-center">
+                              {shift.isInternal && <Briefcase className="h-4 w-4 mr-1.5 text-indigo-600"/>}
+                              {clientNameDisplay}
+                            </h4>
                             <div className="text-sm text-slate-600 flex items-center mt-1">
                               <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
                             </div>
                           </div>
                         </div>
                         <div className="flex flex-col space-y-2 w-full sm:w-auto">
-                          <button onClick={() => { setSelectedClient(client); setIsDayAgendaOpen(false); }} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
-                            Care Plan
-                          </button>
+                          {!shift.isInternal && (
+                            <button onClick={() => { setSelectedClient(client); setIsDayAgendaOpen(false); }} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
+                              Care Plan
+                            </button>
+                          )}
                           
                           {/* CANCELLATION BUTTON LOGIC */}
                           {shift.cancelRequest?.pending ? (
@@ -590,7 +607,8 @@ export default function EmployeeDashboard({
                      <Activity className="h-5 w-5 mr-2" /> Live Timeclock
                    </h3>
                    <p className="text-xs text-slate-400 mb-4 flex items-center flex-wrap gap-2">
-                     {clients.find(c => c.id === activeShift.clientId)?.name} &bull; {activeShift.startTime} - {activeShift.endTime}
+                     {activeShift.isInternal && <Briefcase className="h-3 w-3 inline shrink-0" />}
+                     {activeShift.isInternal ? activeShift.internalTask : clients.find(c => c.id === activeShift.clientId)?.name} &bull; {activeShift.startTime} - {activeShift.endTime}
                      {activeShift.isHourlyOverride && <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded text-[10px] uppercase font-bold border border-amber-500/50 inline-block">Hourly Shift</span>}
                    </p>
                    
@@ -645,11 +663,15 @@ export default function EmployeeDashboard({
                 </div>
                 <div className="flex items-center">
                   <Clock className="h-5 w-5 mr-3 text-slate-400" />
-                  <span className="font-medium">{nextShift.startTime} - {nextShift.endTime}</span>
+                  <span className="font-medium">
+                    {nextShift.startTime} - {nextShift.endTime} &bull; {nextShift.isInternal ? nextShift.internalTask : clients.find(c => c && c.id === nextShift.clientId)?.name}
+                  </span>
                 </div>
-                <button onClick={() => setSelectedClient(clients.find(c => c && c.id === nextShift.clientId))} className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded transition text-sm flex items-center justify-center">
-                  <Info className="h-4 w-4 mr-2" /> View Client Plan
-                </button>
+                {!nextShift.isInternal && (
+                  <button onClick={() => setSelectedClient(clients.find(c => c && c.id === nextShift.clientId))} className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded transition text-sm flex items-center justify-center">
+                    <Info className="h-4 w-4 mr-2" /> View Client Plan
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -847,7 +869,8 @@ export default function EmployeeDashboard({
                         <div className="p-8 text-center text-slate-500">You have no upcoming shifts.</div>
                       ) : (
                         upcomingShifts.map(shift => {
-                          const client = clients.find(c => c && c.id === shift.clientId);
+                          const client = shift.isInternal ? null : clients.find(c => c && c.id === shift.clientId);
+                          const clientNameDisplay = shift.isInternal ? (shift.internalTask || 'Internal Task') : (client?.name || 'Unknown Client');
                           const d = parseLocalSafe(shift.date);
                           const isInvalid = isNaN(d.getTime());
                           return (
@@ -858,16 +881,21 @@ export default function EmployeeDashboard({
                                   <div className="text-xl font-extrabold text-teal-800">{!isInvalid ? d.getDate() : ''}</div>
                                 </div>
                                 <div className={shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}>
-                                  <h4 className="font-bold text-slate-800">{client?.name || 'Unknown Client'}</h4>
+                                  <h4 className="font-bold text-slate-800 flex items-center">
+                                    {shift.isInternal && <Briefcase className="h-4 w-4 mr-1.5 text-indigo-600" />}
+                                    {clientNameDisplay}
+                                  </h4>
                                   <div className="text-sm text-slate-600 flex items-center mt-1">
                                     <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
                                   </div>
                                 </div>
                               </div>
                               <div className="flex flex-col space-y-2 w-full sm:w-auto">
-                                <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
-                                  Care Plan
-                                </button>
+                                {!shift.isInternal && (
+                                  <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
+                                    Care Plan
+                                  </button>
+                                )}
                                 
                                 {/* CANCELLATION BUTTON LOGIC */}
                                 {shift.cancelRequest?.pending ? (
@@ -901,12 +929,19 @@ export default function EmployeeDashboard({
                       <p className="text-sm text-slate-500 text-center py-4">No open shifts at this time.</p>
                     ) : (
                       openShifts.map(shift => {
-                        const client = clients.find(c => c && c.id === shift.clientId);
+                        const client = shift.isInternal ? null : clients.find(c => c && c.id === shift.clientId);
+                        const clientNameDisplay = shift.isInternal ? (shift.internalTask || 'Internal Task') : (client?.name || 'Unknown Client');
+
                         return (
                           <div key={shift.id || Math.random()} className="bg-white border border-amber-200 rounded-lg p-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
                             <div>
                               <div className="font-bold text-slate-800">{shift.date ? parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }) : ''}</div>
-                              <div className="text-sm text-slate-600 mt-1">{shift.startTime} - {shift.endTime} &bull; {client?.name}</div>
+                              <div className="text-sm text-slate-600 mt-1 flex items-center">
+                                {shift.startTime} - {shift.endTime} &bull; 
+                                {shift.isInternal && <Briefcase className="h-3 w-3 mx-1 text-indigo-500"/>} 
+                                {!shift.isInternal && <span className="mx-1"></span>}
+                                {clientNameDisplay}
+                              </div>
                             </div>
                             <button 
                               onClick={() => { if(onPickupShift) onPickupShift(shift.id, currentUser.id); }}

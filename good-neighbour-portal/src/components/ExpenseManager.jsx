@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, DollarSign, CalendarDays, Plus, Trash2, Undo, AlertCircle, Download, Award } from 'lucide-react';
+import { Receipt, Car, CheckCircle, XCircle, Search, FileText, User, Heart, Filter, DollarSign, CalendarDays, Plus, Trash2, Undo, AlertCircle, Download, Award, Briefcase } from 'lucide-react';
 import { getPastPayPeriods } from '../utils';
 
 // --- DATE HELPER ---
@@ -50,7 +50,11 @@ export default function ExpenseManager({
   const safeClients = Array.isArray(clients) ? clients : [];
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
 
-  const getClientName = (id) => safeClients.find(c => c.id === id)?.name || 'Unknown Client';
+  // --- NEW: INTERNAL TASK INTERCEPT ---
+  const getClientName = (id) => {
+    if (id === 'internal') return '🏢 Internal Task';
+    return safeClients.find(c => c.id === id)?.name || 'Unknown Client';
+  };
 
   // --- PAY PERIOD LOGIC ---
   const allPeriods = useMemo(() => getPastPayPeriods(payPeriodStart || '2026-04-01', 104), [payPeriodStart]);
@@ -81,12 +85,18 @@ export default function ExpenseManager({
   // --- MATH HELPERS ---
   const getShiftCost = (emp, shift) => {
     if (emp.payType === 'salary') return 0; 
-    if (emp.payType === 'hourly') {
-      const [sH, sM] = String(shift.startTime || '00:00').split(':').map(Number);
-      const [eH, eM] = String(shift.endTime || '00:00').split(':').map(Number);
-      let h = (eH + eM/60) - (sH + sM/60);
-      if (h < 0) h += 24;
-      return h * (Number(emp.hourlyWage) || 22.5);
+    if (emp.payType === 'hourly' || shift.isHourlyOverride) {
+      let h = 0;
+      if (shift.actualStartTime && shift.actualEndTime) {
+         h = (new Date(shift.actualEndTime) - new Date(shift.actualStartTime)) / 3600000;
+      } else {
+         const [sH, sM] = String(shift.startTime || '00:00').split(':').map(Number);
+         const [eH, eM] = String(shift.endTime || '00:00').split(':').map(Number);
+         h = (eH + eM/60) - (sH + sM/60);
+         if (h < 0) h += 24;
+      }
+      const rate = shift.isHourlyOverride ? (Number(shift.hourlyRate) || 0) : (Number(emp.hourlyWage) || 22.5);
+      return h * rate;
     }
     return Number(emp.perVisitRate) || 45;
   };
@@ -141,18 +151,24 @@ export default function ExpenseManager({
       let sEarn = 0;
       if (emp.payType === 'salary') {
          sEarn = (Number(emp.annualSalary) || 0) / 12; 
-      } else if (emp.payType === 'hourly') {
-        let hrs = 0;
-        empShiftsForBonus.forEach(s => {
-          const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
-          const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
-          let h = (eH + eM/60) - (sH + sM/60);
-          if (h < 0) h += 24;
-          hrs += h;
-        });
-        sEarn = hrs * (Number(emp.hourlyWage) || 22.5);
       } else {
-        sEarn = empShiftsForBonus.length * (Number(emp.perVisitRate) || 45);
+        empShiftsForBonus.forEach(s => {
+          if (emp.payType === 'hourly' || s.isHourlyOverride) {
+            let h = 0;
+            if (s.actualStartTime && s.actualEndTime) {
+               h = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
+            } else {
+               const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number);
+               const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number);
+               h = (eH + eM/60) - (sH + sM/60);
+               if (h < 0) h += 24;
+            }
+            const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(emp.hourlyWage) || 22.5);
+            sEarn += (h * rate);
+          } else {
+            sEarn += (Number(emp.perVisitRate) || 45);
+          }
+        });
       }
       
       const kmE = safeExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= mStart && parseLocalSafe(e.date) <= mEnd).reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
@@ -209,7 +225,7 @@ export default function ExpenseManager({
           const cost = getShiftCost(selectedEmp, s);
           return [
             `"${parseLocalSafe(s.date).toLocaleDateString()}"`,
-            `"${getClientName(s.clientId)}"`,
+            `"${getClientName(s.isInternal ? 'internal' : s.clientId)}"`,
             `"${s.startTime}"`,
             `"${s.endTime}"`,
             cost.toFixed(2),
@@ -467,8 +483,9 @@ export default function ExpenseManager({
                                 <div className={`font-bold text-sm ${isDisputed ? 'text-red-900 line-through' : 'text-slate-800'}`}>
                                   {parseLocalSafe(shift.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} &bull; {shift.startTime} to {shift.endTime}
                                 </div>
-                                <div className={`text-xs mt-1 font-medium ${isDisputed ? 'text-red-700' : 'text-slate-500'}`}>
-                                  Client: {getClientName(shift.clientId)}
+                                <div className={`text-xs mt-1 font-medium flex items-center ${isDisputed ? 'text-red-700' : shift.isInternal ? 'text-indigo-600' : 'text-slate-500'}`}>
+                                  {shift.isInternal ? <Briefcase className="h-3 w-3 mr-1 shrink-0" /> : <Heart className="h-3 w-3 mr-1 shrink-0 text-teal-500" />}
+                                  {getClientName(shift.isInternal ? 'internal' : shift.clientId)}
                                 </div>
                               </div>
                               <div className="flex items-center space-x-6">
@@ -505,8 +522,9 @@ export default function ExpenseManager({
                             <div className={`font-bold text-sm ${exp.status === 'rejected' ? 'text-red-900 line-through' : 'text-slate-800'}`}>
                               {parseLocalSafe(exp.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                             </div>
-                            <div className={`text-xs mt-1 font-medium flex items-center ${exp.status === 'rejected' ? 'text-red-700' : 'text-slate-500'}`}>
-                              <Heart className="h-3 w-3 mr-1 text-teal-500 shrink-0" /> {getClientName(exp.clientId)}
+                            <div className={`text-xs mt-1 font-medium flex items-center ${exp.status === 'rejected' ? 'text-red-700' : exp.clientId === 'internal' ? 'text-indigo-600' : 'text-slate-500'}`}>
+                              {exp.clientId === 'internal' ? <Briefcase className="h-3 w-3 mr-1 shrink-0" /> : <Heart className="h-3 w-3 mr-1 shrink-0 text-teal-500" />}
+                              {getClientName(exp.clientId)}
                             </div>
                             {exp.description && <div className={`text-xs italic mt-1 ${exp.status === 'rejected' ? 'text-red-600' : 'text-slate-400'}`}>"{exp.description}"</div>}
                           </div>
@@ -557,8 +575,9 @@ export default function ExpenseManager({
                             <div className={`font-bold text-sm ${exp.status === 'rejected' ? 'text-red-900 line-through' : 'text-slate-800'}`}>
                               {parseLocalSafe(exp.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                             </div>
-                            <div className={`text-xs mt-1 font-medium flex items-center ${exp.status === 'rejected' ? 'text-red-700' : 'text-slate-500'}`}>
-                              <Heart className="h-3 w-3 mr-1 text-teal-500 shrink-0" /> {getClientName(exp.clientId)}
+                            <div className={`text-xs mt-1 font-medium flex items-center ${exp.status === 'rejected' ? 'text-red-700' : exp.clientId === 'internal' ? 'text-indigo-600' : 'text-slate-500'}`}>
+                              {exp.clientId === 'internal' ? <Briefcase className="h-3 w-3 mr-1 shrink-0" /> : <Heart className="h-3 w-3 mr-1 shrink-0 text-teal-500" />}
+                              {getClientName(exp.clientId)}
                             </div>
                             {exp.description && <div className={`text-xs italic mt-1 ${exp.status === 'rejected' ? 'text-red-600' : 'text-slate-400'}`}>"{exp.description}"</div>}
                           </div>

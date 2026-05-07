@@ -5,7 +5,7 @@ import { getPastPayPeriods, parseLocal } from '../utils';
 export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], clients = [], payPeriodStart, isBonusActive, bonusSettings }) {
   const kmRate = 0.68;
   
-  // --- UPDATED: BULLETPROOF FILTER TO GHOST THE OWNER ---
+  // --- BULLETPROOF FILTER TO GHOST THE OWNER ---
   const safeEmps = Array.isArray(employees) ? employees.filter(e => e && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeExp = Array.isArray(expenses) ? expenses : [];
@@ -52,7 +52,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       
       let sEarn = 0;
       if (emp.payType === 'salary') {
-         sEarn = (Number(emp.annualSalary) || 0) / 12; // Approximation for leaderboard sorting
+         sEarn = (Number(emp.annualSalary) || 0) / 12; 
       } else if (emp.payType === 'hourly') {
         let hrs = 0;
         empShifts.forEach(s => {
@@ -98,21 +98,32 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       if (emp.payType === 'salary') {
         shiftEarnings = (Number(emp.annualSalary) || 0) / 26; 
         displayRate = `Salary: $${(Number(emp.annualSalary)||0).toLocaleString()}/yr`;
-      } else if (emp.payType === 'hourly') {
-        empShifts.forEach(s => {
-          const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
-          const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
-          let hours = (eH + eM/60) - (sH + sM/60);
-          if (hours < 0) hours += 24; 
-          totalHours += hours;
-        });
-        const hourlyWage = Number(emp.hourlyWage) || 22.50;
-        shiftEarnings = totalHours * hourlyWage;
-        displayRate = `${totalHours.toFixed(1)} hrs @ $${hourlyWage.toFixed(2)}/hr`;
       } else {
-        const visitRate = Number(emp.perVisitRate) || 45;
-        shiftEarnings = empShifts.length * visitRate;
-        displayRate = `${empShifts.length} shifts @ $${visitRate.toFixed(2)}/visit`;
+        let hrsWorked = 0;
+        empShifts.forEach(s => {
+          if (emp.payType === 'hourly' || s.isHourlyOverride) {
+            let hours = 0;
+            if (s.actualStartTime && s.actualEndTime) {
+               hours = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
+            } else {
+               const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
+               const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
+               hours = (eH + eM/60) - (sH + sM/60);
+               if (hours < 0) hours += 24; 
+            }
+            totalHours += hours;
+            const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(emp.hourlyWage) || 22.50);
+            shiftEarnings += (hours * rate);
+          } else {
+            shiftEarnings += (Number(emp.perVisitRate) || 45);
+          }
+        });
+        
+        if (emp.payType === 'hourly') {
+          displayRate = `${totalHours.toFixed(1)} hrs @ $${(Number(emp.hourlyWage) || 22.50).toFixed(2)}/hr`;
+        } else {
+          displayRate = `${empShifts.length} shifts (Base + Atypical Hourly)`;
+        }
       }
 
       const empMileage = safeExp.filter(e => {
@@ -132,7 +143,8 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                e.status === 'approved' && 
                d >= currentPeriodStart && d <= currentPeriodEnd;
       });
-      const clientExpenseEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      // Renamed to oopEarnings to clearly denote it pays the employee for ALL out-of-pocket expenses
+      const oopEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
       let bonusEarnings = 0;
       if (isBonusActive) {
@@ -141,7 +153,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         else if (monthlyWinners[2]?.emp.id === emp.id) { bonusEarnings = Number(safeBonusSettings.monthly[2] || 0); }
       }
 
-      const totalEarnings = shiftEarnings + kmEarnings + clientExpenseEarnings + bonusEarnings;
+      const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
 
       return {
         ...emp,
@@ -151,14 +163,15 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         shiftEarnings,
         totalKms,
         kmEarnings,
-        clientExpenseEarnings,
+        oopEarnings,
         bonusEarnings,
         totalEarnings
       };
     }).filter(Boolean).sort((a, b) => b.totalEarnings - a.totalEarnings);
   }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd, isBonusActive, safeBonusSettings]);
 
-  // --- PERFECTED FINANCIAL WIDGET CALCULATIONS ---
+
+  // --- PERFECTED FINANCIAL SEPARATION WIDGET CALCULATIONS ---
   const totalPayrollLiability = employeeEarnings.reduce((sum, emp) => sum + emp.totalEarnings, 0);
 
   const salariedEmployees = employeeEarnings.filter(e => e.payType === 'salary');
@@ -172,12 +185,33 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
 
   const totalBonuses = employeeEarnings.reduce((sum, e) => sum + (e.bonusEarnings || 0), 0);
 
+  // 1. Client Budgets (Strictly excluding Internal Overhead)
   const maxExpenseLiability = safeClients
     .filter(c => c.isActive !== false)
     .reduce((sum, c) => sum + (Number(c.monthlyAllowance) || 0), 0);
 
-  const totalUsedExpense = employeeEarnings.reduce((sum, emp) => sum + emp.kmEarnings + emp.clientExpenseEarnings, 0);
-  const expensePercent = maxExpenseLiability > 0 ? Math.min((totalUsedExpense / maxExpenseLiability) * 100, 100) : 0;
+  const periodClientOop = safeCE
+    .filter(e => e.clientId !== 'internal' && e.status === 'approved' && parseLocal(e.date) >= currentPeriodStart && parseLocal(e.date) <= currentPeriodEnd)
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+  const periodClientKm = safeExp
+    .filter(e => e.clientId !== 'internal' && e.status === 'approved' && parseLocal(e.date) >= currentPeriodStart && parseLocal(e.date) <= currentPeriodEnd)
+    .reduce((sum, e) => sum + (Number(e.kilometers || 0) * kmRate), 0);
+
+  const totalUsedClientExpense = periodClientOop + periodClientKm;
+  const expensePercent = maxExpenseLiability > 0 ? Math.min((totalUsedClientExpense / maxExpenseLiability) * 100, 100) : 0;
+
+  // 2. Corporate Overhead & Petty Cash (Strictly Internal Only)
+  const periodInternalOop = safeCE
+    .filter(e => e.clientId === 'internal' && e.status === 'approved' && parseLocal(e.date) >= currentPeriodStart && parseLocal(e.date) <= currentPeriodEnd)
+    .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+
+  const periodInternalKm = safeExp
+    .filter(e => e.clientId === 'internal' && e.status === 'approved' && parseLocal(e.date) >= currentPeriodStart && parseLocal(e.date) <= currentPeriodEnd)
+    .reduce((sum, e) => sum + (Number(e.kilometers || 0) * kmRate), 0);
+
+  const totalCorporateOverhead = periodInternalOop + periodInternalKm;
+
 
   // --- 2-PART NATIVE CSV EXPORT LOGIC ---
   const exportToCSV = () => {
@@ -189,7 +223,8 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       ['Total Payroll Liability', `"$${totalPayrollLiability.toFixed(2)}"`],
       ['Wage & Bonus Cost', `"$${(totalWageCost + totalBonuses).toFixed(2)}"`],
       ['Salary Cost', `"$${totalSalaryCost.toFixed(2)}"`],
-      ['Expense Budget Utilized', `"$${totalUsedExpense.toFixed(2)} of $${maxExpenseLiability.toFixed(2)}"`],
+      ['Client Budget Utilized', `"$${totalUsedClientExpense.toFixed(2)} of $${maxExpenseLiability.toFixed(2)}"`],
+      ['Corporate Overhead & Petty Cash', `"$${totalCorporateOverhead.toFixed(2)}"`],
       [], 
       ['LINE-BY-LINE BREAKDOWN']
     ];
@@ -204,7 +239,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         `"${emp.role}"`,
         emp.shiftEarnings.toFixed(2),
         emp.kmEarnings.toFixed(2),
-        emp.clientExpenseEarnings.toFixed(2)
+        emp.oopEarnings.toFixed(2)
       ];
       if (isBonusActive) row.push(emp.bonusEarnings.toFixed(2));
       row.push(emp.totalEarnings.toFixed(2));
@@ -272,8 +307,8 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         </div>
       </div>
       
-      {/* --- EXACT 4-COLUMN FINANCIAL DASHBOARD --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-6 border-b border-slate-200 bg-slate-50/50">
+      {/* --- NEW SPLIT FINANCIAL DASHBOARD --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 border-b border-slate-200 bg-slate-50/50">
         
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Wallet className="h-4 w-4 mr-2 text-teal-600"/> Total Payroll Liability</div>
@@ -296,14 +331,17 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           <div className="text-4xl font-black text-slate-800 tracking-tight">${totalSalaryCost.toFixed(2)}</div>
           <div className="text-xs text-slate-400 mt-2 font-medium">Fixed bi-weekly pay ({salariedEmployees.length} staff)</div>
         </div>
+      </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-6 pb-6 border-b border-slate-200 bg-slate-50/50">
+        {/* Client Budget Panel */}
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center">
-            <Receipt className="h-4 w-4 mr-2 text-rose-600"/> Expense Budget Utilized
+            <Receipt className="h-4 w-4 mr-2 text-rose-600"/> Client Budget Utilized
           </div>
           <div className="flex items-end mb-2">
             <div className={`text-3xl font-black tracking-tight ${expensePercent > 90 ? 'text-red-600' : expensePercent > 75 ? 'text-amber-500' : 'text-slate-800'}`}>
-              ${totalUsedExpense.toFixed(2)}
+              ${totalUsedClientExpense.toFixed(2)}
             </div>
             <div className="text-sm font-bold text-slate-400 mb-1 ml-1">
               / ${maxExpenseLiability.toFixed(2)}
@@ -318,6 +356,28 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           </div>
         </div>
 
+        {/* Corporate Petty Cash Panel */}
+        <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-200 rounded-xl p-5 shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none"><Briefcase size={100} /></div>
+          <div className="relative z-10">
+            <div className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center">
+              <Briefcase className="h-4 w-4 mr-2 text-indigo-600"/> Corporate Overhead & Petty Cash
+            </div>
+            <div className="text-3xl font-black text-indigo-900 tracking-tight mb-3">
+              ${totalCorporateOverhead.toFixed(2)}
+            </div>
+            <div className="flex flex-col text-xs text-indigo-700/80 font-medium space-y-1.5">
+              <div className="flex justify-between border-b border-indigo-100 pb-1">
+                <span>Internal Out-of-Pocket:</span>
+                <span className="font-bold text-indigo-900">${periodInternalOop.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Internal Mileage:</span>
+                <span className="font-bold text-indigo-900">${periodInternalKm.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="overflow-y-auto flex-1 bg-white">
@@ -353,7 +413,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                     <div className="text-xs text-slate-400 mt-0.5">{emp.totalKms} km @ $0.68</div>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600 font-semibold text-slate-700">
-                    ${emp.clientExpenseEarnings.toFixed(2)}
+                    ${emp.oopEarnings.toFixed(2)}
                   </td>
                   {isBonusActive && (
                     <td className="px-6 py-4 text-sm font-bold text-amber-600">

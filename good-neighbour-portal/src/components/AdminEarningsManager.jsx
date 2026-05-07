@@ -58,8 +58,10 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           const isHourly = s.isHourlyOverride || emp.payType === 'hourly';
           if (isHourly) {
             const rate = s.isHourlyOverride ? Number(s.hourlyRate) : (Number(emp.hourlyWage) || 22.5);
+            const usePunch = s.requirePunchClock !== false;
             let hours = 0;
-            if (s.actualStartTime && s.actualEndTime) {
+            
+            if (usePunch && s.actualStartTime && s.actualEndTime) {
                hours = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
             } else {
                const st = s.startTime || '00:00';
@@ -115,8 +117,10 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           const isHourly = s.isHourlyOverride || emp.payType === 'hourly';
           if (isHourly) {
             const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(emp.hourlyWage) || 22.50);
+            const usePunch = s.requirePunchClock !== false;
             let hours = 0;
-            if (s.actualStartTime && s.actualEndTime) {
+            
+            if (usePunch && s.actualStartTime && s.actualEndTime) {
                hours = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
             } else {
                const st = s.startTime || '00:00';

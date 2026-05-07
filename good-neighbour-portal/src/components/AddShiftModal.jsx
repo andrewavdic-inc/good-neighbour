@@ -34,12 +34,20 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
   const [isHourlyOverride, setIsHourlyOverride] = useState(editingShift?.isHourlyOverride || false);
   const [hourlyRate, setHourlyRate] = useState(editingShift?.hourlyRate || '');
 
+  // NEW: Punch Clock State (Defaults to true for hourly shifts)
+  const [requirePunchClock, setRequirePunchClock] = useState(editingShift?.requirePunchClock ?? true);
+
   // Internal Task State
   const [isInternal, setIsInternal] = useState(editingShift?.isInternal || false);
   const [internalTask, setInternalTask] = useState(editingShift?.internalTask || '');
 
   // Unified Soft Warning State ('overlap', 'availability', or null)
   const [warningState, setWarningState] = useState(null);
+
+  // --- COMPUTE VISIBILITY FOR PUNCH CLOCK TOGGLE ---
+  const selectedEmp = safeEmps.find(e => e.id === employeeId);
+  const isHourlyEmp = selectedEmp?.payType === 'hourly';
+  const showPunchToggle = isHourlyOverride || isHourlyEmp;
 
   // --- DYNAMIC OVERBOOKING MATH ---
   const baseDate = parseLocalSafe(selectedDate);
@@ -115,8 +123,7 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
       }
 
       // 2. Check for Availability Match
-      const emp = safeEmps.find(e => e.id === employeeId);
-      const avail = emp?.availability || [];
+      const avail = selectedEmp?.availability || [];
       if (avail.length > 0) {
          const d = parseLocalSafe(selectedDate);
          const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
@@ -155,6 +162,13 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
     } else {
       baseShift.isHourlyOverride = false;
       baseShift.hourlyRate = null;
+    }
+
+    // NEW: Attach the requirePunchClock flag (only if it's an hourly shift)
+    if (showPunchToggle) {
+      baseShift.requirePunchClock = requirePunchClock;
+    } else {
+      baseShift.requirePunchClock = false;
     }
 
     // EDIT MODE ROUTING
@@ -256,6 +270,14 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
                  </div>
                  <p className="text-[10px] text-slate-500 mt-1">This specific shift will be tracked hourly instead of per-visit for this employee.</p>
               </div>
+            )}
+
+            {/* NEW: DYNAMIC PUNCH CLOCK TOGGLE */}
+            {showPunchToggle && (
+              <label className="flex items-center space-x-2 text-sm font-bold text-slate-700 cursor-pointer w-fit mb-4">
+                <input type="checkbox" checked={requirePunchClock} onChange={(e) => setRequirePunchClock(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
+                <span>Require Employee to Punch Clock</span>
+              </label>
             )}
 
             {!editingShift && (

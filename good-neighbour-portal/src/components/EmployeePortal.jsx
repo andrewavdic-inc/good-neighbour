@@ -134,9 +134,12 @@ export default function EmployeeDashboard({
   const upcomingShifts = safeShiftsSort(myShifts.filter(s => s && s.date && s.endTime && new Date(`${s.date}T${s.endTime}`) > now));
   const nextShift = upcomingShifts[0];
 
-  // --- TIMECLOCK LOGIC ---
+  // --- NEW: SMART TIMECLOCK LOGIC ---
   const todayShifts = safeShiftsSort(myShifts.filter(s => s.date === todayStr));
-  const activeShift = todayShifts.find(s => !s.actualEndTime) || todayShifts[todayShifts.length - 1];
+  
+  // Only target shifts that actually require a punch clock!
+  const punchableShifts = todayShifts.filter(s => s.requirePunchClock);
+  const activeShift = punchableShifts.find(s => !s.actualEndTime) || punchableShifts[punchableShifts.length - 1];
 
   // --- REWARDS UNBOXING LOGIC ---
   const unackedKudos = useMemo(() => kudos.filter(k => k.employeeId === currentUser.id && k.acknowledged === false), [kudos, currentUser.id]);

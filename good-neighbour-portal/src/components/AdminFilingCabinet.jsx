@@ -199,9 +199,12 @@ export default function AdminFilingCabinet({
         if (isHourly) {
           const rate = s.isHourlyOverride ? Number(s.hourlyRate) : (Number(emp.hourlyWage) || 22.5);
           
-          // Use real punch clock if it exists, otherwise fallback to schedule
-          const st = s.actualStartTime ? s.actualStartTime : (s.startTime || '00:00');
-          const et = s.actualEndTime ? s.actualEndTime : (s.endTime || '00:00');
+          // NEW: Respect the Admin's Punch Clock Toggle
+          const usePunch = s.requirePunchClock !== false; // defaults to true if undefined
+          
+          // Use real punch clock if it's required and exists, otherwise strict fallback to schedule
+          const st = (usePunch && s.actualStartTime) ? s.actualStartTime : (s.startTime || '00:00');
+          const et = (usePunch && s.actualEndTime) ? s.actualEndTime : (s.endTime || '00:00');
           
           const [sH, sM] = String(st).split(':').map(Number);
           const [eH, eM] = String(et).split(':').map(Number);

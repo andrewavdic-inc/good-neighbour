@@ -14,26 +14,29 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-export default function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], timeOffLogs = [], onSave }) {
+export default function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], timeOffLogs = [], onSave, onUpdate, editingShift }) {
   const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeTimeOff = Array.isArray(timeOffLogs) ? timeOffLogs : [];
   
-  const [employeeId, setEmployeeId] = useState(safeEmps[0]?.id || '');
-  const [clientId, setClientId] = useState(safeClients[0]?.id || '');
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('11:00'); // Default to 2 hours
+  // --- SMART INITIALIZATION (Edit Mode vs Add Mode) ---
+  const initialEmpId = editingShift && editingShift.employeeId !== 'unassigned' ? editingShift.employeeId : (safeEmps[0]?.id || '');
+  
+  const [employeeId, setEmployeeId] = useState(initialEmpId);
+  const [clientId, setClientId] = useState(editingShift?.clientId || safeClients[0]?.id || '');
+  const [startTime, setStartTime] = useState(editingShift?.startTime || '09:00');
+  const [endTime, setEndTime] = useState(editingShift?.endTime || '11:00'); 
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(4);
   
   // Atypical Pay State
-  const [isHourlyOverride, setIsHourlyOverride] = useState(false);
-  const [hourlyRate, setHourlyRate] = useState('');
+  const [isHourlyOverride, setIsHourlyOverride] = useState(editingShift?.isHourlyOverride || false);
+  const [hourlyRate, setHourlyRate] = useState(editingShift?.hourlyRate || '');
 
   // Internal Task State
-  const [isInternal, setIsInternal] = useState(false);
-  const [internalTask, setInternalTask] = useState('');
+  const [isInternal, setIsInternal] = useState(editingShift?.isInternal || false);
+  const [internalTask, setInternalTask] = useState(editingShift?.internalTask || '');
 
   // Unified Soft Warning State ('overlap', 'availability', or null)
   const [warningState, setWarningState] = useState(null);
@@ -43,11 +46,16 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
   const shiftMonthKey = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}`;
   const selectedClientData = safeClients.find(c => c.id === clientId);
   
-  const clientShiftsThisMonth = safeShifts.filter(s => {
+  let clientShiftsThisMonth = safeShifts.filter(s => {
     if (s.clientId !== clientId || !s.date) return false;
     const d = parseLocalSafe(s.date);
     return d.getMonth() === baseDate.getMonth() && d.getFullYear() === baseDate.getFullYear();
   }).length;
+
+  // Don't count the shift we are actively editing against the limit
+  if (editingShift && editingShift.clientId === clientId) {
+    clientShiftsThisMonth = Math.max(0, clientShiftsThisMonth - 1);
+  }
 
   const baseShifts = selectedClientData?.autoRenew ? (Number(selectedClientData?.baseMonthlyShifts) || 0) : 0;
   const extraShifts = selectedClientData?.extraShifts?.[shiftMonthKey] || 0;
@@ -83,6 +91,9 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
       
       // 1. Check for Double-Booking
       const conflicting = safeShifts.filter(s => {
+         // Ignore the shift we are currently editing
+         if (editingShift && s.id === editingShift.id) return false; 
+         
          if (s.employeeId !== employeeId || s.date !== selectedDate || !s.startTime || !s.endTime) return false;
          
          const [sH, sM] = s.startTime.split(':').map(Number);
@@ -125,25 +136,38 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
       }
     }
 
-    // --- PROCEED WITH SAVE ---
-    const newShifts = [];
-    const startDate = parseLocalSafe(selectedDate);
-    
-    // Base Shift object
+    // --- PROCEED WITH SAVE / UPDATE ---
     const baseShift = { employeeId, startTime, endTime };
     
     if (isInternal) {
       baseShift.isInternal = true;
       baseShift.internalTask = internalTask;
+      baseShift.clientId = null;
     } else {
+      baseShift.isInternal = false;
+      baseShift.internalTask = '';
       baseShift.clientId = clientId;
     }
 
     if (isHourlyOverride) {
       baseShift.isHourlyOverride = true;
       baseShift.hourlyRate = Number(hourlyRate);
+    } else {
+      baseShift.isHourlyOverride = false;
+      baseShift.hourlyRate = null;
     }
 
+    // EDIT MODE ROUTING
+    if (editingShift && onUpdate) {
+      onUpdate(editingShift.id, baseShift);
+      onClose();
+      return;
+    }
+
+    // ADD MODE ROUTING
+    const newShifts = [];
+    const startDate = parseLocalSafe(selectedDate);
+    
     if (isRecurring) {
       for (let i = 0; i < recurrenceWeeks; i++) {
         const nextDate = new Date(startDate);
@@ -165,7 +189,7 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-          <h3 className="text-lg font-bold text-slate-800">Assign New Shift</h3>
+          <h3 className="text-lg font-bold text-slate-800">{editingShift ? 'Edit Existing Shift' : 'Assign New Shift'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition text-2xl leading-none">&times;</button>
         </div>
         
@@ -234,17 +258,21 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
               </div>
             )}
 
-            <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
-              <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
-              <span>Repeat Weekly</span>
-            </label>
-            {isRecurring && (
-              <select value={recurrenceWeeks} onChange={(e) => setRecurrenceWeeks(Number(e.target.value))} className="w-full mt-3 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
-                <option value={4}>4 Weeks (1 Month)</option>
-                <option value={12}>12 Weeks (3 Months)</option>
-                <option value={26}>26 Weeks (6 Months)</option>
-                <option value={52}>52 Weeks (1 Year)</option>
-              </select>
+            {!editingShift && (
+              <>
+                <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+                  <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
+                  <span>Repeat Weekly</span>
+                </label>
+                {isRecurring && (
+                  <select value={recurrenceWeeks} onChange={(e) => setRecurrenceWeeks(Number(e.target.value))} className="w-full mt-3 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                    <option value={4}>4 Weeks (1 Month)</option>
+                    <option value={12}>12 Weeks (3 Months)</option>
+                    <option value={26}>26 Weeks (6 Months)</option>
+                    <option value={52}>52 Weeks (1 Year)</option>
+                  </select>
+                )}
+              </>
             )}
           </div>
 
@@ -282,7 +310,9 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
             ) : (
                <>
                  <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition">Cancel</button>
-                 <button type="submit" disabled={isTimeOffBlocked} className="px-4 py-2 text-sm font-bold text-white bg-teal-600 rounded-md hover:bg-teal-700 disabled:bg-slate-400 transition shadow-sm">Save Shift</button>
+                 <button type="submit" disabled={isTimeOffBlocked} className="px-4 py-2 text-sm font-bold text-white bg-teal-600 rounded-md hover:bg-teal-700 disabled:bg-slate-400 transition shadow-sm">
+                   {editingShift ? 'Update Shift' : 'Save Shift'}
+                 </button>
                </>
             )}
           </div>

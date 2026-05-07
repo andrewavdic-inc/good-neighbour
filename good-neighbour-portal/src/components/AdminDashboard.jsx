@@ -3,7 +3,7 @@ import {
   Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Briefcase, 
   CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, XCircle, 
   AlertCircle, FileText, Coffee, Wallet, Search, UserMinus, MessageSquare, 
-  Sun, Activity, BookOpen, Award, AlertTriangle, Copy, CheckCircle
+  Sun, Activity, BookOpen, Award, AlertTriangle, Copy, CheckCircle, Edit
 } from 'lucide-react';
 
 // --- SUB-COMPONENT IMPORTS ---
@@ -19,7 +19,7 @@ import DocumentManager from './DocumentManager';
 import Announcements from './Announcements';
 import AdminRewardsManager from './AdminRewardsManager';
 import SettingsManager from './SettingsManager';
-import AddShiftModal from './AddShiftModal'; // Our newly extracted modal!
+import AddShiftModal from './AddShiftModal'; 
 
 import { isBiweeklyPayday, getHoliday } from '../utils';
 
@@ -50,11 +50,15 @@ export default function AdminDashboard({
   onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
-  payrollLogs = [], onFinalizePayroll
+  payrollLogs = [], onFinalizePayroll, onUpdateShift
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
+  
+  // --- NEW: EDIT SHIFT STATE ---
+  const [editingShift, setEditingShift] = useState(null);
+
   const [activeAdminTab, setActiveAdminTab] = useState('schedule');
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [calendarView, setCalendarView] = useState('month'); 
@@ -143,7 +147,15 @@ export default function AdminDashboard({
   const handleDayObjectClick = (d) => {
     const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     setSelectedDateStr(formattedDate);
+    setEditingShift(null); // Ensure we are opening in "Add" mode
     setIsModalOpen(true);
+  };
+
+  // --- NEW: INTERCEPT DAY NUMBER CLICKS FOR NAVIGATION ---
+  const handleDayNumberClick = (e, d) => {
+    e.stopPropagation(); // Prevents the modal from opening
+    setCurrentDate(d);
+    setCalendarView('day');
   };
 
   const year = currentDate.getFullYear();
@@ -260,7 +272,16 @@ export default function AdminDashboard({
     return (
       <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'} ${isToday ? 'border-2 border-teal-500 shadow-sm z-10' : ''}`}>
         <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
-          <span className={`font-medium text-sm group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : isToday ? 'text-teal-700 font-bold' : 'text-slate-600'}`}>{d.getDate()}</span>
+          
+          {/* UPDATED: CLICKABLE DAY NUMBER */}
+          <span 
+            onClick={(e) => handleDayNumberClick(e, d)}
+            className={`font-medium text-sm px-1.5 py-0.5 -ml-1.5 rounded hover:bg-slate-200 hover:text-teal-800 transition cursor-pointer z-20 group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : isToday ? 'text-teal-700 font-bold' : 'text-slate-600'}`}
+            title="Jump to Timeline Day View"
+          >
+            {d.getDate()}
+          </span>
+
           <div className="flex flex-col items-end gap-1">
             {isToday && (<span className="text-[9px] font-bold bg-teal-500 text-white px-1.5 py-0.5 rounded shadow-sm">TODAY</span>)}
             {holiday && (<span className="text-[9px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" title={holiday.name}>🍁 {String(holiday.name).toUpperCase()}</span>)}
@@ -307,16 +328,18 @@ export default function AdminDashboard({
                   <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse"></div>
                 )}
 
-                <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/80 p-0.5 rounded backdrop-blur-sm">
-                  {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
-                  <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
+                {/* UPDATED: ADDED EDIT PENCIL TO HOVER MENU */}
+                <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/90 p-0.5 rounded backdrop-blur-sm z-20">
+                  <button onClick={(e) => { e.stopPropagation(); setEditingShift(shift); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 transition p-0.5 rounded hover:bg-blue-50" title="Edit Shift"><Edit className="h-3 w-3" /></button>
+                  {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded hover:bg-amber-50" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
+                  <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded hover:bg-red-50" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
                 </div>
               </div>
             );
           })}
           
           {hiddenCount > 0 && (
-             <div className="w-full text-center text-[10px] font-bold text-slate-500 hover:text-teal-600 mt-1 py-1 bg-slate-100/80 hover:bg-teal-50 rounded transition shadow-inner">
+             <div className="w-full text-center text-[10px] font-bold text-slate-500 hover:text-teal-600 mt-1 py-1 bg-slate-100/80 hover:bg-teal-50 rounded transition shadow-inner pointer-events-none">
                 +{hiddenCount} more...
              </div>
           )}
@@ -613,7 +636,9 @@ export default function AdminDashboard({
                                               </div>
                                               <div className="font-medium opacity-80 truncate">{shift.startTime} - {shift.endTime}</div>
 
+                                              {/* UPDATED: ADDED EDIT PENCIL TO HOVER MENU */}
                                               <div className="absolute right-1 top-0 bottom-0 flex items-center space-x-1 bg-white/90 px-1 shadow-sm backdrop-blur-sm opacity-0 group-hover/shift:opacity-100 transition-opacity">
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingShift(shift); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 p-0.5 rounded hover:bg-blue-50" title="Edit Shift"><Edit className="h-3.5 w-3.5"/></button>
                                                 {!isUnassignedRow && <button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 p-0.5 rounded hover:bg-amber-50" title="Mark Open"><UserMinus className="h-3.5 w-3.5"/></button>}
                                                 <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-600 hover:text-red-800 p-0.5 rounded hover:bg-red-50" title="Delete"><Trash2 className="h-3.5 w-3.5"/></button>
                                               </div>
@@ -675,6 +700,7 @@ export default function AdminDashboard({
                  const d = currentDate;
                  const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                  setSelectedDateStr(formattedDate);
+                 setEditingShift(null); // Ensure "Add" mode
                  setIsModalOpen(true);
                }} 
                className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition"
@@ -703,7 +729,6 @@ export default function AdminDashboard({
           <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
             {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
-            {/* --- ADMIN SCHEDULE TAB DOT --- */}
             {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0 || urgentOpenShifts.length > 0) && (
               <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${urgentOpenShifts.length > 0 ? 'bg-red-600' : pendingCancellations.length > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
             )}
@@ -713,17 +738,19 @@ export default function AdminDashboard({
       
       {renderAdminTab()}
 
-      {/* --- RENDER ADD SHIFT MODAL WITH PASSED SHIFTS AND TIMEOFF --- */}
+      {/* --- RENDER ADD/EDIT SHIFT MODAL WITH PASSED HOOKS --- */}
       {isModalOpen && (
         <AddShiftModal 
           isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
+          onClose={() => { setIsModalOpen(false); setEditingShift(null); }} 
           selectedDate={selectedDateStr} 
           employees={safeEmployees} 
           clients={safeClients} 
           shifts={safeShifts} 
           timeOffLogs={timeOffLogs}
           onSave={onAddShift} 
+          onUpdate={onUpdateShift} 
+          editingShift={editingShift} 
         />
       )}
     </div>

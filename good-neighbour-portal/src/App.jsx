@@ -543,6 +543,9 @@ export default function App() {
             
             payrollLogs={payrollLogs}
             onFinalizePayroll={handleFinalizePayroll}
+
+            // --- ADMIN EDIT SHIFT PROP ---
+            onUpdateShift={(shiftId, data) => runMutation('gn_shifts', shiftId, 'update', data)}
           />
         ) : (
           <EmployeeDashboard 

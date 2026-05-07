@@ -142,6 +142,13 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   });
 
   let shiftEarnings = 0;
+  
+  // New Split Earnings Logic
+  let standardShiftCount = 0;
+  let standardEarnings = 0;
+  let hourlyHours = 0;
+  let hourlyEarnings = 0;
+
   if (currentUser.payType === 'salary') {
     shiftEarnings = (Number(currentUser.annualSalary) || 0) / 26; 
   } else { 
@@ -157,11 +164,14 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
              if (h < 0) h += 24; 
          }
          const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(currentUser.hourlyWage) || 22.50);
-         shiftEarnings += (h * rate);
+         hourlyHours += h;
+         hourlyEarnings += (h * rate);
       } else {
-         shiftEarnings += (Number(currentUser.perVisitRate) || 45);
+         standardShiftCount += 1;
+         standardEarnings += (Number(currentUser.perVisitRate) || 45);
       }
     });
+    shiftEarnings = standardEarnings + hourlyEarnings;
   }
 
   const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
@@ -185,10 +195,35 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
         <div className="text-xs text-slate-400 mb-6">Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}</div>
         <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">${totalEarnings.toFixed(2)}</div>
         <div className="space-y-3">
-          <div className="flex justify-between items-center bg-white/5 p-2 rounded">
-            <span className="text-sm text-slate-300">{currentUser.payType === 'salary' ? 'Base Salary (Bi-weekly)' : `Completed Shifts (${completedShifts.length})`}</span>
-            <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
-          </div>
+          
+          {/* --- DYNAMIC SHIFT RENDERING LOGIC --- */}
+          {currentUser.payType === 'salary' ? (
+            <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+              <span className="text-sm text-slate-300">Base Salary (Bi-weekly)</span>
+              <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
+            </div>
+          ) : (
+            <>
+              {/* Show Standard Per-Visit Shifts */}
+              {(currentUser.payType === 'per_visit' || standardShiftCount > 0) && (
+                <div className="flex justify-between items-center bg-white/5 p-2 rounded">
+                  <span className="text-sm text-slate-300">Completed Shifts ({standardShiftCount})</span>
+                  <span className="font-semibold text-white">${standardEarnings.toFixed(2)}</span>
+                </div>
+              )}
+              
+              {/* Show Hourly/Atypical Shifts if they worked any */}
+              {(currentUser.payType === 'hourly' || hourlyHours > 0) && (
+                <div className="flex justify-between items-center bg-white/5 p-2 rounded mt-2 border border-slate-700">
+                  <span className="text-sm text-slate-300">
+                    {currentUser.payType === 'hourly' ? `Completed Hours (${hourlyHours.toFixed(1)} hrs)` : `Atypical Hourly Shifts (${hourlyHours.toFixed(1)} hrs)`}
+                  </span>
+                  <span className="font-semibold text-white">${hourlyEarnings.toFixed(2)}</span>
+                </div>
+              )}
+            </>
+          )}
+
           <div className="flex justify-between items-center bg-white/5 p-2 rounded">
             <span className="text-sm text-slate-300">Approved Mileage</span>
             <span className="font-semibold text-white">${kmEarnings.toFixed(2)}</span>
@@ -197,6 +232,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
             <span className="text-sm text-slate-300">Approved Expenses</span>
             <span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span>
           </div>
+          
           {isBonusActive && bonusEarnings > 0 && (
             <div className="flex justify-between items-center bg-yellow-500/20 border border-yellow-500/30 p-2 rounded mt-2">
               <span className="text-sm text-yellow-300 flex items-center"><Star className="h-3 w-3 mr-1" fill="currentColor"/> Projected Bonus</span>

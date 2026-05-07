@@ -63,7 +63,7 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-// --- ADD SHIFT MODAL WITH MONTHLY TRACKER & CONFLICT ENGINE ---
+// --- ADD SHIFT MODAL WITH MONTHLY TRACKER, CONFLICT ENGINE, & ATYPICAL PAY ---
 function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], timeOffLogs = [], onSave }) {
   const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
@@ -73,9 +73,13 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const [employeeId, setEmployeeId] = useState(safeEmps[0]?.id || '');
   const [clientId, setClientId] = useState(safeClients[0]?.id || '');
   const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('17:00');
+  const [endTime, setEndTime] = useState('11:00'); // Default to 2 hours
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceWeeks, setRecurrenceWeeks] = useState(4);
+  
+  // Atypical Pay State
+  const [isHourlyOverride, setIsHourlyOverride] = useState(false);
+  const [hourlyRate, setHourlyRate] = useState('');
 
   // Soft Warning State
   const [showOverlapWarning, setShowOverlapWarning] = useState(false);
@@ -114,7 +118,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (isTimeOffBlocked) return; // Completely block saving
+    if (isTimeOffBlocked) return; 
 
     // --- OVERLAP CONFLICT DETECTION (Soft Warning) ---
     if (!showOverlapWarning) {
@@ -131,19 +135,26 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
          const nStartM = nH * 60 + nM;
          const nEndM = neH * 60 + neM;
          
-         return (nStartM < sEndM && nEndM > sStartM); // Time blocks intersect
+         return (nStartM < sEndM && nEndM > sStartM); 
       });
       
       if (conflicting.length > 0) {
          setOverlapDetails(conflicting);
          setShowOverlapWarning(true);
-         return; // Pause save process to show warning
+         return; 
       }
     }
 
     // --- PROCEED WITH SAVE ---
     const newShifts = [];
     const startDate = parseLocalSafe(selectedDate);
+    
+    // Base Shift object with override data
+    const baseShift = { employeeId, clientId, startTime, endTime };
+    if (isHourlyOverride) {
+      baseShift.isHourlyOverride = true;
+      baseShift.hourlyRate = Number(hourlyRate);
+    }
 
     if (isRecurring) {
       for (let i = 0; i < recurrenceWeeks; i++) {
@@ -152,10 +163,10 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
         const dateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
         
         if (getHoliday(dateStr)) continue;
-        newShifts.push({ employeeId, clientId, date: dateStr, startTime, endTime });
+        newShifts.push({ ...baseShift, date: dateStr });
       }
     } else {
-      newShifts.push({ employeeId, clientId, date: selectedDate, startTime, endTime });
+      newShifts.push({ ...baseShift, date: selectedDate });
     }
     
     if (onSave) onSave(newShifts);
@@ -203,6 +214,23 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
           </div>
           
           <div className="pt-2 border-t border-slate-200">
+            {/* ATYPICAL PAY OVERRIDE TOGGLE */}
+            <label className="flex items-center space-x-2 text-sm font-bold text-slate-700 cursor-pointer w-fit mb-3">
+              <input type="checkbox" checked={isHourlyOverride} onChange={(e) => setIsHourlyOverride(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
+              <span>Atypical Shift: Pay Hourly</span>
+            </label>
+            
+            {isHourlyOverride && (
+              <div className="mb-4 pl-6 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                 <label className="block text-xs font-bold text-slate-700 mb-1">Custom Hourly Rate ($)</label>
+                 <div className="relative">
+                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><span className="text-slate-500 text-sm">$</span></div>
+                   <input type="number" step="0.01" min="0" value={hourlyRate} onChange={e => setHourlyRate(e.target.value)} placeholder="e.g. 25.00" className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-md text-sm font-semibold text-slate-800 focus:ring-teal-500 focus:border-teal-500" required={isHourlyOverride} />
+                 </div>
+                 <p className="text-[10px] text-slate-500 mt-1">This specific shift will be tracked hourly instead of per-visit for this employee.</p>
+              </div>
+            )}
+
             <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
               <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
               <span>Repeat Weekly</span>
@@ -277,7 +305,6 @@ function AdminDashboard({
 
   const [isDeskPingMuted, setIsDeskPingMuted] = useState(false);
   
-  // Admin Smart Notification State (RESTORED)
   const [adminScheduleUpdates, setAdminScheduleUpdates] = useState([]);
   const [showAdminUpdateBanner, setShowAdminUpdateBanner] = useState(false);
 
@@ -805,7 +832,15 @@ function AdminDashboard({
           <p className="text-slate-500">Manage schedule and personnel.</p>
         </div>
         {activeAdminTab === 'schedule' && (
-          <button onClick={() => handleDayClick(new Date().getDate() || 1)} className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition">
+          <button 
+             onClick={() => {
+               const d = new Date();
+               const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+               setSelectedDateStr(formattedDate);
+               setIsModalOpen(true);
+             }} 
+             className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition"
+          >
             <Plus className="h-5 w-5" /><span>Add Shift</span>
           </button>
         )}
@@ -829,7 +864,6 @@ function AdminDashboard({
           <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
             {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
-            {/* --- ADMIN SCHEDULE TAB DOT --- */}
             {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0 || urgentOpenShifts.length > 0) && (
               <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${urgentOpenShifts.length > 0 ? 'bg-red-600' : pendingCancellations.length > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
             )}
@@ -1406,6 +1440,9 @@ export default function App() {
             kudos={kudos}
             prizes={prizes}
             onAcknowledgeReward={handleAcknowledgeReward}
+            
+            // --- NEW: PASS UPDATE MUTATION FOR TIMECLOCK ---
+            onUpdateShift={(shiftId, data) => runMutation('gn_shifts', shiftId, 'update', data)}
           />
         )}
       </main>

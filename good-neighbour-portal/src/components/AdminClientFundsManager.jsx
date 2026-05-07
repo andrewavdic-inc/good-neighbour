@@ -14,7 +14,8 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
   const [topUpAmount, setTopUpAmount] = useState('');
   const [topUpNote, setTopUpNote] = useState('');
 
-  const safeClients = Array.isArray(clients) ? clients : [];
+  // --- FILTER OUT INACTIVE CLIENTS ---
+  const safeClients = Array.isArray(clients) ? clients.filter(c => c && c.isActive !== false) : [];
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
   const safeEmployees = Array.isArray(employees) ? employees : [];

@@ -38,7 +38,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const currentPeriodStart = activePeriod.start;
   const currentPeriodEnd = activePeriod.end;
   
-  // Calculate Monthly Leaderboard
+  // --- SYNCHRONIZED MONTHLY LEADERBOARD CALCULATOR ---
   const getMonthlyLeaderboard = () => {
     const mStart = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), 1);
     const mEnd = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth() + 1, 0, 23, 59, 59);
@@ -53,18 +53,29 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       let sEarn = 0;
       if (emp.payType === 'salary') {
          sEarn = (Number(emp.annualSalary) || 0) / 12; 
-      } else if (emp.payType === 'hourly') {
-        let hrs = 0;
-        empShifts.forEach(s => {
-          const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
-          const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
-          let h = (eH + eM/60) - (sH + sM/60);
-          if (h < 0) h += 24;
-          hrs += h;
-        });
-        sEarn = hrs * (Number(emp.hourlyWage) || 22.5);
       } else {
-        sEarn = empShifts.length * (Number(emp.perVisitRate) || 45);
+        empShifts.forEach(s => {
+          const isHourly = s.isHourlyOverride || emp.payType === 'hourly';
+          if (isHourly) {
+            const rate = s.isHourlyOverride ? Number(s.hourlyRate) : (Number(emp.hourlyWage) || 22.5);
+            let hours = 0;
+            if (s.actualStartTime && s.actualEndTime) {
+               hours = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
+            } else {
+               const st = s.startTime || '00:00';
+               const et = s.endTime || '00:00';
+               const [sH, sM] = String(st).split(':').map(Number);
+               const [eH, eM] = String(et).split(':').map(Number);
+               if (!isNaN(sH) && !isNaN(eH)) {
+                 hours = (eH + eM/60) - (sH + sM/60);
+                 if (hours < 0) hours += 24;
+               }
+            }
+            sEarn += hours * rate;
+          } else {
+            sEarn += (Number(emp.perVisitRate) || 45);
+          }
+        });
       }
       
       const kmE = safeExp.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= mStart && parseLocal(e.date) <= mEnd).reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
@@ -76,6 +87,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
     return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total).slice(0, 3);
   };
 
+  // --- SYNCHRONIZED EARNINGS CALCULATOR ---
   const employeeEarnings = useMemo(() => {
     const now = new Date();
     const monthlyWinners = getMonthlyLeaderboard();
@@ -99,20 +111,24 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         shiftEarnings = (Number(emp.annualSalary) || 0) / 26; 
         displayRate = `Salary: $${(Number(emp.annualSalary)||0).toLocaleString()}/yr`;
       } else {
-        let hrsWorked = 0;
         empShifts.forEach(s => {
-          if (emp.payType === 'hourly' || s.isHourlyOverride) {
+          const isHourly = s.isHourlyOverride || emp.payType === 'hourly';
+          if (isHourly) {
+            const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(emp.hourlyWage) || 22.50);
             let hours = 0;
             if (s.actualStartTime && s.actualEndTime) {
                hours = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
             } else {
-               const [sH, sM] = (s.startTime || '00:00').split(':').map(Number);
-               const [eH, eM] = (s.endTime || '00:00').split(':').map(Number);
-               hours = (eH + eM/60) - (sH + sM/60);
-               if (hours < 0) hours += 24; 
+               const st = s.startTime || '00:00';
+               const et = s.endTime || '00:00';
+               const [sH, sM] = String(st).split(':').map(Number);
+               const [eH, eM] = String(et).split(':').map(Number);
+               if (!isNaN(sH) && !isNaN(eH)) {
+                 hours = (eH + eM/60) - (sH + sM/60);
+                 if (hours < 0) hours += 24; 
+               }
             }
             totalHours += hours;
-            const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(emp.hourlyWage) || 22.50);
             shiftEarnings += (hours * rate);
           } else {
             shiftEarnings += (Number(emp.perVisitRate) || 45);
@@ -143,7 +159,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                e.status === 'approved' && 
                d >= currentPeriodStart && d <= currentPeriodEnd;
       });
-      // Renamed to oopEarnings to clearly denote it pays the employee for ALL out-of-pocket expenses
       const oopEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
       let bonusEarnings = 0;

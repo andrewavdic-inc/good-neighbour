@@ -150,6 +150,22 @@ export default function EmployeeDashboard({
     }
   };
 
+  // --- PUNCH BADGE RENDERER ---
+  const renderPunchBadge = (shift) => {
+    if (!shift.actualStartTime || !shift.actualEndTime) return null;
+    const start = new Date(shift.actualStartTime);
+    const end = new Date(shift.actualEndTime);
+    const diffMs = end - start;
+    const hrs = Math.floor(diffMs / 3600000);
+    const mins = Math.round((diffMs % 3600000) / 60000);
+    
+    return (
+      <div className="mt-1.5 inline-flex items-center bg-slate-100 border border-slate-200 text-slate-600 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider shadow-sm">
+        ⏱️ Punch: {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({hrs}h {mins}m)
+      </div>
+    );
+  };
+
   // --- Feed Ping Logic ---
   useEffect(() => {
     if (activeTab === 'announcements') { 
@@ -185,7 +201,7 @@ export default function EmployeeDashboard({
         if (!found) {
           changes.push(`🟢 ADDED: Shift for ${clientName || 'Unknown'} on ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
         } else if (found.date !== shift.date || found.startTime !== shift.startTime || found.endTime !== shift.endTime) {
-          changes.push(`🔄 CHANGED: Shift for ${clientName || 'Unknown'} moved to ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
+          changes.push(`🟡 CHANGED: Shift for ${clientName || 'Unknown'} moved to ${dateStr} from ${shift.startTime} to ${shift.endTime}`);
         }
       });
 
@@ -207,7 +223,7 @@ export default function EmployeeDashboard({
   };
 
   const hasNewShift = scheduleChanges.some(msg => msg.includes('🟢 ADDED'));
-  const hasChangedShift = scheduleChanges.some(msg => msg.includes('🔄 CHANGED') || msg.includes('🚨 REMOVED'));
+  const hasChangedShift = scheduleChanges.some(msg => msg.includes('🟡 CHANGED') || msg.includes('🚨 REMOVED'));
 
   // --- TIME OFF BALANCE CALCULATIONS ---
   const currentYear = new Date().getFullYear();
@@ -537,6 +553,8 @@ export default function EmployeeDashboard({
                             <div className="text-sm text-slate-600 flex items-center mt-1">
                               <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
                             </div>
+                            {/* --- PUNCH BADGE --- */}
+                            {renderPunchBadge(shift)}
                           </div>
                         </div>
                         <div className="flex flex-col space-y-2 w-full sm:w-auto">
@@ -888,6 +906,8 @@ export default function EmployeeDashboard({
                                   <div className="text-sm text-slate-600 flex items-center mt-1">
                                     <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
                                   </div>
+                                  {/* --- PUNCH BADGE --- */}
+                                  {renderPunchBadge(shift)}
                                 </div>
                               </div>
                               <div className="flex flex-col space-y-2 w-full sm:w-auto">

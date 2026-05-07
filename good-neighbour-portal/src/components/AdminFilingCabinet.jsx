@@ -188,22 +188,34 @@ export default function AdminFilingCabinet({
   const getSystemGross = (emp) => {
     const empShifts = shifts.filter(s => s.employeeId === emp.id && s.date >= startStr && s.date <= paydayStr);
     let shiftPay = 0;
+
+    // SMART SHIFT-BY-SHIFT CALCULATOR
     if (emp.payType === 'salary') {
       shiftPay = (Number(emp.annualSalary) || 0) / 26;
-    } else if (emp.payType === 'hourly') {
-      let hrs = 0;
+    } else {
       empShifts.forEach(s => {
-        const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number);
-        const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number);
-        if (!isNaN(sH) && !isNaN(eH)) {
-          let h = (eH + eM/60) - (sH + sM/60);
-          if (h < 0) h += 24;
-          hrs += h;
+        const isHourly = s.isHourlyOverride || emp.payType === 'hourly';
+        
+        if (isHourly) {
+          const rate = s.isHourlyOverride ? Number(s.hourlyRate) : (Number(emp.hourlyWage) || 22.5);
+          
+          // Use real punch clock if it exists, otherwise fallback to schedule
+          const st = s.actualStartTime ? s.actualStartTime : (s.startTime || '00:00');
+          const et = s.actualEndTime ? s.actualEndTime : (s.endTime || '00:00');
+          
+          const [sH, sM] = String(st).split(':').map(Number);
+          const [eH, eM] = String(et).split(':').map(Number);
+          
+          if (!isNaN(sH) && !isNaN(eH)) {
+            let h = (eH + eM/60) - (sH + sM/60);
+            if (h < 0) h += 24;
+            shiftPay += h * rate;
+          }
+        } else {
+          // Standard Per-Visit Shift Math
+          shiftPay += (Number(emp.perVisitRate) || 45);
         }
       });
-      shiftPay = hrs * (Number(emp.hourlyWage) || 22.5);
-    } else {
-      shiftPay = empShifts.length * (Number(emp.perVisitRate) || 45);
     }
 
     const kmPay = expenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && e.date >= startStr && e.date <= paydayStr).reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);

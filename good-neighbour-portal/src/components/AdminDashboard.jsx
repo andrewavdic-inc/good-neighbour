@@ -35,6 +35,17 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
+// --- PUNCH CLOCK CALCULATOR ---
+const getPunchText = (shift) => {
+  if (!shift.actualStartTime || !shift.actualEndTime) return null;
+  const start = new Date(shift.actualStartTime);
+  const end = new Date(shift.actualEndTime);
+  const diffMs = end - start;
+  const hrs = Math.floor(diffMs / 3600000);
+  const mins = Math.round((diffMs % 3600000) / 60000);
+  return `⏱️ Punch: ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${hrs}h ${mins}m)`;
+};
+
 export default function AdminDashboard({ 
   shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, 
   expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], 
@@ -56,7 +67,6 @@ export default function AdminDashboard({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
   
-  // --- NEW: EDIT SHIFT STATE ---
   const [editingShift, setEditingShift] = useState(null);
 
   const [activeAdminTab, setActiveAdminTab] = useState('schedule');
@@ -151,9 +161,8 @@ export default function AdminDashboard({
     setIsModalOpen(true);
   };
 
-  // --- NEW: INTERCEPT DAY NUMBER CLICKS FOR NAVIGATION ---
   const handleDayNumberClick = (e, d) => {
-    e.stopPropagation(); // Prevents the modal from opening
+    e.stopPropagation(); 
     setCurrentDate(d);
     setCalendarView('day');
   };
@@ -183,7 +192,6 @@ export default function AdminDashboard({
     return d;
   });
 
-  // --- COPY PREVIOUS WEEK LOGIC ---
   const handleClonePreviousWeek = () => {
     const prevStart = new Date(startOfWeek);
     prevStart.setDate(prevStart.getDate() - 7);
@@ -273,7 +281,6 @@ export default function AdminDashboard({
       <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'} ${isToday ? 'border-2 border-teal-500 shadow-sm z-10' : ''}`}>
         <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
           
-          {/* UPDATED: CLICKABLE DAY NUMBER */}
           <span 
             onClick={(e) => handleDayNumberClick(e, d)}
             className={`font-medium text-sm px-1.5 py-0.5 -ml-1.5 rounded hover:bg-slate-200 hover:text-teal-800 transition cursor-pointer z-20 group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : isToday ? 'text-teal-700 font-bold' : 'text-slate-600'}`}
@@ -310,13 +317,14 @@ export default function AdminDashboard({
             
             const empNameDisplay = isOpen ? '🚨 OPEN SHIFT' : String(emp?.name || 'Unknown').split(' ')[0];
             const clientNameDisplay = shift.isInternal ? shift.internalTask : String(client?.name || 'Unknown Client').split(' ')[0];
+            const punchText = getPunchText(shift);
             
             const bgBorderClass = isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 
                                   shift.isInternal ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 
                                   'bg-teal-100 text-teal-800 border-teal-200';
             
             return (
-              <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${bgBorderClass}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${clientNameDisplay}: ${shift.startTime}-${shift.endTime}`}>
+              <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${bgBorderClass}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${clientNameDisplay}: ${shift.startTime}-${shift.endTime}${punchText ? `\n${punchText}` : ''}`}>
                 <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{empNameDisplay}</div>
                 <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : shift.isInternal ? 'text-indigo-700' : 'text-teal-700'}`}>
                   {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0" /> : <Heart className="h-2.5 w-2.5 mr-1 shrink-0" />}
@@ -324,11 +332,17 @@ export default function AdminDashboard({
                 </div>
                 <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
                 
+                {/* INJECT PUNCH TEXT INTO MONTH/WEEK CARDS */}
+                {punchText && (
+                   <div className="text-[9px] font-bold text-slate-700 bg-white/50 rounded px-1 mt-0.5 border border-slate-200/50 truncate">
+                     {punchText}
+                   </div>
+                )}
+                
                 {shift.cancelRequest?.pending && (
                   <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse"></div>
                 )}
 
-                {/* UPDATED: ADDED EDIT PENCIL TO HOVER MENU */}
                 <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/90 p-0.5 rounded backdrop-blur-sm z-20">
                   <button onClick={(e) => { e.stopPropagation(); setEditingShift(shift); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 transition p-0.5 rounded hover:bg-blue-50" title="Edit Shift"><Edit className="h-3 w-3" /></button>
                   {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded hover:bg-amber-50" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
@@ -590,15 +604,17 @@ export default function AdminDashboard({
                                   style: {
                                      left: `${left}%`,
                                      width: `${width}%`,
-                                     top: `${level * 36 + 8}px`,
-                                     height: '28px' 
+                                     // MULTIPLIER INCREASED TO 48px TO FIT PUNCH BADGES
+                                     top: `${level * 48 + 8}px`,
+                                     height: '40px' 
                                   },
                                   level
                                };
                             });
                             
                             const maxLevel = levels.length > 0 ? levels.length - 1 : 0;
-                            const rowMinHeight = Math.max(65, (maxLevel + 1) * 36 + 16);
+                            // OVERALL ROW HEIGHT INCREASED TO MATCH
+                            const rowMinHeight = Math.max(75, (maxLevel + 1) * 48 + 16);
                             
                             return (
                                <div key={emp.id} style={{ minHeight: `${rowMinHeight}px` }} className={`flex relative group ${isUnassignedRow ? 'bg-amber-50/30' : 'bg-white hover:bg-slate-50 transition'}`}>
@@ -617,6 +633,7 @@ export default function AdminDashboard({
                                      {positionedShifts.map(shift => {
                                         const client = shift.isInternal ? null : safeClients.find(c => c.id === shift.clientId);
                                         const clientNameDisplay = shift.isInternal ? shift.internalTask : (client?.name || 'Unknown');
+                                        const punchText = getPunchText(shift);
                                         
                                         const shiftClass = isUnassignedRow ? 'bg-amber-100 border-amber-400 text-amber-900 ring-amber-500' : 
                                                            shift.cancelRequest?.pending ? 'bg-slate-200 border-slate-400 text-slate-600 ring-slate-500 line-through' : 
@@ -628,16 +645,18 @@ export default function AdminDashboard({
                                               key={shift.id} 
                                               style={shift.style} 
                                               className={`absolute rounded-md p-1 shadow-sm text-[10px] overflow-hidden leading-tight cursor-pointer hover:ring-2 hover:ring-offset-1 hover:z-20 transition-all group/shift border ${shiftClass}`}
-                                              title={`${clientNameDisplay} (${shift.startTime} - ${shift.endTime})`}
+                                              title={`${clientNameDisplay} (${shift.startTime} - ${shift.endTime})${punchText ? `\n${punchText}` : ''}`}
                                            >
                                               <div className="font-bold truncate flex items-center">
                                                 {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0"/> : null}
                                                 {clientNameDisplay}
                                               </div>
                                               <div className="font-medium opacity-80 truncate">{shift.startTime} - {shift.endTime}</div>
+                                              
+                                              {/* INJECT PUNCH TEXT DIRECTLY INTO SWIMLANE BLOCK */}
+                                              {punchText && <div className="text-[9px] font-bold text-slate-700 bg-white/40 rounded px-1 truncate mt-0.5">{punchText}</div>}
 
-                                              {/* UPDATED: ADDED EDIT PENCIL TO HOVER MENU */}
-                                              <div className="absolute right-1 top-0 bottom-0 flex items-center space-x-1 bg-white/90 px-1 shadow-sm backdrop-blur-sm opacity-0 group-hover/shift:opacity-100 transition-opacity">
+                                              <div className="absolute right-1 top-0 bottom-0 flex items-center space-x-1 bg-white/90 px-1 shadow-sm backdrop-blur-sm opacity-0 group-hover/shift:opacity-100 transition-opacity z-20">
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingShift(shift); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 p-0.5 rounded hover:bg-blue-50" title="Edit Shift"><Edit className="h-3.5 w-3.5"/></button>
                                                 {!isUnassignedRow && <button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 p-0.5 rounded hover:bg-amber-50" title="Mark Open"><UserMinus className="h-3.5 w-3.5"/></button>}
                                                 <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-600 hover:text-red-800 p-0.5 rounded hover:bg-red-50" title="Delete"><Trash2 className="h-3.5 w-3.5"/></button>

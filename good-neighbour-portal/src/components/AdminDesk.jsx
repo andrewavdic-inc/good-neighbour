@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter, Info, CheckCircle, AlertTriangle, CircleDollarSign, FileCheck } from 'lucide-react';
+import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter, Info, CheckCircle, AlertTriangle, CircleDollarSign, FileCheck, Heart, Users, CalendarDays, ShieldAlert } from 'lucide-react';
 
 // --- DATE HELPERS ---
 const parseLocalSafe = (dateStr) => {
@@ -42,7 +42,21 @@ const CABINET_CATEGORIES = [
   { id: "Corporate Governance", hint: "Stock Ledgers/Ownership Records, Board Resolutions" }
 ];
 
+const ONTARIO_REQUIREMENTS = [
+  { key: 'cpr', label: 'CPR / First Aid' }, 
+  { key: 'whmis', label: 'WHMIS' }, 
+  { key: 'maskFit', label: 'Mask Fitting' },
+  { key: 'vsc', label: 'Vulnerable Sector Check' }, 
+  { key: 'prc', label: 'Police Record Check' }, 
+  { key: 'immunization', label: 'Immunization Records' },
+  { key: 'skills', label: 'Skills Verification' }, 
+  { key: 'driverLicense', label: "Driver's License" }, 
+  { key: 'autoInsurance', label: 'Auto Insurance' },
+  { key: 'references', label: 'Professional References' }
+];
+
 export default function AdminDesk({ 
+  clients = [], // Included to calculate Active Clients metric
   notes = [], businessExpenses = [], currentUser, onAddNote, onUpdateNote, onRemoveNote, 
   onAddBusinessExpense, onRemoveBusinessExpense, employees = [], officeLocation, 
   adminDrawer = [], onAddDrawerFile, onRemoveDrawerFile, 
@@ -147,9 +161,56 @@ export default function AdminDesk({
   const urgentAlerts = myNotes.filter(n => n.isUrgent === true);
   const todayAppts = myAppointments.filter(a => a.date === todayStr);
   
-  // Directly flag any unassigned shifts happening today or tomorrow
   const urgentOpenShifts = (shifts || []).filter(s => s.employeeId === 'unassigned' && (s.date === todayStr || s.date === tomorrowStr));
 
+  // --- NEW: 5-SECOND PULSE CHECK CALCULATIONS ---
+  const activeClientsCount = (clients || []).filter(c => c.isActive !== false).length;
+  const activeStaffCount = safeEmployees.length;
+  
+  const currentWeekShiftsCount = useMemo(() => {
+    const now = new Date();
+    const currentDay = now.getDay(); 
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - currentDay);
+    weekStart.setHours(0,0,0,0);
+    
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23,59,59,999);
+    
+    return (shifts || []).filter(s => {
+      if(!s.date) return false;
+      const d = parseLocalSafe(s.date);
+      return d >= weekStart && d <= weekEnd;
+    }).length;
+  }, [shifts]);
+
+  // --- NEW: COMPLIANCE SCANNER ---
+  const complianceAlerts = useMemo(() => {
+    const alerts = [];
+    safeEmployees.forEach(emp => {
+       const reqs = emp.requirements || {};
+       ONTARIO_REQUIREMENTS.forEach(req => {
+          const docInfo = reqs[req.key];
+          if (!docInfo || !docInfo.fileUrl) {
+             alerts.push({ empName: emp.name, empId: emp.id, reqLabel: req.label, status: 'Missing' });
+          } else if (docInfo.expiryDate) {
+             const expDate = new Date(docInfo.expiryDate);
+             const today = new Date();
+             if (expDate < today) {
+                alerts.push({ empName: emp.name, empId: emp.id, reqLabel: req.label, status: 'Expired', expiry: docInfo.expiryDate });
+             } else {
+                const in30Days = new Date();
+                in30Days.setDate(in30Days.getDate() + 30);
+                if (expDate <= in30Days) {
+                   alerts.push({ empName: emp.name, empId: emp.id, reqLabel: req.label, status: 'Expiring Soon', expiry: docInfo.expiryDate });
+                }
+             }
+          }
+       });
+    });
+    return alerts;
+  }, [safeEmployees]);
 
   // Helper for System Gross
   const getMonthlyLeaderboard = (year, month) => {
@@ -582,6 +643,31 @@ export default function AdminDesk({
         </div>
       )}
 
+      {/* --- NEW: 5-SECOND PULSE CHECK --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex items-center transition hover:shadow-md">
+          <div className="p-3 bg-rose-100 text-rose-600 rounded-lg mr-4 shrink-0"><Heart className="h-6 w-6"/></div>
+          <div>
+            <div className="text-2xl font-black text-slate-800 leading-tight">{activeClientsCount}</div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Clients</div>
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex items-center transition hover:shadow-md">
+          <div className="p-3 bg-teal-100 text-teal-600 rounded-lg mr-4 shrink-0"><Users className="h-6 w-6"/></div>
+          <div>
+            <div className="text-2xl font-black text-slate-800 leading-tight">{activeStaffCount}</div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Staff</div>
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex items-center transition hover:shadow-md">
+          <div className="p-3 bg-blue-100 text-blue-600 rounded-lg mr-4 shrink-0"><CalendarDays className="h-6 w-6"/></div>
+          <div>
+            <div className="text-2xl font-black text-slate-800 leading-tight">{currentWeekShiftsCount}</div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Shifts This Week</div>
+          </div>
+        </div>
+      </div>
+
       {/* --- TOP SECTION: ON THE DESK --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
@@ -664,7 +750,7 @@ export default function AdminDesk({
           </button>
         </div>
 
-        {/* COL 2: PRIVATE CALENDAR & ITINERARY */}
+        {/* COL 2: PRIVATE CALENDAR, ITINERARY & COMPLIANCE ALERTS */}
         <div className="flex flex-col space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-fit flex flex-col">
             <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -711,7 +797,7 @@ export default function AdminDesk({
             </div>
           </div>
 
-          <div className="bg-blue-50 rounded-xl shadow-sm border border-blue-200 overflow-hidden flex flex-col flex-1 min-h-[300px]">
+          <div className="bg-blue-50 rounded-xl shadow-sm border border-blue-200 overflow-hidden flex flex-col flex-1 min-h-[250px]">
             <div className="px-6 py-4 border-b border-blue-200 bg-blue-100/50 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-blue-900 flex items-center"><Clock className="h-5 w-5 mr-2" /> Upcoming Itinerary</h2>
               <button onClick={() => openNewApptModal()} className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded transition">+ Appt</button>
@@ -733,10 +819,38 @@ export default function AdminDesk({
               )}
             </div>
           </div>
+
+          {/* --- NEW: HR & COMPLIANCE SCANNER --- */}
+          {isMasterAdmin && (
+            <div className="bg-red-50 rounded-xl shadow-sm border border-red-200 overflow-hidden flex flex-col flex-1 min-h-[250px]">
+              <div className="px-6 py-4 border-b border-red-200 bg-red-100/50 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-red-900 flex items-center"><ShieldAlert className="h-5 w-5 mr-2" /> Compliance Alerts</h2>
+                {complianceAlerts.length > 0 && (
+                  <span className="text-xs bg-red-600 text-white font-bold px-2 py-1 rounded-full shadow-sm">{complianceAlerts.length}</span>
+                )}
+              </div>
+              <div className="p-4 flex-1 overflow-y-auto space-y-2">
+                {complianceAlerts.length === 0 ? (
+                  <div className="text-center py-8 text-red-600/60 text-sm font-medium italic">All active staff are fully compliant.</div>
+                ) : (
+                  complianceAlerts.map((alert, idx) => (
+                    <div key={idx} className="bg-white border border-red-100 rounded-lg p-3 shadow-sm flex items-start justify-between">
+                      <div>
+                        <div className="font-bold text-slate-800 text-sm">{alert.empName}</div>
+                        <div className="text-xs text-red-600 font-bold mt-0.5 flex items-center">
+                          <XCircle className="h-3 w-3 mr-1" /> {alert.reqLabel}: {alert.status}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* COL 3: SORTABLE STICKY NOTES WITH MONTH FILTER */}
-        <div className="bg-yellow-50 rounded-xl shadow-sm border border-yellow-200 overflow-hidden flex flex-col h-[750px]">
+        <div className="bg-yellow-50 rounded-xl shadow-sm border border-yellow-200 overflow-hidden flex flex-col h-[750px] lg:h-auto">
           <div className="px-6 py-4 border-b border-yellow-200 bg-yellow-100/50 flex flex-col space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-yellow-800 flex items-center"><FileText className="h-5 w-5 mr-2" /> My Sticky Notes</h2>
@@ -812,7 +926,7 @@ export default function AdminDesk({
               Company Ledger
             </button>
             
-            {/* NEW PAYROLL TAB */}
+            {/* PAYROLL TAB */}
             <button 
               onClick={() => setCabinetTab('payroll')} 
               className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${cabinetTab === 'payroll' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'} relative`}
@@ -925,7 +1039,7 @@ export default function AdminDesk({
             </div>
           )}
 
-          {/* TAB 2: NEW PAYROLL LEDGER */}
+          {/* TAB 2: PAYROLL LEDGER */}
           {cabinetTab === 'payroll' && (
              <div className="flex flex-col h-full bg-emerald-50/20">
                 <div className="px-6 py-4 border-b border-slate-200 bg-emerald-800 text-white flex items-center justify-between">
@@ -948,7 +1062,6 @@ export default function AdminDesk({
                   )}
                 </div>
 
-                {/* THE DUAL-INPUT CHECKLIST */}
                 {!isPayrollFinalized && (
                   <div className="flex-1 overflow-y-auto p-6">
                     <div className="mb-4 flex items-start p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">

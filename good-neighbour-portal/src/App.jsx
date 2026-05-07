@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File, BookOpen, Award, AlertTriangle } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, LogOut, Plus, ChevronLeft, ChevronRight, Briefcase, CalendarDays, ShieldAlert, Trash2, Users, Heart, Coins, Star, Settings, Car, Receipt, CheckCircle, XCircle, AlertCircle, Phone, FileText, Info, Coffee, Wallet, Image as ImageIcon, Edit, ShieldCheck, Mail, MapPin, Search, UserMinus, Bell, PlusCircle, MessageSquare, Send, Download, Sun, Activity, File, BookOpen, Award, AlertTriangle, Copy } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from 'firebase/app';
@@ -85,9 +85,8 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
   const [isInternal, setIsInternal] = useState(false);
   const [internalTask, setInternalTask] = useState('');
 
-  // Soft Warning State
-  const [showOverlapWarning, setShowOverlapWarning] = useState(false);
-  const [overlapDetails, setOverlapDetails] = useState([]);
+  // Unified Soft Warning State ('overlap', 'availability', or null)
+  const [warningState, setWarningState] = useState(null);
 
   // --- DYNAMIC OVERBOOKING MATH ---
   const baseDate = parseLocalSafe(selectedDate);
@@ -124,14 +123,15 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
     e.preventDefault();
     if (isTimeOffBlocked) return; 
 
-    // Validation for internal tasks
     if (isInternal && !internalTask.trim()) {
       alert("Please provide a task description for this internal shift.");
       return;
     }
 
-    // --- OVERLAP CONFLICT DETECTION (Soft Warning) ---
-    if (!showOverlapWarning) {
+    // --- SMART CONFLICT DETECTOR (Double-Booking & Availability) ---
+    if (!warningState) {
+      
+      // 1. Check for Double-Booking
       const conflicting = safeShifts.filter(s => {
          if (s.employeeId !== employeeId || s.date !== selectedDate || !s.startTime || !s.endTime) return false;
          
@@ -149,9 +149,29 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
       });
       
       if (conflicting.length > 0) {
-         setOverlapDetails(conflicting);
-         setShowOverlapWarning(true);
+         setWarningState({ type: 'overlap', details: conflicting });
          return; 
+      }
+
+      // 2. Check for Availability Match
+      const emp = safeEmps.find(e => e.id === employeeId);
+      const avail = emp?.availability || [];
+      if (avail.length > 0) {
+         const d = parseLocalSafe(selectedDate);
+         const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
+         const h = Number(startTime.split(':')[0]);
+         let timeSlot = 'Overnights';
+         if (h >= 5 && h < 12) timeSlot = 'Mornings';
+         else if (h >= 12 && h < 17) timeSlot = 'Afternoons';
+         else if (h >= 17 && h < 22) timeSlot = 'Evenings';
+         
+         const expectedSlot = `${dayName} ${timeSlot}`;
+         const isAvailable = avail.includes('Anytime') || avail.includes(expectedSlot) || avail.some(a => a.includes(dayName) && a.includes('Any'));
+         
+         if (!isAvailable) {
+            setWarningState({ type: 'availability', expectedSlot });
+            return;
+         }
       }
     }
 
@@ -159,7 +179,7 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
     const newShifts = [];
     const startDate = parseLocalSafe(selectedDate);
     
-    // Base Shift object with override data
+    // Base Shift object
     const baseShift = { employeeId, startTime, endTime };
     
     if (isInternal) {
@@ -214,15 +234,15 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
               <label className="block text-sm font-medium text-slate-700">Employee</label>
               {isTimeOffBlocked && <span className="text-[10px] font-bold bg-red-100 text-red-800 px-2 py-0.5 rounded shadow-sm border border-red-200">ON VACATION / LEAVE</span>}
             </div>
-            <select value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setShowOverlapWarning(false); }} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 ${isTimeOffBlocked ? 'bg-red-50 border-red-300 text-red-900' : 'border-slate-300'}`} required>
+            <select value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); setWarningState(null); }} className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 ${isTimeOffBlocked ? 'bg-red-50 border-red-300 text-red-900' : 'border-slate-300'}`} required>
               {safeEmps.map(emp => <option key={emp.id} value={emp.id}>{emp.name} ({emp.role})</option>)}
             </select>
             {isTimeOffBlocked && <p className="text-xs font-bold text-red-600 mt-1.5 flex items-center"><XCircle className="h-3.5 w-3.5 mr-1" /> This employee is on approved leave. You cannot schedule them.</p>}
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">Start</label><input type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setShowOverlapWarning(false); }} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
-            <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setShowOverlapWarning(false); }} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">Start</label><input type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setWarningState(null); }} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
+            <div><label className="block text-sm font-medium text-slate-700 mb-1">End</label><input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setWarningState(null); }} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500" required /></div>
           </div>
           
           {!isInternal ? (
@@ -278,13 +298,13 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
             )}
           </div>
 
-          {/* --- SOFT WARNING OVERRIDE UI --- */}
-          {showOverlapWarning && (
+          {/* --- SMART WARNING OVERRIDE UI --- */}
+          {warningState && warningState.type === 'overlap' && (
             <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mt-2 shadow-inner">
               <h4 className="text-yellow-900 font-bold flex items-center mb-2 text-sm"><AlertTriangle className="h-4 w-4 mr-1.5" /> Anomaly Detected: Double-Booking</h4>
               <p className="text-xs text-yellow-800 mb-2 font-medium">This employee is already scheduled during this exact time block:</p>
               <ul className="text-xs text-yellow-900 font-bold list-disc pl-5 space-y-1 mb-3">
-                {overlapDetails.map(c => {
+                {warningState.details.map(c => {
                    const clName = c.isInternal ? c.internalTask : safeClients.find(client => client.id === c.clientId)?.name;
                    return <li key={c.id}>{clName || 'Unknown Client'} ({c.startTime} - {c.endTime})</li>
                 })}
@@ -293,11 +313,21 @@ function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients 
             </div>
           )}
 
+          {warningState && warningState.type === 'availability' && (
+            <div className="bg-orange-50 border border-orange-300 rounded-lg p-4 mt-2 shadow-inner">
+              <h4 className="text-orange-900 font-bold flex items-center mb-2 text-sm"><AlertTriangle className="h-4 w-4 mr-1.5" /> Availability Warning</h4>
+              <p className="text-xs text-orange-800 font-medium mb-1">This employee is not formally marked as available for <strong>{warningState.expectedSlot}</strong>.</p>
+              <p className="text-[11px] text-orange-700 font-bold uppercase tracking-wider border-t border-orange-200 pt-2 mt-2">Proceed anyway if you have verbally confirmed this shift with them.</p>
+            </div>
+          )}
+
           <div className="pt-4 flex justify-end space-x-3">
-            {showOverlapWarning ? (
+            {warningState ? (
                <>
-                 <button type="button" onClick={() => setShowOverlapWarning(false)} className="px-4 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition shadow-sm">Cancel / Fix Time</button>
-                 <button type="submit" className="px-4 py-2.5 text-sm font-black text-yellow-900 bg-yellow-400 rounded-md hover:bg-yellow-500 transition shadow-[0_0_10px_rgba(250,204,21,0.5)]">Yes, Approve Double Booking</button>
+                 <button type="button" onClick={() => setWarningState(null)} className="px-4 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition shadow-sm">Cancel / Fix</button>
+                 <button type="submit" className="px-4 py-2.5 text-sm font-black text-yellow-900 bg-yellow-400 rounded-md hover:bg-yellow-500 transition shadow-[0_0_10px_rgba(250,204,21,0.5)]">
+                    {warningState.type === 'overlap' ? 'Yes, Approve Double Booking' : 'Yes, Override Availability'}
+                 </button>
                </>
             ) : (
                <>
@@ -362,7 +392,7 @@ function AdminDashboard({
   const tomorrowStr = tomorrow.toISOString().split('T')[0];
   const urgentOpenShifts = safeShifts.filter(s => s.employeeId === 'unassigned' && (s.date === todayStr || s.date === tomorrowStr));
 
-  // --- RESTORED SMART TRACKER: SHIFT CLAIM NOTIFICATIONS ---
+  // --- SMART TRACKER: SHIFT CLAIM NOTIFICATIONS ---
   useEffect(() => {
     const saved = localStorage.getItem('gn_admin_shift_snapshot');
     if (saved) {
@@ -447,6 +477,45 @@ function AdminDashboard({
     d.setDate(startOfWeek.getDate() + i);
     return d;
   });
+
+  // --- NEW: COPY PREVIOUS WEEK LOGIC ---
+  const handleClonePreviousWeek = () => {
+    const prevStart = new Date(startOfWeek);
+    prevStart.setDate(prevStart.getDate() - 7);
+    const prevEnd = new Date(endOfWeek);
+    prevEnd.setDate(prevEnd.getDate() - 7);
+
+    const shiftsToClone = safeShifts.filter(s => {
+        if (!s.date) return false;
+        const d = parseLocalSafe(s.date);
+        return d >= prevStart && d <= prevEnd;
+    });
+
+    if (shiftsToClone.length === 0) {
+        alert("No shifts found in the previous week to clone.");
+        return;
+    }
+
+    if (window.confirm(`Found ${shiftsToClone.length} shifts from the previous week. Clone them to the currently viewed week?`)) {
+        const clonedShifts = shiftsToClone.map(s => {
+            const oldDate = parseLocalSafe(s.date);
+            const newDate = new Date(oldDate);
+            newDate.setDate(newDate.getDate() + 7);
+            const newDateStr = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}-${String(newDate.getDate()).padStart(2, '0')}`;
+            
+            return {
+                ...s,
+                id: undefined, // Cleared so backend generates new ones
+                date: newDateStr,
+                cancelRequest: null, // Clear any past cancellations
+                actualStartTime: null, // Clear timeclock
+                actualEndTime: null // Clear timeclock
+            };
+        });
+        
+        if(onAddShift) onAddShift(clonedShifts);
+    }
+  };
   
   const filteredShifts = safeShifts.filter(s => {
     if (!s) return false;
@@ -672,7 +741,7 @@ function AdminDashboard({
             </div>
           )}
 
-          {/* RESTORED CLAIMED SHIFT BANNER */}
+          {/* RESTORED SMART TRACKER: SHIFT CLAIM NOTIFICATIONS */}
           {showAdminUpdateBanner && adminScheduleUpdates.length > 0 && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
               <div className="flex items-start">
@@ -756,7 +825,7 @@ function AdminDashboard({
               </>
             )}
 
-            {/* NEW SWIMLANE TIMELINE (DAY VIEW) WITH COLLISION DETECTION */}
+            {/* SWIMLANE TIMELINE (DAY VIEW) WITH COLLISION DETECTION */}
             {calendarView === 'day' && (() => {
               const dayStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
               const dayViewShifts = filteredShifts.filter(s => s && s.date === dayStr);
@@ -914,17 +983,26 @@ function AdminDashboard({
           <p className="text-slate-500">Manage schedule and personnel.</p>
         </div>
         {activeAdminTab === 'schedule' && (
-          <button 
-             onClick={() => {
-               const d = currentDate;
-               const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-               setSelectedDateStr(formattedDate);
-               setIsModalOpen(true);
-             }} 
-             className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition"
-          >
-            <Plus className="h-5 w-5" /><span>Add Shift</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button 
+               onClick={handleClonePreviousWeek} 
+               className="flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 shadow-sm transition"
+               title="Clone shifts from the previous week to the current view"
+            >
+              <Copy className="h-4 w-4" /><span className="hidden sm:inline">Copy Prev Week</span>
+            </button>
+            <button 
+               onClick={() => {
+                 const d = currentDate;
+                 const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                 setSelectedDateStr(formattedDate);
+                 setIsModalOpen(true);
+               }} 
+               className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition"
+            >
+              <Plus className="h-5 w-5" /><span>Add Shift</span>
+            </button>
+          </div>
         )}
       </div>
 

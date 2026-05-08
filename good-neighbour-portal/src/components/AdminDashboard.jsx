@@ -489,13 +489,35 @@ export default function AdminDashboard({
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-200 gap-4">
             <div className="flex items-center space-x-3 w-full sm:w-auto">
-              <label htmlFor="schedule-search" className="text-sm font-semibold text-slate-700 whitespace-nowrap">Filter Schedule:</label>
-              <div className="relative w-full sm:w-72">
+              <label htmlFor="schedule-search" className="text-sm font-semibold text-slate-700 whitespace-nowrap hidden sm:block">Filter:</label>
+              <div className="relative w-full sm:w-64">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search className="h-4 w-4 text-slate-400" /></div>
-                <input type="text" placeholder="Search employee or client..." value={scheduleSearch} onChange={(e) => setScheduleSearch(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition" />
+                <input type="text" placeholder="Search schedule..." value={scheduleSearch} onChange={(e) => setScheduleSearch(e.target.value)} className="block w-full pl-9 pr-3 py-2 border border-slate-300 rounded-md leading-5 bg-slate-50 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 text-sm transition" />
               </div>
+              {scheduleSearch.trim() !== '' && <div className="text-xs text-teal-700 font-semibold bg-teal-50 px-3 py-1.5 rounded-full border border-teal-100 whitespace-nowrap hidden md:block">Filtered</div>}
             </div>
-            {scheduleSearch.trim() !== '' && <div className="text-xs text-teal-700 font-semibold bg-teal-50 px-3 py-1.5 rounded-full border border-teal-100 whitespace-nowrap">Filtered View Active</div>}
+            
+            <div className="flex items-center space-x-2 w-full sm:w-auto justify-end shrink-0">
+              <button 
+                 onClick={handleClonePreviousWeek} 
+                 className="flex items-center space-x-2 bg-indigo-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-indigo-700 shadow-sm transition text-sm"
+                 title="Clone shifts from the previous week to the current view"
+              >
+                <Copy className="h-4 w-4" /><span className="hidden sm:inline">Copy Prev Week</span>
+              </button>
+              <button 
+                 onClick={() => {
+                   const d = currentDate;
+                   const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                   setSelectedDateStr(formattedDate);
+                   setEditingShift(null); // Ensure "Add" mode
+                   setIsModalOpen(true);
+                 }} 
+                 className="flex items-center space-x-2 bg-teal-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition text-sm"
+              >
+                <Plus className="h-4 w-4" /><span>Add Shift</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -604,7 +626,6 @@ export default function AdminDashboard({
                                   style: {
                                      left: `${left}%`,
                                      width: `${width}%`,
-                                     // MULTIPLIER INCREASED TO 48px TO FIT PUNCH BADGES
                                      top: `${level * 48 + 8}px`,
                                      height: '40px' 
                                   },
@@ -613,7 +634,6 @@ export default function AdminDashboard({
                             });
                             
                             const maxLevel = levels.length > 0 ? levels.length - 1 : 0;
-                            // OVERALL ROW HEIGHT INCREASED TO MATCH
                             const rowMinHeight = Math.max(75, (maxLevel + 1) * 48 + 16);
                             
                             return (
@@ -705,29 +725,6 @@ export default function AdminDashboard({
           <h1 className="text-2xl font-bold text-slate-800">Admin Dashboard</h1>
           <p className="text-slate-500">Manage schedule and personnel.</p>
         </div>
-        {activeAdminTab === 'schedule' && (
-          <div className="flex items-center space-x-2">
-            <button 
-               onClick={handleClonePreviousWeek} 
-               className="flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 shadow-sm transition"
-               title="Clone shifts from the previous week to the current view"
-            >
-              <Copy className="h-4 w-4" /><span className="hidden sm:inline">Copy Prev Week</span>
-            </button>
-            <button 
-               onClick={() => {
-                 const d = currentDate;
-                 const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                 setSelectedDateStr(formattedDate);
-                 setEditingShift(null); // Ensure "Add" mode
-                 setIsModalOpen(true);
-               }} 
-               className="flex items-center space-x-2 bg-teal-600 text-white px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition"
-            >
-              <Plus className="h-5 w-5" /><span>Add Shift</span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* --- PING ALERT FOR GLOBAL NAV WITH MUTE --- */}
@@ -748,6 +745,7 @@ export default function AdminDashboard({
           <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
             {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
+            {/* --- ADMIN SCHEDULE TAB DOT --- */}
             {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0 || urgentOpenShifts.length > 0) && (
               <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${urgentOpenShifts.length > 0 ? 'bg-red-600' : pendingCancellations.length > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
             )}

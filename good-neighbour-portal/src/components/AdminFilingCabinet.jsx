@@ -99,7 +99,6 @@ export default function AdminFilingCabinet({
     }).sort((a,b) => new Date(b.uploadDate) - new Date(a.uploadDate)); 
   }, [safeCabinetDocs, cabFilterCategory, cabFilterMonth]);
 
-
   // --- EXPENSE HANDLERS ---
   const handleSaveExpense = async (e) => { 
     e.preventDefault(); 
@@ -185,11 +184,11 @@ export default function AdminFilingCabinet({
     return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.activityScore - a.activityScore);
   };
 
-  const getSystemGross = (emp) => {
+  // UPDATED: Now returns Taxable Gross and Reimbursements separately
+  const getPayrollTotals = (emp) => {
     const empShifts = shifts.filter(s => s.employeeId === emp.id && s.date >= startStr && s.date <= paydayStr);
     let shiftPay = 0;
 
-    // SMART SHIFT-BY-SHIFT CALCULATOR
     if (emp.payType === 'salary') {
       shiftPay = (Number(emp.annualSalary) || 0) / 26;
     } else {
@@ -198,11 +197,8 @@ export default function AdminFilingCabinet({
         
         if (isHourly) {
           const rate = s.isHourlyOverride ? Number(s.hourlyRate) : (Number(emp.hourlyWage) || 22.5);
+          const usePunch = s.requirePunchClock !== false;
           
-          // NEW: Respect the Admin's Punch Clock Toggle
-          const usePunch = s.requirePunchClock !== false; // defaults to true if undefined
-          
-          // Use real punch clock if it's required and exists, otherwise strict fallback to schedule
           const st = (usePunch && s.actualStartTime) ? s.actualStartTime : (s.startTime || '00:00');
           const et = (usePunch && s.actualEndTime) ? s.actualEndTime : (s.endTime || '00:00');
           
@@ -215,7 +211,6 @@ export default function AdminFilingCabinet({
             shiftPay += h * rate;
           }
         } else {
-          // Standard Per-Visit Shift Math
           shiftPay += (Number(emp.perVisitRate) || 45);
         }
       });
@@ -233,7 +228,10 @@ export default function AdminFilingCabinet({
       else if (lb[2]?.emp?.id === emp.id) bonusEarnings = Number(bonusSettings?.monthly[2] || 0);
     }
 
-    return shiftPay + kmPay + oopPay + bonusEarnings;
+    return {
+      taxableGross: shiftPay + bonusEarnings,
+      reimbursementTotal: kmPay + oopPay
+    };
   };
 
   const handlePayrollFormChange = (empId, field, value) => {
@@ -251,17 +249,19 @@ export default function AdminFilingCabinet({
     const paystubFiles = {};
     let totalGross = 0;
     let totalNet = 0;
+    let totalReimbursements = 0;
 
     safeEmployees.forEach(emp => {
       const form = payrollForms[emp.id] || {};
-      const sys = getSystemGross(emp);
+      const totals = getPayrollTotals(emp);
       const acc = Number(form.accGross || 0);
       const net = Number(form.netPay || 0);
       
       records[emp.id] = {
         name: emp.name,
         role: emp.role,
-        systemGross: sys,
+        systemGross: totals.taxableGross,
+        reimbursementTotal: totals.reimbursementTotal,
         accountantGross: acc,
         netPay: net
       };
@@ -272,6 +272,7 @@ export default function AdminFilingCabinet({
       
       totalGross += acc;
       totalNet += net;
+      totalReimbursements += totals.reimbursementTotal;
     });
 
     const payrollData = {
@@ -280,6 +281,7 @@ export default function AdminFilingCabinet({
       periodEnd: paydayStr,
       totalGross,
       totalNet,
+      totalReimbursements,
       records
     };
 
@@ -290,17 +292,25 @@ export default function AdminFilingCabinet({
   };
 
   const exportPayrollCSV = (log) => {
-    const headers = ['Employee', 'Role', 'System Gross ($)', 'Accountant Gross ($)', 'Actual Net Pay ($)'];
+    const headers = ['Employee', 'Role', 'System Gross ($)', 'Accountant Gross ($)', 'Actual Net Pay ($)', 'Reimbursements ($)', 'Total Payout (Net + Reimbursements) ($)'];
     const rows = Object.values(log.records || {}).map(r => [
       `"${r.name}"`,
       `"${r.role}"`,
-      Number(r.systemGross).toFixed(2),
-      Number(r.accountantGross).toFixed(2),
-      Number(r.netPay).toFixed(2)
+      Number(r.systemGross || 0).toFixed(2),
+      Number(r.accountantGross || 0).toFixed(2),
+      Number(r.netPay || 0).toFixed(2),
+      Number(r.reimbursementTotal || 0).toFixed(2),
+      (Number(r.netPay || 0) + Number(r.reimbursementTotal || 0)).toFixed(2)
     ]);
     
-    rows.push(['', '', '', '', '']);
-    rows.push(['"TOTAL COMPANY PAYOUT"', '', '', Number(log.totalGross).toFixed(2), Number(log.totalNet).toFixed(2)]);
+    rows.push(['', '', '', '', '', '', '']);
+    rows.push([
+      '"TOTAL COMPANY PAYOUT"', '', '', 
+      Number(log.totalGross || 0).toFixed(2), 
+      Number(log.totalNet || 0).toFixed(2), 
+      Number(log.totalReimbursements || 0).toFixed(2), 
+      (Number(log.totalNet || 0) + Number(log.totalReimbursements || 0)).toFixed(2)
+    ]);
 
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -465,7 +475,7 @@ export default function AdminFilingCabinet({
                   <div className="mb-4 flex items-start p-4 bg-blue-50 border border-blue-200 rounded-lg shadow-sm">
                     <Info className="h-5 w-5 text-blue-600 mr-3 shrink-0" />
                     <p className="text-sm text-blue-900 leading-relaxed font-medium">
-                      <strong>Dual-Input Verification:</strong> Type the Gross amount provided by the accountant to verify it matches the system's tracked Gross. Attach the paystub PDF, and it will be sent directly to the employee's personal tab upon finalization.
+                      <strong>Dual-Input Verification:</strong> Type the Gross amount provided by the accountant to verify it matches the system's tracked Taxable Gross. Attach the paystub PDF, and it will be sent directly to the employee's personal tab upon finalization. Reimbursements should be issued as a separate transaction.
                     </p>
                   </div>
 
@@ -474,7 +484,9 @@ export default function AdminFilingCabinet({
                       <div className="text-center py-8 text-slate-500">No active employees found for payroll.</div>
                     ) : (
                       safeEmployees.map(emp => {
-                        const sysGross = getSystemGross(emp);
+                        const totals = getPayrollTotals(emp);
+                        const sysGross = totals.taxableGross;
+                        const reimbursements = totals.reimbursementTotal;
                         const form = payrollForms[emp.id] || { accGross: '', netPay: '', paystubFile: null };
                         
                         const isGrossMatch = form.accGross !== '' && Math.abs(Number(form.accGross) - sysGross) <= 0.02;
@@ -488,8 +500,13 @@ export default function AdminFilingCabinet({
                                 <div className="font-bold text-slate-800 text-lg">{emp.name}</div>
                                 <div className="text-xs text-slate-500 font-medium">{emp.role}</div>
                                 <div className="mt-2 text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 w-fit">
-                                  System Gross: <span className="font-black text-slate-800">${sysGross.toFixed(2)}</span>
+                                  System Gross (Taxable): <span className="font-black text-slate-800">${sysGross.toFixed(2)}</span>
                                 </div>
+                                {reimbursements > 0 && (
+                                  <div className="mt-2 text-sm font-bold text-blue-800 bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 w-fit flex items-center shadow-sm">
+                                    <Receipt className="h-4 w-4 mr-1.5" /> Reimbursements Due: ${reimbursements.toFixed(2)}
+                                  </div>
+                                )}
                               </div>
 
                               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -580,13 +597,15 @@ export default function AdminFilingCabinet({
                         </div>
                         <div className="flex items-center space-x-6">
                           <div className="text-right">
-                            <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Gross</div>
-                            <div className="font-bold text-slate-700">${Number(log.totalGross).toFixed(2)}</div>
-                          </div>
-                          <div className="text-right">
                             <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Net Pay</div>
                             <div className="font-black text-emerald-700">${Number(log.totalNet).toFixed(2)}</div>
                           </div>
+                          {log.totalReimbursements > 0 && (
+                            <div className="text-right hidden sm:block">
+                              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Reimbursements</div>
+                              <div className="font-black text-blue-600">${Number(log.totalReimbursements).toFixed(2)}</div>
+                            </div>
+                          )}
                           <button onClick={() => exportPayrollCSV(log)} className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded transition flex items-center" title="Export Ledger to CSV">
                             <Download className="h-5 w-5" />
                           </button>

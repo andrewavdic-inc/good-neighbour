@@ -192,13 +192,33 @@ export default function AdminDashboard({
     return d;
   });
 
+  const filteredShifts = safeShifts.filter(s => {
+    if (!s) return false;
+    if (scheduleSearch === 'unassigned') return s.employeeId === 'unassigned';
+    if (!scheduleSearch.trim()) return true;
+    const emp = safeEmployees.find(e => e && e.id === s.employeeId);
+    
+    const clientMatch = s.isInternal 
+      ? String(s.internalTask).toLowerCase().includes(scheduleSearch.toLowerCase())
+      : (() => {
+          const c = safeClients.find(client => client && client.id === s.clientId);
+          return c && c.name && String(c.name).toLowerCase().includes(scheduleSearch.toLowerCase());
+        })();
+        
+    const searchLower = scheduleSearch.toLowerCase();
+    const empMatch = emp && emp.name && String(emp.name).toLowerCase().includes(searchLower);
+    
+    return empMatch || clientMatch;
+  });
+
   const handleClonePreviousWeek = () => {
     const prevStart = new Date(startOfWeek);
     prevStart.setDate(prevStart.getDate() - 7);
     const prevEnd = new Date(endOfWeek);
     prevEnd.setDate(prevEnd.getDate() - 7);
 
-    const shiftsToClone = safeShifts.filter(s => {
+    // CHANGED from safeShifts to filteredShifts to respect the search bar
+    const shiftsToClone = filteredShifts.filter(s => {
         if (!s.date) return false;
         const d = parseLocalSafe(s.date);
         return d >= prevStart && d <= prevEnd;
@@ -229,25 +249,6 @@ export default function AdminDashboard({
         if(onAddShift) onAddShift(clonedShifts);
     }
   };
-  
-  const filteredShifts = safeShifts.filter(s => {
-    if (!s) return false;
-    if (scheduleSearch === 'unassigned') return s.employeeId === 'unassigned';
-    if (!scheduleSearch.trim()) return true;
-    const emp = safeEmployees.find(e => e && e.id === s.employeeId);
-    
-    const clientMatch = s.isInternal 
-      ? String(s.internalTask).toLowerCase().includes(scheduleSearch.toLowerCase())
-      : (() => {
-          const c = safeClients.find(client => client && client.id === s.clientId);
-          return c && c.name && String(c.name).toLowerCase().includes(scheduleSearch.toLowerCase());
-        })();
-        
-    const searchLower = scheduleSearch.toLowerCase();
-    const empMatch = emp && emp.name && String(emp.name).toLowerCase().includes(searchLower);
-    
-    return empMatch || clientMatch;
-  });
 
   // --- MONTH & WEEK RENDER ENGINE ---
   const renderCalendarCell = (d, minHeight = "min-h-[120px]", isWeekView = false) => {

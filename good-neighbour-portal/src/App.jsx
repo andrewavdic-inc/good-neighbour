@@ -77,10 +77,10 @@ export default function App() {
   const [cabinetDocuments, setCabinetDocuments] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
-  // NEW DATABASES FOR REWARDS & AUDITING
+  // NEW DATABASES FOR REWARDS
   const [kudos, setKudos] = useState([]);
   const [prizes, setPrizes] = useState([]);
-  const [shiftAuditLogs, setShiftAuditLogs] = useState([]); // <-- NEW AUDIT LOG STATE
+  const [shiftAuditLogs, setShiftAuditLogs] = useState([]);
   
   // DATABASE FOR PAYROLL
   const [payrollLogs, setPayrollLogs] = useState([]);
@@ -135,7 +135,7 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_appointments'), snap => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_kudos'), snap => setKudos(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_prizes'), snap => setPrizes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_shiftAuditLogs'), snap => setShiftAuditLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError)); // <-- NEW AUDIT LISTENER
+    unsubs.push(onSnapshot(getCol('gn_shiftAuditLogs'), snap => setShiftAuditLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
     // PAYROLL LOGS LISTENER
     unsubs.push(onSnapshot(getCol('gn_payroll_logs'), snap => setPayrollLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
@@ -471,7 +471,8 @@ export default function App() {
               if (!firebaseUser) return;
               const arr = Array.isArray(newShifts) ? newShifts : [newShifts];
               for (const s of arr) {
-                const id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+                // BUG FIX: Respect pre-generated IDs from AddShiftModal for Audit Log linking
+                const id = s.id || (Date.now().toString() + Math.random().toString(36).substring(2, 7));
                 await setDoc(getDocRef('gn_shifts', id), { ...s, id });
               }
             }} 

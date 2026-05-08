@@ -3,7 +3,7 @@ import {
   Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Briefcase, 
   CalendarDays, Trash2, Users, User, Heart, Coins, Settings, Receipt, XCircle, 
   AlertCircle, FileText, Coffee, Wallet, Search, UserMinus, MessageSquare, 
-  Sun, Activity, BookOpen, Award, AlertTriangle, Copy, Edit, History
+  Sun, Activity, BookOpen, Award, AlertTriangle, Copy, CheckCircle, Edit, History, Download
 } from 'lucide-react';
 
 // --- SUB-COMPONENT IMPORTS ---
@@ -69,7 +69,10 @@ export default function AdminDashboard({
   const [selectedDateStr, setSelectedDateStr] = useState('');
   
   const [editingShift, setEditingShift] = useState(null);
+  
+  // --- NEW AUDIT VIEWER STATE ---
   const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false); 
+  const [auditFilterMonth, setAuditFilterMonth] = useState('');
 
   const [activeAdminTab, setActiveAdminTab] = useState('schedule');
   const [scheduleSearch, setScheduleSearch] = useState('');
@@ -166,6 +169,41 @@ export default function AdminDashboard({
     e.stopPropagation(); 
     setCurrentDate(d);
     setCalendarView('day');
+  };
+
+  // --- AUDIT LOG FILTERING & EXPORT ---
+  const filteredAuditLogs = useMemo(() => {
+    let filtered = safeAuditLogs;
+    if (auditFilterMonth) {
+      filtered = filtered.filter(log => log.timestamp && log.timestamp.startsWith(auditFilterMonth));
+    }
+    return filtered.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+  }, [safeAuditLogs, auditFilterMonth]);
+
+  const exportAuditLogCSV = () => {
+    if (filteredAuditLogs.length === 0) {
+      alert("No logs available to export for the selected filter.");
+      return;
+    }
+    let csv = "Timestamp,Admin Name,Action Type,Shift ID,Details,Reason\n";
+    filteredAuditLogs.forEach(log => {
+      const date = `"${new Date(log.timestamp).toLocaleString().replace(/"/g, '""')}"`;
+      const admin = `"${(log.adminName || '').replace(/"/g, '""')}"`;
+      const action = `"${(log.actionType || '').replace(/"/g, '""')}"`;
+      const shift = `"${(log.shiftId || '').replace(/"/g, '""')}"`;
+      const details = `"${(log.details || '').replace(/"/g, '""')}"`;
+      const reason = `"${(log.reason || '').replace(/"/g, '""')}"`;
+      csv += `${date},${admin},${action},${shift},${details},${reason}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Scheduling_Audit_Log_${auditFilterMonth || 'All_Time'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // --- ACTION INTERCEPTORS FOR AUDIT TRAIL ---
@@ -363,7 +401,6 @@ export default function AdminDashboard({
                                   shift.isInternal ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 
                                   'bg-teal-100 text-teal-800 border-teal-200';
             
-            // SAFE PARSING: Use string concatenation instead of nested template literals
             const tooltipTitle = (isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')) + 
                                  ` with ${clientNameDisplay}: ${shift.startTime}-${shift.endTime}` + 
                                  (punchText ? `\n${punchText}` : '');
@@ -404,10 +441,18 @@ export default function AdminDashboard({
             );
           })}
           
+          {/* NEW FUNCTIONAL BUTTON FOR "+X MORE" */}
           {hiddenCount > 0 && (
-             <div className="w-full text-center text-[10px] font-bold text-slate-500 hover:text-teal-600 mt-1 py-1 bg-slate-100/80 hover:bg-teal-50 rounded transition shadow-inner pointer-events-none">
+             <button 
+                onClick={(e) => { 
+                   e.stopPropagation(); 
+                   setCurrentDate(d); 
+                   setCalendarView('week'); 
+                }}
+                className="w-full text-center text-[10px] font-bold text-slate-500 hover:text-teal-600 mt-1 py-1 bg-slate-100/80 hover:bg-teal-50 rounded transition shadow-inner cursor-pointer"
+             >
                 +{hiddenCount} more...
-             </div>
+             </button>
           )}
         </div>
       </div>
@@ -733,7 +778,6 @@ export default function AdminDashboard({
                                                            shift.isInternal ? 'bg-indigo-50 border-indigo-300 text-indigo-900 ring-indigo-500' :
                                                            'bg-teal-100 border-teal-400 text-teal-900 ring-teal-500';
                                         
-                                        // SAFE PARSING: Use string concatenation instead of nested template literals
                                         const tooltipTitle = `${clientNameDisplay} (${shift.startTime} - ${shift.endTime})` + (punchText ? `\n${punchText}` : '');
 
                                         return (
@@ -844,12 +888,39 @@ export default function AdminDashboard({
                 <h3 className="font-bold flex items-center text-lg"><FileText className="h-5 w-5 mr-2 text-teal-400"/> Scheduling Audit Log</h3>
                 <button onClick={() => setIsAuditViewerOpen(false)} className="hover:text-slate-300 transition text-3xl leading-none">&times;</button>
              </div>
+             
+             {/* --- NEW: FILTER & CSV EXPORT CONTROLS --- */}
+             <div className="px-6 py-3 bg-slate-100 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
+                <div className="flex items-center space-x-3 w-full sm:w-auto">
+                  <label className="text-sm font-bold text-slate-600">Filter Month:</label>
+                  <input 
+                    type="month" 
+                    value={auditFilterMonth} 
+                    onChange={e => setAuditFilterMonth(e.target.value)} 
+                    className="px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:ring-teal-500 font-medium text-slate-700 bg-white shadow-sm" 
+                  />
+                  {auditFilterMonth && (
+                    <button onClick={() => setAuditFilterMonth('')} className="text-xs font-bold text-slate-500 hover:text-red-500 transition underline">
+                      Clear Filter
+                    </button>
+                  )}
+                </div>
+                <button 
+                  onClick={exportAuditLogCSV} 
+                  className="w-full sm:w-auto flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-md hover:bg-indigo-700 transition shadow-sm"
+                >
+                  <Download className="h-4 w-4 mr-2" /> Export CSV
+                </button>
+             </div>
+
              <div className="flex-1 overflow-y-auto p-0 bg-slate-50">
-                {safeAuditLogs.length === 0 ? (
-                   <div className="p-12 text-center text-slate-500 font-medium">No schedule changes have been logged yet.</div>
+                {filteredAuditLogs.length === 0 ? (
+                   <div className="p-12 text-center text-slate-500 font-medium">
+                     {safeAuditLogs.length === 0 ? "No schedule changes have been logged yet." : "No logs found for the selected month."}
+                   </div>
                 ) : (
                    <div className="divide-y divide-slate-200">
-                      {safeAuditLogs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).map(log => (
+                      {filteredAuditLogs.map(log => (
                          <div key={log.id} className="p-5 bg-white hover:bg-slate-50 transition flex flex-col sm:flex-row gap-4">
                             <div className="w-48 shrink-0 border-r border-slate-100 pr-4">
                                <div className="text-sm font-bold text-slate-800">{new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { XCircle, AlertTriangle } from 'lucide-react';
+import { XCircle, AlertTriangle, Clock } from 'lucide-react';
 import { getHoliday } from '../utils';
 
 // --- INLINE DATE HELPER ---
@@ -12,6 +12,14 @@ const parseLocalSafe = (dateStr) => {
   } catch (e) {
     return new Date();
   }
+};
+
+// --- ISO TO LOCAL TIME HELPER ---
+const parseTimeFromISO = (isoString) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
 export default function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], timeOffLogs = [], onSave, onUpdate, editingShift }) {
@@ -34,8 +42,12 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
   const [isHourlyOverride, setIsHourlyOverride] = useState(editingShift?.isHourlyOverride || false);
   const [hourlyRate, setHourlyRate] = useState(editingShift?.hourlyRate || '');
 
-  // NEW: Punch Clock State (Defaults to true for hourly shifts)
+  // Punch Clock State
   const [requirePunchClock, setRequirePunchClock] = useState(editingShift?.requirePunchClock ?? true);
+  
+  // NEW: Admin Override State for Actual Punches
+  const [actualStartTime, setActualStartTime] = useState(parseTimeFromISO(editingShift?.actualStartTime));
+  const [actualEndTime, setActualEndTime] = useState(parseTimeFromISO(editingShift?.actualEndTime));
 
   // Internal Task State
   const [isInternal, setIsInternal] = useState(editingShift?.isInternal || false);
@@ -164,9 +176,15 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
       baseShift.hourlyRate = null;
     }
 
-    // Attach the requirePunchClock flag (only if it's an hourly shift)
+    // Attach the requirePunchClock flag and manual overrides
     if (showPunchToggle) {
       baseShift.requirePunchClock = requirePunchClock;
+      
+      if (editingShift && requirePunchClock) {
+        // Construct strict ISO strings for the backend using the local date and the admin-provided time
+        baseShift.actualStartTime = actualStartTime ? new Date(`${selectedDate}T${actualStartTime}`).toISOString() : null;
+        baseShift.actualEndTime = actualEndTime ? new Date(`${selectedDate}T${actualEndTime}`).toISOString() : null;
+      }
     } else {
       baseShift.requirePunchClock = false;
     }
@@ -284,6 +302,29 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
                   <input type="checkbox" checked={requirePunchClock} onChange={(e) => setRequirePunchClock(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
                   <span>Require Employee to Punch Clock</span>
                 </label>
+              )}
+
+              {/* NEW: ADMIN OVERRIDE FOR PUNCH TIMESTAMPS */}
+              {editingShift && showPunchToggle && requirePunchClock && (
+                <div className="mb-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-inner">
+                   <h4 className="text-sm font-bold text-indigo-900 mb-2 flex items-center"><Clock className="h-4 w-4 mr-1.5"/> Admin Punch Override</h4>
+                   <p className="text-xs text-indigo-700 mb-3 font-medium">Manually correct the actual worked times if the employee forgot to punch in or out.</p>
+                   <div className="grid grid-cols-2 gap-4">
+                     <div>
+                       <label className="block text-xs font-bold text-indigo-800 mb-1">Actual Punch In</label>
+                       <input type="time" value={actualStartTime} onChange={e => setActualStartTime(e.target.value)} className="w-full px-3 py-2 border border-indigo-300 rounded-md focus:ring-indigo-500 text-sm font-bold text-indigo-900 bg-white" />
+                     </div>
+                     <div>
+                       <label className="block text-xs font-bold text-indigo-800 mb-1">Actual Punch Out</label>
+                       <input type="time" value={actualEndTime} onChange={e => setActualEndTime(e.target.value)} className="w-full px-3 py-2 border border-indigo-300 rounded-md focus:ring-indigo-500 text-sm font-bold text-indigo-900 bg-white" />
+                     </div>
+                   </div>
+                   <div className="mt-3 text-right">
+                     <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider cursor-pointer hover:text-indigo-800 hover:underline transition" onClick={() => { setActualStartTime(''); setActualEndTime(''); }}>
+                       Clear Punches
+                     </span>
+                   </div>
+                </div>
               )}
 
               {!editingShift && (

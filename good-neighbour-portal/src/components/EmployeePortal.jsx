@@ -643,6 +643,10 @@ export default function EmployeeDashboard({
                           <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
                           <div className="font-bold">Shift Completed</div>
                           <div className="text-xs mt-1 text-emerald-100">Clocked out at {new Date(activeShift.actualEndTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                          {/* NEW FAILSAFE BUTTON */}
+                          <button onClick={() => { if(onUpdateShift) onUpdateShift(activeShift.id, { actualEndTime: null }); }} className="mt-4 px-4 py-2 bg-emerald-800 hover:bg-emerald-700 text-emerald-200 text-xs font-bold rounded shadow transition">
+                            Oops! Resume Shift
+                          </button>
                        </div>
                    ) : activeShift.actualStartTime ? (
                        <div className="text-center">

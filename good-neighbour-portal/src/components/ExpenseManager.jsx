@@ -200,7 +200,10 @@ export default function ExpenseManager({
   const approvedOOPCost = isSalaried ? 0 : empOOP.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.amount || 0) : 0), 0);
   const totalAdjustments = empAdjs.reduce((sum, a) => sum + Number(a.amount || 0), 0) + autoBonusAmount;
   
-  const grandTotalOwed = approvedShiftsCost + approvedMileageCost + approvedOOPCost + totalAdjustments;
+  // --- NEW SPLIT MATH ---
+  const taxableEarnings = approvedShiftsCost + totalAdjustments;
+  const reimbursementsDue = approvedMileageCost + approvedOOPCost;
+  const grandTotalOwed = taxableEarnings + reimbursementsDue;
 
   // --- CONTEXTUAL CSV EXPORT ---
   const exportContextualCSV = () => {
@@ -405,17 +408,28 @@ export default function ExpenseManager({
             </div>
           ) : (
             <>
-              {/* AUDIT HEADER */}
-              <div className="p-6 border-b border-slate-200 bg-white flex justify-between items-center shrink-0">
+              {/* UPDATED AUDIT HEADER WITH SPLIT MATH VISIBILITY */}
+              <div className="p-6 border-b border-slate-200 bg-white flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 shrink-0">
                 <div>
                   <h2 className="text-2xl font-black text-slate-800">{selectedEmp.name}</h2>
                   <div className="text-sm font-semibold text-slate-500 flex items-center mt-1">
                     Pay Rate: {isSalaried ? `$${(Number(selectedEmp.annualSalary)||0).toLocaleString()}/yr` : selectedEmp.payType === 'hourly' ? `$${selectedEmp.hourlyWage}/hr` : `$${selectedEmp.perVisitRate}/visit`}
                   </div>
                 </div>
-                <div className="text-right bg-emerald-50 border border-emerald-200 px-5 py-2.5 rounded-xl shadow-sm">
-                  <div className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Total Approved Payout</div>
-                  <div className="text-3xl font-black text-emerald-600">${grandTotalOwed.toFixed(2)}</div>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+                  <div className="flex-1 sm:flex-none w-full sm:w-auto text-right bg-slate-50 border border-slate-200 px-5 py-2.5 rounded-xl shadow-sm">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Taxable Gross</div>
+                    <div className="text-xl font-black text-slate-700">${taxableEarnings.toFixed(2)}</div>
+                  </div>
+                  <div className="flex-1 sm:flex-none w-full sm:w-auto text-right bg-blue-50 border border-blue-200 px-5 py-2.5 rounded-xl shadow-sm">
+                    <div className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-1">Reimbursements Due</div>
+                    <div className="text-xl font-black text-blue-600">${reimbursementsDue.toFixed(2)}</div>
+                  </div>
+                  <div className="flex-1 sm:flex-none w-full sm:w-auto text-right bg-emerald-50 border border-emerald-200 px-5 py-2.5 rounded-xl shadow-sm">
+                    <div className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Total Payout</div>
+                    <div className="text-2xl font-black text-emerald-600">${grandTotalOwed.toFixed(2)}</div>
+                  </div>
                 </div>
               </div>
 

@@ -74,7 +74,7 @@ export default function AdminDashboard({
   const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false); 
   const [auditFilterMonth, setAuditFilterMonth] = useState('');
 
-  const [activeAdminTab, setActiveAdminTab] = useState('schedule');
+  const [activeAdminTab, setActiveAdminTab] = useState('desk');
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [calendarView, setCalendarView] = useState('month'); 
 

@@ -90,7 +90,7 @@ export default function EmployeeDashboard({
   kudos = [], prizes = [], onAcknowledgeReward, onUpdateShift
 }) {
   const [activeTab, setActiveTab] = useState('schedule');
-  const [scheduleView, setScheduleView] = useState('list');
+  const [scheduleView, setScheduleView] = useState('calendar');
   const [currentDate, setCurrentDate] = useState(new Date());
   
   // Notification & Upload States

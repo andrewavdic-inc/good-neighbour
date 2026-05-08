@@ -70,9 +70,11 @@ export default function AdminDashboard({
   
   const [editingShift, setEditingShift] = useState(null);
   
-  // --- NEW AUDIT VIEWER STATE ---
   const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false); 
   const [auditFilterMonth, setAuditFilterMonth] = useState('');
+  
+  // --- NEW: DAY-SPECIFIC AUDIT STATE ---
+  const [dayAuditLogDate, setDayAuditLogDate] = useState(null);
 
   const [activeAdminTab, setActiveAdminTab] = useState('desk');
   const [scheduleSearch, setScheduleSearch] = useState('');
@@ -171,7 +173,6 @@ export default function AdminDashboard({
     setCalendarView('day');
   };
 
-  // --- AUDIT LOG FILTERING & EXPORT ---
   const filteredAuditLogs = useMemo(() => {
     let filtered = safeAuditLogs;
     if (auditFilterMonth) {
@@ -206,7 +207,7 @@ export default function AdminDashboard({
     document.body.removeChild(link);
   };
 
-  // --- ACTION INTERCEPTORS FOR AUDIT TRAIL ---
+  // --- ADDED shiftDate TO QUICK ACTIONS ---
   const handleDeleteShiftWithLog = (e, shift) => {
     e.stopPropagation();
     if (window.confirm('Are you sure you want to delete this shift?')) {
@@ -217,6 +218,7 @@ export default function AdminDashboard({
           adminName: currentUser.name,
           actionType: 'Deleted',
           shiftId: shift.id,
+          shiftDate: shift.date, // INJECTED SHIFT DATE
           details: `Deleted shift for ${emp?.name || 'Unassigned'} on ${shift.date} (${shift.startTime}-${shift.endTime}).`
         });
       }
@@ -234,6 +236,7 @@ export default function AdminDashboard({
            adminName: currentUser.name,
            actionType: 'Marked Open',
            shiftId: shift.id,
+           shiftDate: shift.date, // INJECTED SHIFT DATE
            details: `Removed ${emp?.name || 'Unknown'} from shift on ${shift.date} and marked it as open.`
          });
        }
@@ -323,12 +326,14 @@ export default function AdminDashboard({
     }
   };
 
-  // --- MONTH & WEEK RENDER ENGINE ---
   const renderCalendarCell = (d, minHeight = "min-h-[120px]", isWeekView = false) => {
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const isPayday = isBiweeklyPayday(dateStr, payPeriodStart);
     const holiday = getHoliday(dateStr);
     const isToday = dateStr === todayStr; 
+    
+    // --- CHECK IF THIS DAY HAS LOGS ---
+    const dayHasLogs = safeAuditLogs.some(log => log.shiftDate === dateStr);
     
     const dayShifts = filteredShifts
       .filter(s => s && s.date === dateStr)
@@ -355,13 +360,26 @@ export default function AdminDashboard({
       <div key={dateStr} onClick={() => handleDayObjectClick(d)} className={`bg-white ${minHeight} p-2 hover:bg-teal-50 transition cursor-pointer group relative ${holiday ? 'bg-purple-50/50' : 'bg-white'} ${isToday ? 'border-2 border-teal-500 shadow-sm z-10' : ''}`}>
         <div className="flex justify-between items-start mb-1 gap-1 flex-wrap">
           
-          <span 
-            onClick={(e) => handleDayNumberClick(e, d)}
-            className={`font-medium text-sm px-1.5 py-0.5 -ml-1.5 rounded hover:bg-slate-200 hover:text-teal-800 transition cursor-pointer z-20 group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : isToday ? 'text-teal-700 font-bold' : 'text-slate-600'}`}
-            title="Jump to Timeline Day View"
-          >
-            {d.getDate()}
-          </span>
+          <div className="flex items-center gap-1">
+            <span 
+              onClick={(e) => handleDayNumberClick(e, d)}
+              className={`font-medium text-sm px-1.5 py-0.5 -ml-1.5 rounded hover:bg-slate-200 hover:text-teal-800 transition cursor-pointer z-20 group-hover:text-teal-700 ${holiday ? 'text-purple-700 font-bold' : isToday ? 'text-teal-700 font-bold' : 'text-slate-600'}`}
+              title="Jump to Timeline Day View"
+            >
+              {d.getDate()}
+            </span>
+            
+            {/* THE NEW CLICKABLE DAILY AUDIT ICON */}
+            {dayHasLogs && (
+              <button 
+                 onClick={(e) => { e.stopPropagation(); setDayAuditLogDate(dateStr); }}
+                 className="text-purple-500 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 p-1 rounded-full transition shadow-sm border border-purple-200"
+                 title="View Audit Log for this day"
+              >
+                <FileText className="h-3 w-3" />
+              </button>
+            )}
+          </div>
 
           <div className="flex flex-col items-end gap-1">
             {isToday && (<span className="text-[9px] font-bold bg-teal-500 text-white px-1.5 py-0.5 rounded shadow-sm">TODAY</span>)}
@@ -369,7 +387,7 @@ export default function AdminDashboard({
             {isPayday && (<span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded flex items-center shadow-sm" title="Payday"><Coins className="h-2.5 w-2.5 mr-0.5" /> PAYDAY</span>)}
           </div>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 mt-1">
           {dayTimeOff.map(log => {
             const emp = safeEmployees.find(e => e.id === log.employeeId);
             const isSick = log.type === 'sick';
@@ -441,7 +459,6 @@ export default function AdminDashboard({
             );
           })}
           
-          {/* NEW FUNCTIONAL BUTTON FOR "+X MORE" */}
           {hiddenCount > 0 && (
              <button 
                 onClick={(e) => { 
@@ -536,16 +553,17 @@ export default function AdminDashboard({
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                        {/* INJECTED shiftDate FOR CANCELLATIONS */}
                         <button onClick={() => {
-                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Approved (Deleted)', shiftId: shift.id, details: `Approved cancellation and deleted shift on ${shift.date}. Reason: ${shift.cancelRequest.reason}`});
+                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Approved (Deleted)', shiftId: shift.id, shiftDate: shift.date, details: `Approved cancellation and deleted shift on ${shift.date}. Reason: ${shift.cancelRequest.reason}`});
                           onApproveShiftCancelDelete(shift.id);
                         }} className="px-4 py-2.5 text-sm font-bold bg-red-600 text-white rounded-md hover:bg-red-700 transition shadow-sm">Delete Shift</button>
                         <button onClick={() => {
-                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Approved (Marked Open)', shiftId: shift.id, details: `Approved cancellation and marked shift open on ${shift.date}. Reason: ${shift.cancelRequest.reason}`});
+                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Approved (Marked Open)', shiftId: shift.id, shiftDate: shift.date, details: `Approved cancellation and marked shift open on ${shift.date}. Reason: ${shift.cancelRequest.reason}`});
                           onApproveShiftCancelOpen(shift.id);
                         }} className="px-4 py-2.5 text-sm font-bold bg-amber-500 text-white rounded-md hover:bg-amber-600 transition shadow-sm">Mark as Open</button>
                         <button onClick={() => {
-                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Denied', shiftId: shift.id, details: `Denied cancellation request for shift on ${shift.date}.`});
+                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Denied', shiftId: shift.id, shiftDate: shift.date, details: `Denied cancellation request for shift on ${shift.date}.`});
                           onDenyShiftCancel(shift.id);
                         }} className="px-4 py-2.5 text-sm font-bold bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300 transition shadow-sm">Deny Request</button>
                       </div>
@@ -880,7 +898,51 @@ export default function AdminDashboard({
       
       {renderAdminTab()}
 
-      {/* --- THE AUDIT VIEWER MODAL --- */}
+      {/* --- DAY-SPECIFIC AUDIT VIEWER MODAL --- */}
+      {dayAuditLogDate && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+             <div className="px-6 py-4 bg-purple-800 text-white flex justify-between items-center shrink-0">
+                <h3 className="font-bold flex items-center text-lg"><History className="h-5 w-5 mr-2 text-purple-300"/> Audit Log for {parseLocalSafe(dayAuditLogDate).toLocaleDateString()}</h3>
+                <button onClick={() => setDayAuditLogDate(null)} className="hover:text-purple-300 transition text-3xl leading-none">&times;</button>
+             </div>
+             <div className="flex-1 overflow-y-auto p-0 bg-slate-50">
+                {safeAuditLogs.filter(l => l.shiftDate === dayAuditLogDate).length === 0 ? (
+                   <div className="p-12 text-center text-slate-500 font-medium">No schedule changes have been logged for this day.</div>
+                ) : (
+                   <div className="divide-y divide-slate-200">
+                      {safeAuditLogs.filter(l => l.shiftDate === dayAuditLogDate).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).map(log => (
+                         <div key={log.id} className="p-5 bg-white hover:bg-slate-50 transition flex flex-col sm:flex-row gap-4">
+                            <div className="w-48 shrink-0 border-r border-slate-100 pr-4">
+                               <div className="text-sm font-bold text-slate-800">{new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
+                               <div className="text-xs text-slate-500 mt-1 flex items-center"><User className="h-3 w-3 mr-1" /> {log.adminName}</div>
+                            </div>
+                            <div className="flex-1">
+                               <div className="flex items-center mb-1.5">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${log.actionType.includes('Retroactive') ? 'bg-purple-100 text-purple-800 border border-purple-200' : log.actionType.includes('Deleted') ? 'bg-red-100 text-red-800 border border-red-200' : log.actionType.includes('Open') ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                                     {log.actionType}
+                                  </span>
+                               </div>
+                               <p className="text-sm text-slate-700 font-medium">{log.details}</p>
+                               {log.reason && (
+                                  <div className="mt-3 text-xs bg-slate-100 border border-slate-200 p-3 rounded-lg text-slate-700 shadow-inner">
+                                     <span className="font-bold uppercase tracking-wider text-slate-500 mr-2">Reason Provided:</span> "{log.reason}"
+                                  </div>
+                                )}
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                )}
+             </div>
+             <div className="px-6 py-3 border-t border-slate-200 bg-slate-100 flex justify-end shrink-0">
+               <button onClick={() => setDayAuditLogDate(null)} className="px-5 py-2 font-bold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition shadow-sm">Close Log</button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MASTER AUDIT VIEWER MODAL --- */}
       {isAuditViewerOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -889,7 +951,7 @@ export default function AdminDashboard({
                 <button onClick={() => setIsAuditViewerOpen(false)} className="hover:text-slate-300 transition text-3xl leading-none">&times;</button>
              </div>
              
-             {/* --- NEW: FILTER & CSV EXPORT CONTROLS --- */}
+             {/* --- FILTER & CSV EXPORT CONTROLS --- */}
              <div className="px-6 py-3 bg-slate-100 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
                 <div className="flex items-center space-x-3 w-full sm:w-auto">
                   <label className="text-sm font-bold text-slate-600">Filter Month:</label>

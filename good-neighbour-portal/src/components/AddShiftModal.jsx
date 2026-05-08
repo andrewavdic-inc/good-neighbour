@@ -59,7 +59,7 @@ export default function AddShiftModal({
   // Unified Soft Warning State ('overlap', 'availability', or null)
   const [warningState, setWarningState] = useState(null);
   
-  // --- NEW: RETROACTIVE AUDIT STATE ---
+  // Retroactive Audit State
   const [retroactiveReason, setRetroactiveReason] = useState('');
 
   // --- RETROACTIVE DETECTION LOGIC ---
@@ -115,7 +115,6 @@ export default function AddShiftModal({
       return;
     }
     
-    // Validate Retroactive Reason
     if (isPastShift && !retroactiveReason.trim()) {
       alert("A reason is required when making retroactive changes to past shifts.");
       return;
@@ -197,34 +196,74 @@ export default function AddShiftModal({
     }
 
     // --- AUDIT LOG GENERATOR HELPER ---
-    const generateAuditLog = (actionType, details, overrideShiftId = null) => {
+    // Now uniquely targets a specific date so the calendar icon groups perfectly
+    const generateAuditLog = (actionType, details, overrideShiftId = null, specificShiftDate = null) => {
       if (onAddShiftAuditLog && currentUser) {
         onAddShiftAuditLog({
           timestamp: new Date().toISOString(),
           adminName: currentUser.name,
           actionType: actionType,
           shiftId: overrideShiftId || (editingShift ? editingShift.id : 'New'),
+          shiftDate: specificShiftDate || selectedDate, 
           details: details,
           reason: isPastShift ? retroactiveReason : ''
         });
       }
     };
 
-    // EDIT MODE ROUTING
+    // ==========================================
+    // EDIT MODE ROUTING & THE "DIFF" CHECKER
+    // ==========================================
     if (editingShift && onUpdate) {
+      const changes = [];
+
+      // 1. Employee Diff
+      if (editingShift.employeeId !== baseShift.employeeId) {
+        const oldEmp = safeEmps.find(e => e.id === editingShift.employeeId)?.name || 'Unassigned';
+        const newEmp = safeEmps.find(e => e.id === baseShift.employeeId)?.name || 'Unassigned';
+        changes.push(`Employee changed from ${oldEmp} to ${newEmp}`);
+      }
+
+      // 2. Time Diff
+      if (editingShift.startTime !== baseShift.startTime || editingShift.endTime !== baseShift.endTime) {
+        changes.push(`Time changed from ${editingShift.startTime}-${editingShift.endTime} to ${baseShift.startTime}-${baseShift.endTime}`);
+      }
+
+      // 3. Client / Task Diff
+      if (editingShift.isInternal !== baseShift.isInternal || editingShift.clientId !== baseShift.clientId || editingShift.internalTask !== baseShift.internalTask) {
+        const oldTarget = editingShift.isInternal ? `Internal Task (${editingShift.internalTask})` : (safeClients.find(c => c.id === editingShift.clientId)?.name || 'Unknown Client');
+        const newTarget = baseShift.isInternal ? `Internal Task (${baseShift.internalTask})` : (safeClients.find(c => c.id === baseShift.clientId)?.name || 'Unknown Client');
+        changes.push(`Task/Client changed from ${oldTarget} to ${newTarget}`);
+      }
+
+      // 4. Punch Clock Diff (Manual overrides)
+      if (requirePunchClock && showPunchToggle) {
+        const oldIn = parseTimeFromISO(editingShift.actualStartTime);
+        if (oldIn !== actualStartTime) changes.push(`Actual Punch In changed from ${oldIn || 'None'} to ${actualStartTime || 'None'}`);
+        
+        const oldOut = parseTimeFromISO(editingShift.actualEndTime);
+        if (oldOut !== actualEndTime) changes.push(`Actual Punch Out changed from ${oldOut || 'None'} to ${actualEndTime || 'None'}`);
+      }
+
+      // 5. Atypical Pay Diff
+      if (editingShift.isHourlyOverride !== baseShift.isHourlyOverride || editingShift.hourlyRate !== baseShift.hourlyRate) {
+        changes.push(`Atypical Pay changed to ${baseShift.isHourlyOverride ? 'Yes ($' + baseShift.hourlyRate + ')' : 'No'}`);
+      }
+
+      const diffDetails = changes.length > 0 ? changes.join(' | ') : 'No specific scheduling parameters altered.';
+      const actionName = isPastShift ? 'Retroactive Update' : 'Updated';
+
       onUpdate(editingShift.id, baseShift);
-      generateAuditLog(
-        isPastShift ? 'Retroactive Update' : 'Updated',
-        `Updated shift for ${selectedEmp?.name || 'Unassigned'} on ${selectedDate} (${startTime}-${endTime}).`
-      );
+      generateAuditLog(actionName, `Updated shift: ${diffDetails}`);
       onClose();
       return;
     }
 
-    // ADD MODE ROUTING
+    // ==========================================
+    // ADD MODE ROUTING 
+    // ==========================================
     const newShifts = [];
     const startDate = parseLocalSafe(selectedDate);
-    const generatedIds = [];
     
     if (isRecurring && !isPastShift) {
       for (let i = 0; i < recurrenceWeeks; i++) {
@@ -235,21 +274,23 @@ export default function AddShiftModal({
         if (getHoliday(dateStr)) continue;
         const newId = `shift_${Date.now()}_${Math.random().toString(36).substring(2,7)}`;
         newShifts.push({ ...baseShift, id: newId, date: dateStr });
-        generatedIds.push(newId);
       }
     } else {
       const newId = `shift_${Date.now()}_${Math.random().toString(36).substring(2,7)}`;
       newShifts.push({ ...baseShift, id: newId, date: selectedDate });
-      generatedIds.push(newId);
     }
     
     if (onSave) onSave(newShifts);
     
-    generateAuditLog(
-      isPastShift ? 'Retroactive Creation' : 'Created',
-      `Created ${newShifts.length} shift(s) starting ${selectedDate} for ${selectedEmp?.name || 'Unassigned'}.`,
-      generatedIds[0] // Bind the audit log to the newly created shift ID
-    );
+    // Log EACH shift individually so they route to the correct calendar day
+    newShifts.forEach(ns => {
+       generateAuditLog(
+         isPastShift ? 'Retroactive Creation' : 'Created',
+         `Created shift for ${selectedEmp?.name || 'Unassigned'} on ${ns.date} (${ns.startTime}-${ns.endTime}).`,
+         ns.id,
+         ns.date 
+       );
+    });
     
     onClose();
   };
@@ -380,7 +421,7 @@ export default function AddShiftModal({
               )}
             </div>
             
-            {/* --- NEW: RETROACTIVE CHANGE AUDIT ENFORCEMENT --- */}
+            {/* RETROACTIVE CHANGE AUDIT ENFORCEMENT */}
             {isPastShift && (
               <div className="pt-2 border-t border-slate-200 mt-4">
                 <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg shadow-inner">

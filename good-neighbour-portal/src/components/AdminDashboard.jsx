@@ -3,7 +3,7 @@ import {
   Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Briefcase, 
   CalendarDays, Trash2, Users, User, Heart, Coins, Settings, Receipt, XCircle, 
   AlertCircle, FileText, Coffee, Wallet, Search, UserMinus, MessageSquare, 
-  Sun, Activity, BookOpen, Award, AlertTriangle, Copy, CheckCircle, Edit, History
+  Sun, Activity, BookOpen, Award, AlertTriangle, Copy, Edit, History
 } from 'lucide-react';
 
 // --- SUB-COMPONENT IMPORTS ---
@@ -355,7 +355,6 @@ export default function AdminDashboard({
             const clientNameDisplay = shift.isInternal ? shift.internalTask : String(client?.name || 'Unknown Client').split(' ')[0];
             const punchText = getPunchText(shift);
             
-            // --- NEW: PAST SHIFT PROTECTIONS ---
             const shiftEndDt = new Date(`${shift.date}T${shift.endTime || '23:59'}`);
             const isPast = shiftEndDt < new Date();
             const hasRetroEdit = safeAuditLogs.some(log => log.shiftId === shift.id && log.actionType.includes('Retroactive'));
@@ -364,11 +363,15 @@ export default function AdminDashboard({
                                   shift.isInternal ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 
                                   'bg-teal-100 text-teal-800 border-teal-200';
             
+            // SAFE PARSING: Use string concatenation instead of nested template literals
+            const tooltipTitle = (isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')) + 
+                                 ` with ${clientNameDisplay}: ${shift.startTime}-${shift.endTime}` + 
+                                 (punchText ? `\n${punchText}` : '');
+
             return (
-              <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${bgBorderClass} ${isPast ? 'opacity-60 saturate-50' : ''}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${clientNameDisplay}: ${shift.startTime}-${shift.endTime}${punchText ? `\n${punchText}` : ''}`}>
+              <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${bgBorderClass} ${isPast ? 'opacity-60 saturate-50' : ''}`} title={tooltipTitle}>
                 <div className={`font-semibold truncate flex justify-between items-center ${isOpen ? 'text-amber-700' : ''}`}>
                   <span>{empNameDisplay}</span>
-                  {hasRetroEdit && <History className="h-3 w-3 text-purple-600 shrink-0" title="Shift has been retroactively altered. Check Audit Log." />}
                 </div>
                 <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : shift.isInternal ? 'text-indigo-700' : 'text-teal-700'}`}>
                   {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0" /> : <Heart className="h-2.5 w-2.5 mr-1 shrink-0" />}
@@ -379,6 +382,12 @@ export default function AdminDashboard({
                 {punchText && (
                    <div className="text-[9px] font-bold text-slate-700 bg-white/50 rounded px-1 mt-0.5 border border-slate-200/50 truncate">
                      {punchText}
+                   </div>
+                )}
+
+                {hasRetroEdit && (
+                   <div className="mt-1 inline-flex items-center bg-purple-100 text-purple-800 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shadow-sm border border-purple-200">
+                     <History className="h-2.5 w-2.5 mr-1 shrink-0" /> Retro Change
                    </div>
                 )}
                 
@@ -550,7 +559,6 @@ export default function AdminDashboard({
             </div>
             
             <div className="flex items-center space-x-2 w-full sm:w-auto justify-end shrink-0">
-              {/* --- NEW AUDIT LOG BUTTON --- */}
               <button 
                  onClick={() => setIsAuditViewerOpen(true)} 
                  className="flex items-center space-x-2 bg-slate-800 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-slate-700 shadow-sm transition text-sm"
@@ -724,24 +732,32 @@ export default function AdminDashboard({
                                                            shift.cancelRequest?.pending ? 'bg-slate-200 border-slate-400 text-slate-600 ring-slate-500 line-through' : 
                                                            shift.isInternal ? 'bg-indigo-50 border-indigo-300 text-indigo-900 ring-indigo-500' :
                                                            'bg-teal-100 border-teal-400 text-teal-900 ring-teal-500';
-                                                           
+                                        
+                                        // SAFE PARSING: Use string concatenation instead of nested template literals
+                                        const tooltipTitle = `${clientNameDisplay} (${shift.startTime} - ${shift.endTime})` + (punchText ? `\n${punchText}` : '');
+
                                         return (
                                            <div 
                                               key={shift.id} 
                                               style={shift.style} 
                                               className={`absolute rounded-md p-1 shadow-sm text-[10px] overflow-hidden leading-tight cursor-pointer hover:ring-2 hover:ring-offset-1 hover:z-20 transition-all group/shift border ${shiftClass} ${isPast ? 'opacity-60 saturate-50' : ''}`}
-                                              title={`${clientNameDisplay} (${shift.startTime} - ${shift.endTime})${punchText ? `\n${punchText}` : ''}`}
+                                              title={tooltipTitle}
                                            >
                                               <div className="font-bold truncate flex justify-between items-center">
                                                 <span className="truncate flex items-center">
                                                   {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0"/> : null}
                                                   {clientNameDisplay}
                                                 </span>
-                                                {hasRetroEdit && <History className="h-3 w-3 text-purple-600 shrink-0" title="Shift has been retroactively altered. Check Audit Log." />}
                                               </div>
                                               <div className="font-medium opacity-80 truncate">{shift.startTime} - {shift.endTime}</div>
                                               
                                               {punchText && <div className="text-[9px] font-bold text-slate-700 bg-white/40 rounded px-1 truncate mt-0.5">{punchText}</div>}
+
+                                              {hasRetroEdit && (
+                                                 <div className="mt-0.5 inline-flex items-center bg-purple-100 text-purple-800 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider shadow-sm border border-purple-200 truncate max-w-full">
+                                                   <History className="h-2.5 w-2.5 mr-1 shrink-0" /> <span className="truncate">Retro Change</span>
+                                                 </div>
+                                              )}
 
                                               <div className="absolute right-1 top-0 bottom-0 flex items-center space-x-1 bg-white/90 px-1 shadow-sm backdrop-blur-sm opacity-0 group-hover/shift:opacity-100 transition-opacity z-20">
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingShift(shift); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 p-0.5 rounded hover:bg-blue-50" title="Edit Shift"><Edit className="h-3.5 w-3.5"/></button>
@@ -820,7 +836,7 @@ export default function AdminDashboard({
       
       {renderAdminTab()}
 
-      {/* --- NEW: THE AUDIT VIEWER MODAL --- */}
+      {/* --- THE AUDIT VIEWER MODAL --- */}
       {isAuditViewerOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">

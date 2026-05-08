@@ -196,14 +196,14 @@ export default function AddShiftModal({
       baseShift.requirePunchClock = false;
     }
 
-    // AUDIT LOG GENERATOR HELPER
-    const generateAuditLog = (actionType, details) => {
+    // --- AUDIT LOG GENERATOR HELPER ---
+    const generateAuditLog = (actionType, details, overrideShiftId = null) => {
       if (onAddShiftAuditLog && currentUser) {
         onAddShiftAuditLog({
           timestamp: new Date().toISOString(),
           adminName: currentUser.name,
           actionType: actionType,
-          shiftId: editingShift ? editingShift.id : 'New',
+          shiftId: overrideShiftId || (editingShift ? editingShift.id : 'New'),
           details: details,
           reason: isPastShift ? retroactiveReason : ''
         });
@@ -224,6 +224,7 @@ export default function AddShiftModal({
     // ADD MODE ROUTING
     const newShifts = [];
     const startDate = parseLocalSafe(selectedDate);
+    const generatedIds = [];
     
     if (isRecurring && !isPastShift) {
       for (let i = 0; i < recurrenceWeeks; i++) {
@@ -232,17 +233,22 @@ export default function AddShiftModal({
         const dateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
         
         if (getHoliday(dateStr)) continue;
-        newShifts.push({ ...baseShift, date: dateStr });
+        const newId = `shift_${Date.now()}_${Math.random().toString(36).substring(2,7)}`;
+        newShifts.push({ ...baseShift, id: newId, date: dateStr });
+        generatedIds.push(newId);
       }
     } else {
-      newShifts.push({ ...baseShift, date: selectedDate });
+      const newId = `shift_${Date.now()}_${Math.random().toString(36).substring(2,7)}`;
+      newShifts.push({ ...baseShift, id: newId, date: selectedDate });
+      generatedIds.push(newId);
     }
     
     if (onSave) onSave(newShifts);
     
     generateAuditLog(
       isPastShift ? 'Retroactive Creation' : 'Created',
-      `Created ${newShifts.length} shift(s) starting ${selectedDate} for ${selectedEmp?.name || 'Unassigned'}.`
+      `Created ${newShifts.length} shift(s) starting ${selectedDate} for ${selectedEmp?.name || 'Unassigned'}.`,
+      generatedIds[0] // Bind the audit log to the newly created shift ID
     );
     
     onClose();

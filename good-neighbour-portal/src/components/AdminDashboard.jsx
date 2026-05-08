@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Briefcase, 
-  CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, XCircle, 
+  CalendarDays, Trash2, Users, User, Heart, Coins, Settings, Receipt, XCircle, 
   AlertCircle, FileText, Coffee, Wallet, Search, UserMinus, MessageSquare, 
   Sun, Activity, BookOpen, Award, AlertTriangle, Copy, CheckCircle, Edit, History
 } from 'lucide-react';
@@ -62,14 +62,14 @@ export default function AdminDashboard({
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
   payrollLogs = [], onFinalizePayroll, onUpdateShift,
-  shiftAuditLogs = [], onAddShiftAuditLog // <-- NEW AUDIT LOG PROPS
+  shiftAuditLogs = [], onAddShiftAuditLog 
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
   
   const [editingShift, setEditingShift] = useState(null);
-  const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false); // <-- AUDIT VIEWER STATE
+  const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false); 
 
   const [activeAdminTab, setActiveAdminTab] = useState('schedule');
   const [scheduleSearch, setScheduleSearch] = useState('');
@@ -877,8 +877,8 @@ export default function AdminDashboard({
           onSave={onAddShift} 
           onUpdate={onUpdateShift} 
           editingShift={editingShift}
-          currentUser={currentUser}              // <-- NEW: Passing to Modal for auditing
-          onAddShiftAuditLog={onAddShiftAuditLog} // <-- NEW: Passing to Modal for auditing
+          currentUser={currentUser}              
+          onAddShiftAuditLog={onAddShiftAuditLog} 
         />
       )}
     </div>

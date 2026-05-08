@@ -77,9 +77,10 @@ export default function App() {
   const [cabinetDocuments, setCabinetDocuments] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
-  // NEW DATABASES FOR REWARDS
+  // NEW DATABASES FOR REWARDS & AUDITING
   const [kudos, setKudos] = useState([]);
   const [prizes, setPrizes] = useState([]);
+  const [shiftAuditLogs, setShiftAuditLogs] = useState([]); // <-- NEW AUDIT LOG STATE
   
   // DATABASE FOR PAYROLL
   const [payrollLogs, setPayrollLogs] = useState([]);
@@ -134,6 +135,7 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_appointments'), snap => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_kudos'), snap => setKudos(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_prizes'), snap => setPrizes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_shiftAuditLogs'), snap => setShiftAuditLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError)); // <-- NEW AUDIT LISTENER
     
     // PAYROLL LOGS LISTENER
     unsubs.push(onSnapshot(getCol('gn_payroll_logs'), snap => setPayrollLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
@@ -546,6 +548,10 @@ export default function App() {
 
             // --- ADMIN EDIT SHIFT PROP ---
             onUpdateShift={(shiftId, data) => runMutation('gn_shifts', shiftId, 'update', data)}
+            
+            // --- NEW: AUDIT LOG PROPS ---
+            shiftAuditLogs={shiftAuditLogs}
+            onAddShiftAuditLog={(data) => runMutation('gn_shiftAuditLogs', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })}
           />
         ) : (
           <EmployeeDashboard 

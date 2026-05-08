@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { XCircle, AlertTriangle, Clock } from 'lucide-react';
+import { XCircle, AlertTriangle, Clock, History } from 'lucide-react';
 import { getHoliday } from '../utils';
 
 // --- INLINE DATE HELPER ---
@@ -22,7 +22,10 @@ const parseTimeFromISO = (isoString) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-export default function AddShiftModal({ isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], timeOffLogs = [], onSave, onUpdate, editingShift }) {
+export default function AddShiftModal({ 
+  isOpen, onClose, selectedDate, employees = [], clients = [], shifts = [], timeOffLogs = [], 
+  onSave, onUpdate, editingShift, currentUser, onAddShiftAuditLog 
+}) {
   const safeEmps = Array.isArray(employees) ? employees.filter(Boolean).filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean).filter(c => c.isActive !== false) : [];
   const safeShifts = Array.isArray(shifts) ? shifts : [];
@@ -45,7 +48,7 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
   // Punch Clock State
   const [requirePunchClock, setRequirePunchClock] = useState(editingShift?.requirePunchClock ?? true);
   
-  // NEW: Admin Override State for Actual Punches
+  // Admin Override State for Actual Punches
   const [actualStartTime, setActualStartTime] = useState(parseTimeFromISO(editingShift?.actualStartTime));
   const [actualEndTime, setActualEndTime] = useState(parseTimeFromISO(editingShift?.actualEndTime));
 
@@ -55,6 +58,13 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
 
   // Unified Soft Warning State ('overlap', 'availability', or null)
   const [warningState, setWarningState] = useState(null);
+  
+  // --- NEW: RETROACTIVE AUDIT STATE ---
+  const [retroactiveReason, setRetroactiveReason] = useState('');
+
+  // --- RETROACTIVE DETECTION LOGIC ---
+  const shiftEndDt = new Date(`${selectedDate}T${endTime || '23:59'}`);
+  const isPastShift = shiftEndDt < new Date();
 
   // --- COMPUTE VISIBILITY FOR PUNCH CLOCK TOGGLE ---
   const selectedEmp = safeEmps.find(e => e.id === employeeId);
@@ -72,7 +82,6 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
     return d.getMonth() === baseDate.getMonth() && d.getFullYear() === baseDate.getFullYear();
   }).length;
 
-  // Don't count the shift we are actively editing against the limit
   if (editingShift && editingShift.clientId === clientId) {
     clientShiftsThisMonth = Math.max(0, clientShiftsThisMonth - 1);
   }
@@ -105,15 +114,17 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
       alert("Please provide a task description for this internal shift.");
       return;
     }
+    
+    // Validate Retroactive Reason
+    if (isPastShift && !retroactiveReason.trim()) {
+      alert("A reason is required when making retroactive changes to past shifts.");
+      return;
+    }
 
-    // --- SMART CONFLICT DETECTOR (Double-Booking & Availability) ---
+    // --- SMART CONFLICT DETECTOR ---
     if (!warningState) {
-      
-      // 1. Check for Double-Booking
       const conflicting = safeShifts.filter(s => {
-         // Ignore the shift we are currently editing
          if (editingShift && s.id === editingShift.id) return false; 
-         
          if (s.employeeId !== employeeId || s.date !== selectedDate || !s.startTime || !s.endTime) return false;
          
          const [sH, sM] = s.startTime.split(':').map(Number);
@@ -134,7 +145,6 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
          return; 
       }
 
-      // 2. Check for Availability Match
       const avail = selectedEmp?.availability || [];
       if (avail.length > 0) {
          const d = parseLocalSafe(selectedDate);
@@ -176,12 +186,9 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
       baseShift.hourlyRate = null;
     }
 
-    // Attach the requirePunchClock flag and manual overrides
     if (showPunchToggle) {
       baseShift.requirePunchClock = requirePunchClock;
-      
       if (editingShift && requirePunchClock) {
-        // Construct strict ISO strings for the backend using the local date and the admin-provided time
         baseShift.actualStartTime = actualStartTime ? new Date(`${selectedDate}T${actualStartTime}`).toISOString() : null;
         baseShift.actualEndTime = actualEndTime ? new Date(`${selectedDate}T${actualEndTime}`).toISOString() : null;
       }
@@ -189,9 +196,27 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
       baseShift.requirePunchClock = false;
     }
 
+    // AUDIT LOG GENERATOR HELPER
+    const generateAuditLog = (actionType, details) => {
+      if (onAddShiftAuditLog && currentUser) {
+        onAddShiftAuditLog({
+          timestamp: new Date().toISOString(),
+          adminName: currentUser.name,
+          actionType: actionType,
+          shiftId: editingShift ? editingShift.id : 'New',
+          details: details,
+          reason: isPastShift ? retroactiveReason : ''
+        });
+      }
+    };
+
     // EDIT MODE ROUTING
     if (editingShift && onUpdate) {
       onUpdate(editingShift.id, baseShift);
+      generateAuditLog(
+        isPastShift ? 'Retroactive Update' : 'Updated',
+        `Updated shift for ${selectedEmp?.name || 'Unassigned'} on ${selectedDate} (${startTime}-${endTime}).`
+      );
       onClose();
       return;
     }
@@ -200,7 +225,7 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
     const newShifts = [];
     const startDate = parseLocalSafe(selectedDate);
     
-    if (isRecurring) {
+    if (isRecurring && !isPastShift) {
       for (let i = 0; i < recurrenceWeeks; i++) {
         const nextDate = new Date(startDate);
         nextDate.setDate(startDate.getDate() + (i * 7));
@@ -214,6 +239,12 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
     }
     
     if (onSave) onSave(newShifts);
+    
+    generateAuditLog(
+      isPastShift ? 'Retroactive Creation' : 'Created',
+      `Created ${newShifts.length} shift(s) starting ${selectedDate} for ${selectedEmp?.name || 'Unassigned'}.`
+    );
+    
     onClose();
   };
 
@@ -279,7 +310,6 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
             )}
             
             <div className="pt-2 border-t border-slate-200">
-              {/* ATYPICAL PAY OVERRIDE TOGGLE */}
               <label className="flex items-center space-x-2 text-sm font-bold text-slate-700 cursor-pointer w-fit mb-3">
                 <input type="checkbox" checked={isHourlyOverride} onChange={(e) => setIsHourlyOverride(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
                 <span>Atypical Shift: Pay Hourly</span>
@@ -296,7 +326,6 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
                 </div>
               )}
 
-              {/* DYNAMIC PUNCH CLOCK TOGGLE */}
               {showPunchToggle && (
                 <label className="flex items-center space-x-2 text-sm font-bold text-slate-700 cursor-pointer w-fit mb-4">
                   <input type="checkbox" checked={requirePunchClock} onChange={(e) => setRequirePunchClock(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
@@ -304,7 +333,7 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
                 </label>
               )}
 
-              {/* NEW: ADMIN OVERRIDE FOR PUNCH TIMESTAMPS */}
+              {/* ADMIN OVERRIDE FOR PUNCH TIMESTAMPS */}
               {editingShift && showPunchToggle && requirePunchClock && (
                 <div className="mb-4 p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-inner">
                    <h4 className="text-sm font-bold text-indigo-900 mb-2 flex items-center"><Clock className="h-4 w-4 mr-1.5"/> Admin Punch Override</h4>
@@ -327,7 +356,7 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
                 </div>
               )}
 
-              {!editingShift && (
+              {!editingShift && !isPastShift && (
                 <>
                   <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
                     <input type="checkbox" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4" />
@@ -344,8 +373,28 @@ export default function AddShiftModal({ isOpen, onClose, selectedDate, employees
                 </>
               )}
             </div>
+            
+            {/* --- NEW: RETROACTIVE CHANGE AUDIT ENFORCEMENT --- */}
+            {isPastShift && (
+              <div className="pt-2 border-t border-slate-200 mt-4">
+                <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg shadow-inner">
+                   <h4 className="text-sm font-bold text-purple-900 mb-2 flex items-center"><History className="h-4 w-4 mr-1.5"/> Retroactive Change</h4>
+                   <p className="text-xs text-purple-700 mb-3 font-medium">You are altering a shift that has already occurred. This change will be permanently recorded in the Audit Log.</p>
+                   <div>
+                     <label className="block text-xs font-bold text-purple-800 mb-1">Reason for Retroactive Change *</label>
+                     <textarea 
+                        value={retroactiveReason} 
+                        onChange={e => setRetroactiveReason(e.target.value)} 
+                        className="w-full px-3 py-2 border border-purple-300 rounded-md focus:ring-purple-500 text-sm font-medium text-purple-900 bg-white" 
+                        placeholder="e.g. Swapped shift with Juhlea, forgot to update schedule." 
+                        rows="2" 
+                        required={isPastShift} 
+                     />
+                   </div>
+                </div>
+              </div>
+            )}
 
-            {/* SMART WARNING OVERRIDE UI */}
             {warningState && warningState.type === 'overlap' && (
               <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mt-2 shadow-inner">
                 <h4 className="text-yellow-900 font-bold flex items-center mb-2 text-sm"><AlertTriangle className="h-4 w-4 mr-1.5" /> Anomaly Detected: Double-Booking</h4>

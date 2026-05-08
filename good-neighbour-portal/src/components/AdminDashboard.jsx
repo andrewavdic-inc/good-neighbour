@@ -3,7 +3,7 @@ import {
   Calendar as CalendarIcon, Clock, Plus, ChevronLeft, ChevronRight, Briefcase, 
   CalendarDays, Trash2, Users, Heart, Coins, Settings, Receipt, XCircle, 
   AlertCircle, FileText, Coffee, Wallet, Search, UserMinus, MessageSquare, 
-  Sun, Activity, BookOpen, Award, AlertTriangle, Copy, CheckCircle, Edit
+  Sun, Activity, BookOpen, Award, AlertTriangle, Copy, CheckCircle, Edit, History
 } from 'lucide-react';
 
 // --- SUB-COMPONENT IMPORTS ---
@@ -61,13 +61,15 @@ export default function AdminDashboard({
   onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
-  payrollLogs = [], onFinalizePayroll, onUpdateShift
+  payrollLogs = [], onFinalizePayroll, onUpdateShift,
+  shiftAuditLogs = [], onAddShiftAuditLog // <-- NEW AUDIT LOG PROPS
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDateStr, setSelectedDateStr] = useState('');
   
   const [editingShift, setEditingShift] = useState(null);
+  const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false); // <-- AUDIT VIEWER STATE
 
   const [activeAdminTab, setActiveAdminTab] = useState('schedule');
   const [scheduleSearch, setScheduleSearch] = useState('');
@@ -84,6 +86,7 @@ export default function AdminDashboard({
   const safeEmployees = Array.isArray(employees) ? employees.filter(Boolean) : [];
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
   const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
+  const safeAuditLogs = Array.isArray(shiftAuditLogs) ? shiftAuditLogs : [];
 
   // --- Ping Logic ---
   const todayStr = new Date().toISOString().split('T')[0];
@@ -93,13 +96,11 @@ export default function AdminDashboard({
 
   const pendingCancellations = safeShifts.filter(s => s.cancelRequest?.pending === true);
 
-  // --- CRITICAL ALERT: UNASSIGNED SHIFTS TODAY/TOMORROW ---
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = tomorrow.toISOString().split('T')[0];
   const urgentOpenShifts = safeShifts.filter(s => s.employeeId === 'unassigned' && (s.date === todayStr || s.date === tomorrowStr));
 
-  // --- SMART TRACKER: SHIFT CLAIM NOTIFICATIONS ---
   useEffect(() => {
     const saved = localStorage.getItem('gn_admin_shift_snapshot');
     if (saved) {
@@ -157,7 +158,7 @@ export default function AdminDashboard({
   const handleDayObjectClick = (d) => {
     const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     setSelectedDateStr(formattedDate);
-    setEditingShift(null); // Ensure we are opening in "Add" mode
+    setEditingShift(null); 
     setIsModalOpen(true);
   };
 
@@ -165,6 +166,41 @@ export default function AdminDashboard({
     e.stopPropagation(); 
     setCurrentDate(d);
     setCalendarView('day');
+  };
+
+  // --- ACTION INTERCEPTORS FOR AUDIT TRAIL ---
+  const handleDeleteShiftWithLog = (e, shift) => {
+    e.stopPropagation();
+    if (window.confirm('Are you sure you want to delete this shift?')) {
+      const emp = safeEmployees.find(emp => emp.id === shift.employeeId);
+      if (onAddShiftAuditLog) {
+        onAddShiftAuditLog({
+          timestamp: new Date().toISOString(),
+          adminName: currentUser.name,
+          actionType: 'Deleted',
+          shiftId: shift.id,
+          details: `Deleted shift for ${emp?.name || 'Unassigned'} on ${shift.date} (${shift.startTime}-${shift.endTime}).`
+        });
+      }
+      if (onRemoveShift) onRemoveShift(shift.id);
+    }
+  };
+
+  const handleMarkOpenWithLog = (e, shift) => {
+    e.stopPropagation();
+    if (window.confirm('Mark this shift as open?')) {
+       const emp = safeEmployees.find(emp => emp.id === shift.employeeId);
+       if (onAddShiftAuditLog) {
+         onAddShiftAuditLog({
+           timestamp: new Date().toISOString(),
+           adminName: currentUser.name,
+           actionType: 'Marked Open',
+           shiftId: shift.id,
+           details: `Removed ${emp?.name || 'Unknown'} from shift on ${shift.date} and marked it as open.`
+         });
+       }
+       if (onMarkShiftOpen) onMarkShiftOpen(shift.id);
+    }
   };
 
   const year = currentDate.getFullYear();
@@ -217,7 +253,6 @@ export default function AdminDashboard({
     const prevEnd = new Date(endOfWeek);
     prevEnd.setDate(prevEnd.getDate() - 7);
 
-    // CHANGED from safeShifts to filteredShifts to respect the search bar
     const shiftsToClone = filteredShifts.filter(s => {
         if (!s.date) return false;
         const d = parseLocalSafe(s.date);
@@ -320,20 +355,27 @@ export default function AdminDashboard({
             const clientNameDisplay = shift.isInternal ? shift.internalTask : String(client?.name || 'Unknown Client').split(' ')[0];
             const punchText = getPunchText(shift);
             
+            // --- NEW: PAST SHIFT PROTECTIONS ---
+            const shiftEndDt = new Date(`${shift.date}T${shift.endTime || '23:59'}`);
+            const isPast = shiftEndDt < new Date();
+            const hasRetroEdit = safeAuditLogs.some(log => log.shiftId === shift.id && log.actionType.includes('Retroactive'));
+            
             const bgBorderClass = isOpen ? 'bg-amber-100 text-amber-800 border-amber-300 shadow-sm' : 
                                   shift.isInternal ? 'bg-indigo-50 text-indigo-800 border-indigo-200' : 
                                   'bg-teal-100 text-teal-800 border-teal-200';
             
             return (
-              <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${bgBorderClass}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${clientNameDisplay}: ${shift.startTime}-${shift.endTime}${punchText ? `\n${punchText}` : ''}`}>
-                <div className={`font-semibold truncate ${isOpen ? 'text-amber-700' : ''}`}>{empNameDisplay}</div>
+              <div key={shift.id || Math.random()} className={`text-xs p-1.5 rounded relative group/shift border ${bgBorderClass} ${isPast ? 'opacity-60 saturate-50' : ''}`} title={`${isOpen ? 'OPEN SHIFT' : String(emp?.name || 'Unknown')} with ${clientNameDisplay}: ${shift.startTime}-${shift.endTime}${punchText ? `\n${punchText}` : ''}`}>
+                <div className={`font-semibold truncate flex justify-between items-center ${isOpen ? 'text-amber-700' : ''}`}>
+                  <span>{empNameDisplay}</span>
+                  {hasRetroEdit && <History className="h-3 w-3 text-purple-600 shrink-0" title="Shift has been retroactively altered. Check Audit Log." />}
+                </div>
                 <div className={`text-[10px] truncate flex items-center mt-0.5 ${isOpen ? 'text-amber-700' : shift.isInternal ? 'text-indigo-700' : 'text-teal-700'}`}>
                   {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0" /> : <Heart className="h-2.5 w-2.5 mr-1 shrink-0" />}
                   <span className="truncate">{clientNameDisplay}</span>
                 </div>
                 <div className="text-[10px] mt-0.5 opacity-90">{shift.startTime} - {shift.endTime}</div>
                 
-                {/* INJECT PUNCH TEXT INTO MONTH/WEEK CARDS */}
                 {punchText && (
                    <div className="text-[9px] font-bold text-slate-700 bg-white/50 rounded px-1 mt-0.5 border border-slate-200/50 truncate">
                      {punchText}
@@ -346,8 +388,8 @@ export default function AdminDashboard({
 
                 <div className="absolute right-1 top-1 opacity-0 group-hover/shift:opacity-100 flex space-x-1 bg-white/90 p-0.5 rounded backdrop-blur-sm z-20">
                   <button onClick={(e) => { e.stopPropagation(); setEditingShift(shift); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 transition p-0.5 rounded hover:bg-blue-50" title="Edit Shift"><Edit className="h-3 w-3" /></button>
-                  {!isOpen && (<button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded hover:bg-amber-50" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
-                  <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-500 hover:text-red-700 transition p-0.5 rounded hover:bg-red-50" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>
+                  {!isPast && !isOpen && (<button onClick={(e) => handleMarkOpenWithLog(e, shift)} className="text-amber-600 hover:text-amber-800 transition p-0.5 rounded hover:bg-amber-50" title="Mark as Open Shift (Sick Call)"><UserMinus className="h-3 w-3" /></button>)}
+                  {!isPast && (<button onClick={(e) => handleDeleteShiftWithLog(e, shift)} className="text-red-500 hover:text-red-700 transition p-0.5 rounded hover:bg-red-50" title="Delete Shift"><Trash2 className="h-3 w-3" /></button>)}
                 </div>
               </div>
             );
@@ -440,9 +482,18 @@ export default function AdminDashboard({
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-                        <button onClick={() => onApproveShiftCancelDelete(shift.id)} className="px-4 py-2.5 text-sm font-bold bg-red-600 text-white rounded-md hover:bg-red-700 transition shadow-sm">Delete Shift</button>
-                        <button onClick={() => onApproveShiftCancelOpen(shift.id)} className="px-4 py-2.5 text-sm font-bold bg-amber-500 text-white rounded-md hover:bg-amber-600 transition shadow-sm">Mark as Open</button>
-                        <button onClick={() => onDenyShiftCancel(shift.id)} className="px-4 py-2.5 text-sm font-bold bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300 transition shadow-sm">Deny Request</button>
+                        <button onClick={() => {
+                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Approved (Deleted)', shiftId: shift.id, details: `Approved cancellation and deleted shift on ${shift.date}. Reason: ${shift.cancelRequest.reason}`});
+                          onApproveShiftCancelDelete(shift.id);
+                        }} className="px-4 py-2.5 text-sm font-bold bg-red-600 text-white rounded-md hover:bg-red-700 transition shadow-sm">Delete Shift</button>
+                        <button onClick={() => {
+                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Approved (Marked Open)', shiftId: shift.id, details: `Approved cancellation and marked shift open on ${shift.date}. Reason: ${shift.cancelRequest.reason}`});
+                          onApproveShiftCancelOpen(shift.id);
+                        }} className="px-4 py-2.5 text-sm font-bold bg-amber-500 text-white rounded-md hover:bg-amber-600 transition shadow-sm">Mark as Open</button>
+                        <button onClick={() => {
+                          if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Denied', shiftId: shift.id, details: `Denied cancellation request for shift on ${shift.date}.`});
+                          onDenyShiftCancel(shift.id);
+                        }} className="px-4 py-2.5 text-sm font-bold bg-slate-200 text-slate-700 rounded-md hover:bg-slate-300 transition shadow-sm">Deny Request</button>
                       </div>
                     </div>
                   )
@@ -499,19 +550,28 @@ export default function AdminDashboard({
             </div>
             
             <div className="flex items-center space-x-2 w-full sm:w-auto justify-end shrink-0">
+              {/* --- NEW AUDIT LOG BUTTON --- */}
+              <button 
+                 onClick={() => setIsAuditViewerOpen(true)} 
+                 className="flex items-center space-x-2 bg-slate-800 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-slate-700 shadow-sm transition text-sm"
+                 title="View history of all schedule changes"
+              >
+                <FileText className="h-4 w-4" /><span className="hidden sm:inline">Audit Log</span>
+              </button>
+              
               <button 
                  onClick={handleClonePreviousWeek} 
                  className="flex items-center space-x-2 bg-indigo-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-indigo-700 shadow-sm transition text-sm"
                  title="Clone shifts from the previous week to the current view"
               >
-                <Copy className="h-4 w-4" /><span className="hidden sm:inline">Copy Prev Week</span>
+                <Copy className="h-4 w-4" /><span className="hidden lg:inline">Copy Prev Week</span>
               </button>
               <button 
                  onClick={() => {
                    const d = currentDate;
                    const formattedDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                    setSelectedDateStr(formattedDate);
-                   setEditingShift(null); // Ensure "Add" mode
+                   setEditingShift(null); 
                    setIsModalOpen(true);
                  }} 
                  className="flex items-center space-x-2 bg-teal-600 text-white px-3 sm:px-4 py-2 rounded-md hover:bg-teal-700 shadow-sm transition text-sm"
@@ -656,6 +716,10 @@ export default function AdminDashboard({
                                         const clientNameDisplay = shift.isInternal ? shift.internalTask : (client?.name || 'Unknown');
                                         const punchText = getPunchText(shift);
                                         
+                                        const shiftEndDt = new Date(`${shift.date}T${shift.endTime || '23:59'}`);
+                                        const isPast = shiftEndDt < new Date();
+                                        const hasRetroEdit = safeAuditLogs.some(log => log.shiftId === shift.id && log.actionType.includes('Retroactive'));
+
                                         const shiftClass = isUnassignedRow ? 'bg-amber-100 border-amber-400 text-amber-900 ring-amber-500' : 
                                                            shift.cancelRequest?.pending ? 'bg-slate-200 border-slate-400 text-slate-600 ring-slate-500 line-through' : 
                                                            shift.isInternal ? 'bg-indigo-50 border-indigo-300 text-indigo-900 ring-indigo-500' :
@@ -665,22 +729,24 @@ export default function AdminDashboard({
                                            <div 
                                               key={shift.id} 
                                               style={shift.style} 
-                                              className={`absolute rounded-md p-1 shadow-sm text-[10px] overflow-hidden leading-tight cursor-pointer hover:ring-2 hover:ring-offset-1 hover:z-20 transition-all group/shift border ${shiftClass}`}
+                                              className={`absolute rounded-md p-1 shadow-sm text-[10px] overflow-hidden leading-tight cursor-pointer hover:ring-2 hover:ring-offset-1 hover:z-20 transition-all group/shift border ${shiftClass} ${isPast ? 'opacity-60 saturate-50' : ''}`}
                                               title={`${clientNameDisplay} (${shift.startTime} - ${shift.endTime})${punchText ? `\n${punchText}` : ''}`}
                                            >
-                                              <div className="font-bold truncate flex items-center">
-                                                {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0"/> : null}
-                                                {clientNameDisplay}
+                                              <div className="font-bold truncate flex justify-between items-center">
+                                                <span className="truncate flex items-center">
+                                                  {shift.isInternal ? <Briefcase className="h-2.5 w-2.5 mr-1 shrink-0"/> : null}
+                                                  {clientNameDisplay}
+                                                </span>
+                                                {hasRetroEdit && <History className="h-3 w-3 text-purple-600 shrink-0" title="Shift has been retroactively altered. Check Audit Log." />}
                                               </div>
                                               <div className="font-medium opacity-80 truncate">{shift.startTime} - {shift.endTime}</div>
                                               
-                                              {/* INJECT PUNCH TEXT DIRECTLY INTO SWIMLANE BLOCK */}
                                               {punchText && <div className="text-[9px] font-bold text-slate-700 bg-white/40 rounded px-1 truncate mt-0.5">{punchText}</div>}
 
                                               <div className="absolute right-1 top-0 bottom-0 flex items-center space-x-1 bg-white/90 px-1 shadow-sm backdrop-blur-sm opacity-0 group-hover/shift:opacity-100 transition-opacity z-20">
                                                 <button onClick={(e) => { e.stopPropagation(); setEditingShift(shift); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800 p-0.5 rounded hover:bg-blue-50" title="Edit Shift"><Edit className="h-3.5 w-3.5"/></button>
-                                                {!isUnassignedRow && <button onClick={(e) => { e.stopPropagation(); onMarkShiftOpen(shift.id); }} className="text-amber-600 hover:text-amber-800 p-0.5 rounded hover:bg-amber-50" title="Mark Open"><UserMinus className="h-3.5 w-3.5"/></button>}
-                                                <button onClick={(e) => { e.stopPropagation(); onRemoveShift(shift.id); }} className="text-red-600 hover:text-red-800 p-0.5 rounded hover:bg-red-50" title="Delete"><Trash2 className="h-3.5 w-3.5"/></button>
+                                                {!isPast && !isUnassignedRow && <button onClick={(e) => handleMarkOpenWithLog(e, shift)} className="text-amber-600 hover:text-amber-800 p-0.5 rounded hover:bg-amber-50" title="Mark Open"><UserMinus className="h-3.5 w-3.5"/></button>}
+                                                {!isPast && <button onClick={(e) => handleDeleteShiftWithLog(e, shift)} className="text-red-600 hover:text-red-800 p-0.5 rounded hover:bg-red-50" title="Delete"><Trash2 className="h-3.5 w-3.5"/></button>}
                                               </div>
                                            </div>
                                         )
@@ -728,7 +794,6 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      {/* --- PING ALERT FOR GLOBAL NAV WITH MUTE --- */}
       {hasUrgentDeskItem && activeAdminTab !== 'desk' && !isDeskPingMuted && (
         <div className="bg-red-500 text-white p-3 rounded-lg flex items-center justify-between shadow-md animate-pulse mb-4">
           <div className="flex items-center cursor-pointer flex-1" onClick={() => setActiveAdminTab('desk')}>
@@ -746,7 +811,6 @@ export default function AdminDashboard({
           <button key={tab.id} onClick={() => setActiveAdminTab(tab.id)} className={`relative px-2 py-1 font-medium whitespace-nowrap flex items-center ${activeAdminTab === tab.id ? 'text-teal-600 border-b-2 border-teal-600' : 'text-slate-500 hover:text-slate-700'}`}>
             <tab.icon className="h-4 w-4 mr-2" /> {tab.label}
             {tab.id === 'desk' && hasUrgentDeskItem && <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>}
-            {/* --- ADMIN SCHEDULE TAB DOT --- */}
             {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0 || urgentOpenShifts.length > 0) && (
               <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${urgentOpenShifts.length > 0 ? 'bg-red-600' : pendingCancellations.length > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
             )}
@@ -756,7 +820,51 @@ export default function AdminDashboard({
       
       {renderAdminTab()}
 
-      {/* --- RENDER ADD/EDIT SHIFT MODAL WITH PASSED HOOKS --- */}
+      {/* --- NEW: THE AUDIT VIEWER MODAL --- */}
+      {isAuditViewerOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+             <div className="px-6 py-4 bg-slate-800 text-white flex justify-between items-center shrink-0">
+                <h3 className="font-bold flex items-center text-lg"><FileText className="h-5 w-5 mr-2 text-teal-400"/> Scheduling Audit Log</h3>
+                <button onClick={() => setIsAuditViewerOpen(false)} className="hover:text-slate-300 transition text-3xl leading-none">&times;</button>
+             </div>
+             <div className="flex-1 overflow-y-auto p-0 bg-slate-50">
+                {safeAuditLogs.length === 0 ? (
+                   <div className="p-12 text-center text-slate-500 font-medium">No schedule changes have been logged yet.</div>
+                ) : (
+                   <div className="divide-y divide-slate-200">
+                      {safeAuditLogs.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp)).map(log => (
+                         <div key={log.id} className="p-5 bg-white hover:bg-slate-50 transition flex flex-col sm:flex-row gap-4">
+                            <div className="w-48 shrink-0 border-r border-slate-100 pr-4">
+                               <div className="text-sm font-bold text-slate-800">{new Date(log.timestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
+                               <div className="text-xs text-slate-500 mt-1 flex items-center"><User className="h-3 w-3 mr-1" /> {log.adminName}</div>
+                            </div>
+                            <div className="flex-1">
+                               <div className="flex items-center mb-1.5">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${log.actionType.includes('Retroactive') ? 'bg-purple-100 text-purple-800 border border-purple-200' : log.actionType.includes('Deleted') ? 'bg-red-100 text-red-800 border border-red-200' : log.actionType.includes('Open') ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                                     {log.actionType}
+                                  </span>
+                               </div>
+                               <p className="text-sm text-slate-700 font-medium">{log.details}</p>
+                               {log.reason && (
+                                  <div className="mt-3 text-xs bg-slate-100 border border-slate-200 p-3 rounded-lg text-slate-700 shadow-inner">
+                                     <span className="font-bold uppercase tracking-wider text-slate-500 mr-2">Reason Provided:</span> "{log.reason}"
+                                  </div>
+                                )}
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                )}
+             </div>
+             <div className="px-6 py-3 border-t border-slate-200 bg-slate-100 flex justify-end shrink-0">
+               <button onClick={() => setIsAuditViewerOpen(false)} className="px-5 py-2 font-bold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition shadow-sm">Close Log</button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- ADD SHIFT MODAL --- */}
       {isModalOpen && (
         <AddShiftModal 
           isOpen={isModalOpen} 
@@ -768,7 +876,9 @@ export default function AdminDashboard({
           timeOffLogs={timeOffLogs}
           onSave={onAddShift} 
           onUpdate={onUpdateShift} 
-          editingShift={editingShift} 
+          editingShift={editingShift}
+          currentUser={currentUser}              // <-- NEW: Passing to Modal for auditing
+          onAddShiftAuditLog={onAddShiftAuditLog} // <-- NEW: Passing to Modal for auditing
         />
       )}
     </div>

@@ -884,58 +884,80 @@ export default function EmployeeDashboard({
 
                   <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-end">
                     <div className="flex bg-slate-200 p-1 rounded-lg w-fit">
-                      <button onClick={() => setScheduleView('list')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'list' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>List View</button>
+                      <button onClick={() => setScheduleView('list')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'list' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Agenda View</button>
                       <button onClick={() => setScheduleView('calendar')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${scheduleView === 'calendar' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}>Calendar</button>
                     </div>
                   </div>
                   
                   {scheduleView === 'list' ? (
-                    <div className="divide-y divide-slate-100 border rounded-xl overflow-hidden m-6">
+                    <div className="p-6 bg-slate-100/50 space-y-6">
                       {upcomingShifts.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500">You have no upcoming shifts.</div>
+                        <div className="p-12 text-center bg-white border border-slate-200 rounded-2xl shadow-sm">
+                          <CalendarDays className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                          <h3 className="text-lg font-bold text-slate-700">No Upcoming Shifts</h3>
+                          <p className="text-sm text-slate-500 mt-1">Enjoy your free time!</p>
+                        </div>
                       ) : (
-                        upcomingShifts.map(shift => {
-                          const client = shift.isInternal ? null : clients.find(c => c && c.id === shift.clientId);
-                          const clientNameDisplay = shift.isInternal ? (shift.internalTask || 'Internal Task') : (client?.name || 'Unknown Client');
-                          const d = parseLocalSafe(shift.date);
+                        Object.entries(upcomingShifts.reduce((acc, shift) => {
+                          if(!acc[shift.date]) acc[shift.date] = [];
+                          acc[shift.date].push(shift);
+                          return acc;
+                        }, {})).sort((a,b) => new Date(a[0]) - new Date(b[0])).map(([dateStr, dayShifts]) => {
+                          const d = parseLocalSafe(dateStr);
                           const isInvalid = isNaN(d.getTime());
                           return (
-                            <div key={shift.id || Math.random()} className="p-4 hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                              <div className="flex items-start space-x-4">
-                                <div className={`bg-teal-50 border border-teal-100 rounded-lg p-2 text-center min-w-[70px] ${shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}`}>
-                                  <div className="text-xs font-bold text-teal-600 uppercase">{!isInvalid ? d.toLocaleDateString('en-US', { month: 'short' }) : ''}</div>
-                                  <div className="text-xl font-extrabold text-teal-800">{!isInvalid ? d.getDate() : ''}</div>
-                                </div>
-                                <div className={shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}>
-                                  <h4 className="font-bold text-slate-800 flex items-center">
-                                    {shift.isInternal && <Briefcase className="h-4 w-4 mr-1.5 text-indigo-600" />}
-                                    {clientNameDisplay}
-                                  </h4>
-                                  <div className="text-sm text-slate-600 flex items-center mt-1">
-                                    <Clock className="h-3.5 w-3.5 mr-1.5" /> {shift.startTime} - {shift.endTime}
-                                  </div>
-                                  {/* --- PUNCH BADGE --- */}
-                                  {renderPunchBadge(shift)}
-                                </div>
+                            <div key={dateStr} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                              <div className="bg-teal-700 text-white px-6 py-3 flex items-center justify-between">
+                                <h3 className="font-bold text-lg flex items-center">
+                                  <CalendarDays className="h-5 w-5 mr-2 text-teal-300" />
+                                  {!isInvalid ? d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : dateStr}
+                                </h3>
+                                <span className="text-xs font-bold bg-teal-900/50 px-3 py-1 rounded-full border border-teal-600 shadow-inner">
+                                  {dayShifts.length} {dayShifts.length === 1 ? 'Shift' : 'Shifts'}
+                                </span>
                               </div>
-                              <div className="flex flex-col space-y-2 w-full sm:w-auto">
-                                {!shift.isInternal && (
-                                  <button onClick={() => setSelectedClient(client)} className="text-sm font-medium text-teal-600 hover:text-teal-800 border border-teal-200 hover:bg-teal-50 px-3 py-1.5 rounded transition w-full sm:w-auto text-center">
-                                    Care Plan
-                                  </button>
-                                )}
-                                
-                                {/* CANCELLATION BUTTON LOGIC */}
-                                {shift.cancelRequest?.pending ? (
-                                  <button disabled className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded cursor-not-allowed text-center w-full sm:w-auto border border-slate-200">
-                                    Cancellation Pending
-                                  </button>
-                                ) : (
-                                  <button onClick={() => initiateCancellation(shift.id)} className="text-xs font-medium text-slate-500 hover:text-red-500 hover:underline text-center w-full sm:w-auto">
-                                    Request Cancellation
-                                  </button>
-                                )}
-
+                              <div className="divide-y divide-slate-100">
+                                {dayShifts.map(shift => {
+                                  const client = shift.isInternal ? null : clients.find(c => c && c.id === shift.clientId);
+                                  const clientNameDisplay = shift.isInternal ? (shift.internalTask || 'Internal Task') : (client?.name || 'Unknown Client');
+                                  return (
+                                    <div key={shift.id || Math.random()} className="p-5 hover:bg-slate-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                      <div className="flex items-start space-x-4">
+                                        <div className={`p-3 rounded-xl border shadow-sm flex items-center justify-center shrink-0 ${shift.isInternal ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-teal-50 border-teal-200 text-teal-600'}`}>
+                                          {shift.isInternal ? <Briefcase className="h-6 w-6" /> : <Heart className="h-6 w-6" />}
+                                        </div>
+                                        <div className={shift.cancelRequest?.pending ? 'opacity-50 grayscale' : ''}>
+                                          <h4 className="font-bold text-slate-800 text-base">{clientNameDisplay}</h4>
+                                          <div className="text-sm text-slate-600 flex items-center mt-1 font-medium">
+                                            <Clock className="h-4 w-4 mr-1.5 text-slate-400" /> {shift.startTime} - {shift.endTime}
+                                          </div>
+                                          {renderPunchBadge(shift)}
+                                          {shift.requirePunchClock && !shift.actualStartTime && (
+                                            <div className="mt-1.5 inline-flex items-center bg-amber-50 border border-amber-200 text-amber-700 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider shadow-sm">
+                                              ⏱️ Punch Required
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                                        {!shift.isInternal && (
+                                          <button onClick={() => setSelectedClient(client)} className="text-sm font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-4 py-2 rounded-lg transition text-center shadow-sm">
+                                            Care Plan
+                                          </button>
+                                        )}
+                                        {shift.cancelRequest?.pending ? (
+                                          <button disabled className="text-xs font-bold text-slate-400 bg-slate-100 px-4 py-2 rounded-lg cursor-not-allowed text-center border border-slate-200 shadow-inner">
+                                            Cancellation Pending
+                                          </button>
+                                        ) : (
+                                          <button onClick={() => initiateCancellation(shift.id)} className="text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 px-4 py-2 rounded-lg transition text-center">
+                                            Cancel
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           );

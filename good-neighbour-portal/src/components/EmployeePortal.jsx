@@ -172,7 +172,12 @@ export default function EmployeeDashboard({
   // --- Feed Ping Logic ---
   useEffect(() => {
     if (activeTab === 'announcements') { 
-      localStorage.setItem('gn_feed_last_read', Date.now().toString()); 
+      // SMART FIX: Instead of browser time, use the timestamp of the newest message
+      const newestMessageTime = safeMessages.length > 0 
+        ? Math.max(...safeMessages.map(m => new Date(m.date).getTime() || 0)) 
+        : Date.now();
+        
+      localStorage.setItem('gn_feed_last_read', newestMessageTime.toString()); 
       setHasNewFeed(false); 
     } else { 
       const lastRead = Number(localStorage.getItem('gn_feed_last_read') || 0); 

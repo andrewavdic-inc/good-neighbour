@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
 import { Briefcase, AlertCircle, Loader2, Lock } from 'lucide-react';
 
-export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
+export default function LoginPage({ onLogin, isDbReady }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Strict boolean casting to prevent React crash errors
   const dbReady = Boolean(isDbReady);
-  const dataExists = Boolean(hasData);
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!dbReady || (!dataExists && dbReady)) return;
+    if (!dbReady) return;
     
     setIsLoggingIn(true);
     await onLogin(email, password);
@@ -74,31 +73,13 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
             <div>
               <button 
                 type="submit" 
-                disabled={!dbReady || (!dataExists && dbReady) || isLoggingIn}
+                disabled={!dbReady || isLoggingIn}
                 className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
               >
                 {!dbReady ? 'Connecting to Server...' : isLoggingIn ? <><Loader2 className="h-5 w-5 mr-2 animate-spin"/> Authenticating...</> : 'Secure Sign In'}
               </button>
             </div>
           </form>
-
-          {dbReady && (
-            <div className="mt-6 border-t border-slate-200 pt-6">
-              <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-center shadow-inner">
-                <AlertCircle className="h-6 w-6 text-amber-500 mx-auto mb-2" />
-                <p className="text-sm font-medium text-amber-800 mb-3">
-                  The cloud database is currently empty.
-                </p>
-                <button 
-                  onClick={onSeedData}
-                  type="button"
-                  className="px-4 py-2 w-full bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-bold shadow transition"
-                >
-                  Force Initialize Demo Database
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

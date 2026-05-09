@@ -83,7 +83,7 @@ const getHoliday = (dateStr) => {
 export default function EmployeeDashboard({ 
   shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, 
   clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], 
-  timeOffLogs = [], messages = [], documents = [], onSendMessage, payPeriodStart, 
+  timeOffLogs = [], messages = [], directMessages = [], documents = [], onSendMessage, onSendDirectMessage, payPeriodStart, 
   onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, 
   onEmployeeFileUpload, onAddTimeOff, onRequestShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
@@ -118,6 +118,7 @@ export default function EmployeeDashboard({
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
   const safeMessages = Array.isArray(messages) ? messages : [];
+  const safeDirectMessages = Array.isArray(directMessages) ? directMessages : [];
   const safeClients = Array.isArray(clients) ? clients : [];
   
   const liveEmployee = employees.find(e => e && e.id === currentUser.id) || currentUser;
@@ -146,6 +147,10 @@ export default function EmployeeDashboard({
   const unackedPrizes = useMemo(() => prizes.filter(p => p.employeeId === currentUser.id && p.acknowledged === false), [prizes, currentUser.id]);
   const activeReward = unackedKudos[0] ? { ...unackedKudos[0], _type: 'kudo' } : (unackedPrizes[0] ? { ...unackedPrizes[0], _type: 'prize' } : null);
   const hasUnreadRewards = unackedKudos.length > 0 || unackedPrizes.length > 0;
+
+  // Check for unread Direct Messages
+  const unreadDMs = safeDirectMessages.filter(dm => dm.receiverId === currentUser.id && dm.read === false);
+  const hasUnreadDMs = unreadDMs.length > 0;
 
   const handleClaimReward = () => {
     if (activeReward && onAcknowledgeReward) {
@@ -748,7 +753,7 @@ export default function EmployeeDashboard({
                 </button>
               )}
               <button onClick={() => setActiveTab('announcements')} className={`relative flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'announcements' ? 'border-teal-600 text-teal-700 bg-teal-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}>
-                Team Feed {hasNewFeed && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-rose-500 rounded-full border-2 border-white"></span>}
+                Team Feed {(hasNewFeed || hasUnreadDMs) && <span className="absolute top-2.5 right-2 h-2.5 w-2.5 bg-rose-500 rounded-full border-2 border-white"></span>}
               </button>
             </div>
 
@@ -1100,7 +1105,9 @@ export default function EmployeeDashboard({
               {activeTab === 'announcements' && (
                 <Announcements 
                   messages={messages} 
+                  directMessages={directMessages}
                   onSendMessage={onSendMessage} 
+                  onSendDirectMessage={onSendDirectMessage}
                   currentUser={currentUser} 
                   employees={employees} 
                   onDeleteMessage={onDeleteMessage} 

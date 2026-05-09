@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { MessageSquare, Send, User, Trash2, AlertTriangle, CheckCircle, Camera, Loader2, Image as ImageIcon, Users, CheckSquare, XCircle, Download, Archive } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageSquare, Send, User, Trash2, AlertTriangle, CheckCircle, Camera, Loader2, Image as ImageIcon, Users, CheckSquare, XCircle, Download, Archive, Lock } from 'lucide-react';
 
 export default function Announcements({ 
   messages = [], 
+  directMessages = [],
   onSendMessage, 
+  onSendDirectMessage,
   currentUser, 
   employees = [],
   onDeleteMessage,
@@ -11,6 +13,8 @@ export default function Announcements({
   announcementPictureUrl,
   onUpdateAnnouncementPicture
 }) {
+  const [viewTab, setViewTab] = useState('feed'); // 'feed' | 'dm'
+  
   const [text, setText] = useState('');
   const [isHighPriority, setIsHighPriority] = useState(false);
   const [isUploadingPic, setIsUploadingPic] = useState(false);
@@ -18,12 +22,36 @@ export default function Announcements({
   const [showArchived, setShowArchived] = useState(false);
   const [selectedArchiveMonth, setSelectedArchiveMonth] = useState('');
 
-  const handleSubmit = (e) => {
+  // DM State
+  const [selectedDmUserId, setSelectedDmUserId] = useState(null);
+  const [dmText, setDmText] = useState('');
+  const chatEndRef = useRef(null);
+
+  // Scroll to bottom of chat when looking at DMs
+  useEffect(() => {
+    if (viewTab === 'dm') {
+       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [directMessages, viewTab, selectedDmUserId]);
+
+  const handleSubmitFeed = (e) => {
     e.preventDefault();
     if (text.trim()) {
       if (onSendMessage) onSendMessage(text, currentUser?.id || 'unknown', isHighPriority);
       setText('');
       setIsHighPriority(false);
+    }
+  };
+
+  const handleSendDm = (e) => {
+    e.preventDefault();
+    if (dmText.trim() && onSendDirectMessage) {
+      // If employee sends a DM, route it to 'admin1'. If Admin sends, route to selected user.
+      const receiver = isAdmin ? selectedDmUserId : 'admin1';
+      if (receiver) {
+        onSendDirectMessage(dmText, currentUser.id, receiver);
+        setDmText('');
+      }
     }
   };
 
@@ -50,7 +78,7 @@ export default function Announcements({
 
   // --- PERMISSIONS ---
   const isAdmin = currentUser?.role === 'Administrator' || currentUser?.role === 'admin' || currentUser?.role === 'Master Admin';
-  const canSend = isAdmin || currentUser?.role === 'Block Captain';
+  const canSendFeed = isAdmin || currentUser?.role === 'Block Captain';
   
   // Strict Owner Check (Only the owner doesn't need to acknowledge)
   const isOwner = currentUser?.id === 'admin1' || currentUser?.name === 'Master Admin' || currentUser?.role === 'Master Admin';
@@ -244,128 +272,255 @@ export default function Announcements({
     );
   };
 
+  // --- RENDER DIRECT MESSAGES ---
+  const renderDirectMessages = () => {
+    // Sort oldest to newest for chronological chat reading
+    const sortedDMs = safeSortByDateDesc(directMessages).reverse();
+    
+    // For Admin: We need a selected user to chat with.
+    // Filter DMs based on selected user OR if Employee, filter their own DMs.
+    const activeChatId = isAdmin ? selectedDmUserId : currentUser.id;
+    const chatPartnerId = isAdmin ? currentUser.id : 'admin1'; // Employees implicitly chat with admin1
+    
+    const activeMessages = sortedDMs.filter(m => 
+      (m.senderId === activeChatId && m.receiverId === chatPartnerId) || 
+      (m.senderId === chatPartnerId && m.receiverId === activeChatId) ||
+      (!isAdmin && (m.senderId === currentUser.id || m.receiverId === currentUser.id)) ||
+      (isAdmin && selectedDmUserId && (m.senderId === selectedDmUserId || m.receiverId === selectedDmUserId))
+    );
+
+    return (
+      <div className="flex flex-col sm:flex-row h-full">
+        
+        {/* Admin Sidebar */}
+        {isAdmin && (
+          <div className="w-full sm:w-1/3 md:w-1/4 border-r border-slate-200 bg-white overflow-y-auto shrink-0 flex flex-col h-64 sm:h-auto">
+            <div className="p-4 border-b border-slate-100 bg-slate-50 font-bold text-sm text-slate-700 sticky top-0 z-10 shadow-sm">
+              Team Directory
+            </div>
+            <div className="divide-y divide-slate-100">
+              {trackableEmployees.map(emp => {
+                const unreadCount = directMessages.filter(m => m.senderId === emp.id && m.receiverId === currentUser.id && !m.read).length;
+                return (
+                  <button 
+                    key={emp.id} 
+                    onClick={() => setSelectedDmUserId(emp.id)} 
+                    className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition relative ${selectedDmUserId === emp.id ? 'bg-teal-50 border-l-4 border-l-teal-500' : 'border-l-4 border-l-transparent'}`}
+                  >
+                    <div className="font-bold text-sm text-slate-800 truncate">{emp.name}</div>
+                    <div className="text-xs text-slate-500 truncate">{emp.role}</div>
+                    {unreadCount > 0 && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Chat Window */}
+        <div className="flex-1 flex flex-col bg-slate-50/50 relative">
+          {isAdmin && !selectedDmUserId ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center">
+              <MessageSquare className="h-12 w-12 mb-3 opacity-20" />
+              <p className="text-sm font-medium">Select a team member from the directory to start a secure chat.</p>
+            </div>
+          ) : (
+            <>
+              {/* Messages Area */}
+              <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4">
+                {activeMessages.length === 0 ? (
+                  <div className="text-center py-10 text-sm text-slate-400 italic">No messages yet. Send a secure message below.</div>
+                ) : (
+                  activeMessages.map(m => {
+                    const isMine = m.senderId === currentUser.id;
+                    return (
+                      <div key={m.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${isMine ? 'bg-teal-600 text-white rounded-br-sm' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-sm'}`}>
+                          <div className="whitespace-pre-wrap">{m.text}</div>
+                          <div className={`text-[9px] mt-1.5 text-right font-medium ${isMine ? 'text-teal-200' : 'text-slate-400'}`}>
+                            {new Date(m.date).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Chat Input Form */}
+              <form onSubmit={handleSendDm} className="p-4 bg-white border-t border-slate-200 flex gap-3 shrink-0">
+                <input 
+                  type="text" 
+                  value={dmText} 
+                  onChange={e => setDmText(e.target.value)} 
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-full focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-sm transition" 
+                  placeholder="Type a secure, private message..." 
+                />
+                <button 
+                  type="submit" 
+                  disabled={!dmText.trim()}
+                  className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 text-white rounded-full h-10 w-10 flex items-center justify-center shrink-0 transition shadow-sm"
+                >
+                  <Send className="h-4 w-4 ml-0.5" />
+                </button>
+              </form>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[800px]">
-      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center">
           <MessageSquare className="h-5 w-5 mr-2 text-teal-600" />
-          <h2 className="text-lg font-bold text-slate-800">Team Feed & Announcements</h2>
+          <h2 className="text-lg font-bold text-slate-800">Team Communication</h2>
         </div>
-      </div>
-      
-      <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-slate-50/50">
         
-        {/* --- 1. SHARED COMMUNITY PICTURE FRAME --- */}
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm relative group">
-          <div className="bg-slate-100 min-h-[160px] flex items-center justify-center relative">
-            {isUploadingPic ? (
-              <div className="flex flex-col items-center py-10 text-slate-500">
-                <Loader2 className="h-8 w-8 animate-spin mb-2 text-teal-600" />
-                <span className="text-sm font-medium">Updating Poster...</span>
-              </div>
-            ) : announcementPictureUrl ? (
-              <img src={announcementPictureUrl} alt="Community Announcement" className="w-full object-cover max-h-[350px]" />
-            ) : (
-              <div className="flex flex-col items-center py-10 text-slate-400">
-                <ImageIcon className="h-10 w-10 mb-2 opacity-50" />
-                <span className="text-sm font-medium">Company Bulletin Board</span>
-              </div>
-            )}
-
-            {/* Admin Upload Overlay */}
-            {isAdmin && (
-              <label className="absolute inset-0 bg-slate-900/0 hover:bg-slate-900/40 transition-all flex items-center justify-center cursor-pointer group-hover:opacity-100 opacity-0">
-                <div className="bg-white/90 text-slate-800 px-4 py-2 rounded-lg shadow font-bold text-sm flex items-center transform translate-y-4 group-hover:translate-y-0 transition-all">
-                  <Camera className="h-4 w-4 mr-2" /> Change Picture
-                </div>
-                <input type="file" accept="image/*" className="hidden" onChange={handlePicUpload} disabled={isUploadingPic} />
-              </label>
-            )}
-          </div>
-        </div>
-
-        {/* --- 2. THE CURRENT MESSAGE FEED --- */}
-        <div className="space-y-4">
-          {currentMessages.length === 0 ? (
-            <div className="text-center text-slate-500 py-8 italic border border-dashed border-slate-300 rounded-xl bg-slate-50">No announcements for this period.</div>
-          ) : (
-            currentMessages.map(renderMessageCard)
-          )}
-          
-          {/* --- 3. ARCHIVE TOGGLE & SELECTOR --- */}
-          {archivedMessages.length > 0 && (
-            <div className="pt-6 pb-2 flex justify-center border-t border-slate-200 border-dashed mt-8">
-              <button 
-                onClick={() => setShowArchived(!showArchived)}
-                className="flex items-center text-sm font-semibold text-slate-500 hover:text-slate-800 bg-white border border-slate-300 px-4 py-2 rounded-full transition shadow-sm"
-              >
-                <Archive className="h-4 w-4 mr-2" />
-                {showArchived ? 'Hide Archived Announcements' : `View Archived Announcements (${archivedMessages.length})`}
-              </button>
-            </div>
-          )}
-
-          {/* --- 4. ARCHIVED MESSAGES FOR SELECTED MONTH --- */}
-          {showArchived && archiveMonthKeys.length > 0 && (
-            <div className="mt-4 space-y-4 bg-slate-100 p-5 rounded-xl border border-slate-200 shadow-inner">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 mb-4 gap-3">
-                 <h3 className="text-sm font-bold text-slate-700 flex items-center"><Archive className="h-4 w-4 mr-2 text-slate-500" /> Archive Viewer</h3>
-                 <select
-                  value={activeArchiveMonth}
-                  onChange={(e) => setSelectedArchiveMonth(e.target.value)}
-                  className="bg-white border border-slate-300 rounded text-sm px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium shadow-sm w-full sm:w-auto"
-                >
-                  {archiveMonthKeys.map(key => (
-                    <option key={key} value={key}>{key}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="space-y-4">
-                {groupedArchived[activeArchiveMonth]?.map(renderMessageCard)}
-              </div>
-            </div>
-          )}
-
+        {/* VIEW TOGGLE */}
+        <div className="flex bg-slate-200 p-1 rounded-lg w-full sm:w-auto shrink-0">
+          <button 
+            onClick={() => setViewTab('feed')} 
+            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-colors ${viewTab === 'feed' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Company Feed
+          </button>
+          <button 
+            onClick={() => setViewTab('dm')} 
+            className={`flex-1 sm:flex-none px-4 py-1.5 text-sm font-bold rounded-md transition-colors flex items-center justify-center ${viewTab === 'dm' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            <Lock className="h-3.5 w-3.5 mr-1.5" /> Secure Chat
+          </button>
         </div>
       </div>
       
-      {/* --- BROADCAST FORM --- */}
-      {canSend && (
-        <form onSubmit={handleSubmit} className="p-5 border-t border-slate-200 bg-slate-50 flex flex-col gap-3 shrink-0">
-          <label className="text-sm font-semibold text-slate-800">Broadcast New Announcement</label>
-          <textarea 
-            value={text} 
-            onChange={(e) => setText(e.target.value)} 
-            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500 text-sm transition resize-none" 
-            placeholder="Write an announcement to share with the whole team..." 
-            rows="3"
-          />
-          <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 ${isAdmin ? 'justify-between' : 'justify-end'}`}>
+      {/* RENDER ACTIVE TAB */}
+      {viewTab === 'feed' ? (
+        <>
+          <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-slate-50/50">
             
-            {/* ONLY Admins can see and use the Priority Checkbox */}
-            {isAdmin && (
-              <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition w-full sm:w-auto">
-                <input 
-                  type="checkbox" 
-                  checked={isHighPriority} 
-                  onChange={(e) => setIsHighPriority(e.target.checked)} 
-                  className="rounded border-slate-300 text-yellow-500 focus:ring-yellow-400 h-4 w-4" 
-                />
-                <span className="flex items-center"><AlertTriangle className="h-4 w-4 mr-1.5 text-yellow-500" /> Require Acknowledgement (High Priority)</span>
-              </label>
-            )}
+            {/* --- 1. SHARED COMMUNITY PICTURE FRAME --- */}
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm relative group">
+              <div className="bg-slate-100 min-h-[160px] flex items-center justify-center relative">
+                {isUploadingPic ? (
+                  <div className="flex flex-col items-center py-10 text-slate-500">
+                    <Loader2 className="h-8 w-8 animate-spin mb-2 text-teal-600" />
+                    <span className="text-sm font-medium">Updating Poster...</span>
+                  </div>
+                ) : announcementPictureUrl ? (
+                  <img src={announcementPictureUrl} alt="Community Announcement" className="w-full object-cover max-h-[350px]" />
+                ) : (
+                  <div className="flex flex-col items-center py-10 text-slate-400">
+                    <ImageIcon className="h-10 w-10 mb-2 opacity-50" />
+                    <span className="text-sm font-medium">Company Bulletin Board</span>
+                  </div>
+                )}
 
-            <button 
-              type="submit" 
-              disabled={!text.trim()}
-              className={`bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-md px-6 py-2.5 flex items-center justify-center transition shadow-sm font-bold text-sm ${isAdmin ? 'w-full sm:w-auto' : 'w-full sm:w-64'}`}
-            >
-              <Send className="h-4 w-4 mr-2" /> Broadcast Message
-            </button>
+                {/* Admin Upload Overlay */}
+                {isAdmin && (
+                  <label className="absolute inset-0 bg-slate-900/0 hover:bg-slate-900/40 transition-all flex items-center justify-center cursor-pointer group-hover:opacity-100 opacity-0">
+                    <div className="bg-white/90 text-slate-800 px-4 py-2 rounded-lg shadow font-bold text-sm flex items-center transform translate-y-4 group-hover:translate-y-0 transition-all">
+                      <Camera className="h-4 w-4 mr-2" /> Change Picture
+                    </div>
+                    <input type="file" accept="image/*" className="hidden" onChange={handlePicUpload} disabled={isUploadingPic} />
+                  </label>
+                )}
+              </div>
+            </div>
 
+            {/* --- 2. THE CURRENT MESSAGE FEED --- */}
+            <div className="space-y-4">
+              {currentMessages.length === 0 ? (
+                <div className="text-center text-slate-500 py-8 italic border border-dashed border-slate-300 rounded-xl bg-slate-50">No announcements for this period.</div>
+              ) : (
+                currentMessages.map(renderMessageCard)
+              )}
+              
+              {/* --- 3. ARCHIVE TOGGLE & SELECTOR --- */}
+              {archivedMessages.length > 0 && (
+                <div className="pt-6 pb-2 flex justify-center border-t border-slate-200 border-dashed mt-8">
+                  <button 
+                    onClick={() => setShowArchived(!showArchived)}
+                    className="flex items-center text-sm font-semibold text-slate-500 hover:text-slate-800 bg-white border border-slate-300 px-4 py-2 rounded-full transition shadow-sm"
+                  >
+                    <Archive className="h-4 w-4 mr-2" />
+                    {showArchived ? 'Hide Archived Announcements' : `View Archived Announcements (${archivedMessages.length})`}
+                  </button>
+                </div>
+              )}
+
+              {/* --- 4. ARCHIVED MESSAGES FOR SELECTED MONTH --- */}
+              {showArchived && archiveMonthKeys.length > 0 && (
+                <div className="mt-4 space-y-4 bg-slate-100 p-5 rounded-xl border border-slate-200 shadow-inner">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 mb-4 gap-3">
+                     <h3 className="text-sm font-bold text-slate-700 flex items-center"><Archive className="h-4 w-4 mr-2 text-slate-500" /> Archive Viewer</h3>
+                     <select
+                      value={activeArchiveMonth}
+                      onChange={(e) => setSelectedArchiveMonth(e.target.value)}
+                      className="bg-white border border-slate-300 rounded text-sm px-3 py-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500 font-medium shadow-sm w-full sm:w-auto"
+                    >
+                      {archiveMonthKeys.map(key => (
+                        <option key={key} value={key}>{key}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {groupedArchived[activeArchiveMonth]?.map(renderMessageCard)}
+                  </div>
+                </div>
+              )}
+
+            </div>
           </div>
-        </form>
+          
+          {/* --- BROADCAST FORM --- */}
+          {canSendFeed && (
+            <form onSubmit={handleSubmitFeed} className="p-5 border-t border-slate-200 bg-slate-50 flex flex-col gap-3 shrink-0">
+              <label className="text-sm font-semibold text-slate-800">Broadcast New Announcement</label>
+              <textarea 
+                value={text} 
+                onChange={(e) => setText(e.target.value)} 
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500 text-sm transition resize-none" 
+                placeholder="Write an announcement to share with the whole team..." 
+                rows="3"
+              />
+              <div className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 ${isAdmin ? 'justify-between' : 'justify-end'}`}>
+                
+                {/* ONLY Admins can see and use the Priority Checkbox */}
+                {isAdmin && (
+                  <label className="flex items-center space-x-2 text-sm font-medium text-slate-700 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition w-full sm:w-auto">
+                    <input 
+                      type="checkbox" 
+                      checked={isHighPriority} 
+                      onChange={(e) => setIsHighPriority(e.target.checked)} 
+                      className="rounded border-slate-300 text-yellow-500 focus:ring-yellow-400 h-4 w-4" 
+                    />
+                    <span className="flex items-center"><AlertTriangle className="h-4 w-4 mr-1.5 text-yellow-500" /> Require Acknowledgement (High Priority)</span>
+                  </label>
+                )}
+
+                <button 
+                  type="submit" 
+                  disabled={!text.trim()}
+                  className={`bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-md px-6 py-2.5 flex items-center justify-center transition shadow-sm font-bold text-sm ${isAdmin ? 'w-full sm:w-auto' : 'w-full sm:w-64'}`}
+                >
+                  <Send className="h-4 w-4 mr-2" /> Broadcast Message
+                </button>
+
+              </div>
+            </form>
+          )}
+        </>
+      ) : (
+        renderDirectMessages()
       )}
     </div>
   );

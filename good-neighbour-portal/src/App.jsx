@@ -68,6 +68,7 @@ export default function App() {
   const [paystubs, setPaystubs] = useState([]);
   const [timeOffLogs, setTimeOffLogs] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [directMessages, setDirectMessages] = useState([]);
   const [documents, setDocuments] = useState([]);
   
   // DATABASES FOR THE DESK
@@ -125,6 +126,7 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_paystubs'), snap => setPaystubs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_timeOffLogs'), snap => setTimeOffLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_messages'), snap => setMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_directMessages'), snap => setDirectMessages(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_documents'), snap => setDocuments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
     // DESK & REWARDS LISTENERS
@@ -180,6 +182,7 @@ export default function App() {
       await wipeCollection('gn_paystubs', paystubs);
       await wipeCollection('gn_timeOffLogs', timeOffLogs);
       await wipeCollection('gn_messages', messages);
+      await wipeCollection('gn_directMessages', directMessages);
       await wipeCollection('gn_shiftAuditLogs', shiftAuditLogs);
       await wipeCollection('gn_payroll_logs', payrollLogs);
       
@@ -467,8 +470,10 @@ export default function App() {
             
             documents={documents} 
             messages={messages} 
+            directMessages={directMessages}
             
             onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
+            onSendDirectMessage={(text, senderId, receiverId) => runMutation('gn_directMessages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, receiverId, date: new Date().toISOString(), read: false })}
             onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
             onAcknowledgeMessage={handleAcknowledgeMessage}
             announcementPictureUrl={announcementPictureUrl}
@@ -597,9 +602,11 @@ export default function App() {
             paystubs={paystubs} 
             timeOffLogs={timeOffLogs} 
             messages={messages} 
+            directMessages={directMessages}
             documents={documents} 
             
             onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
+            onSendDirectMessage={(text, senderId, receiverId) => runMutation('gn_directMessages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, receiverId, date: new Date().toISOString(), read: false })}
             onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
             onAcknowledgeMessage={handleAcknowledgeMessage}
             announcementPictureUrl={announcementPictureUrl}

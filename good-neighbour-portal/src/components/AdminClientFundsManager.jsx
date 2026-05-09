@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Wallet, Car, Receipt, Download, Plus, FileText } from 'lucide-react';
+import { Wallet, Car, Receipt, Download, Plus, FileText, CheckCircle } from 'lucide-react';
 import { parseLocal } from '../utils';
 
 export default function AdminClientFundsManager({ clients = [], expenses = [], clientExpenses = [], employees = [], onAddClientExpense }) {
@@ -39,15 +39,18 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
   const clientFundsData = useMemo(() => {
     return safeClients.map(client => {
       if(!client) return null;
+      
+      // PATCH 1: Allow both 'approved' and 'paid' status to count against the budget
       const cMileage = safeExpenses.filter(e => {
-        if(!e || e.clientId !== client.id || e.status !== 'approved' || !e.date) return false;
+        if(!e || e.clientId !== client.id || (e.status !== 'approved' && e.status !== 'paid') || !e.date) return false;
         const d = parseLocal(e.date);
         return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
       });
       const mileageCost = cMileage.reduce((sum, e) => sum + (Number(e.kilometers || 0) * 0.68), 0);
 
+      // PATCH 1: Allow both 'approved' and 'paid' status to count against the budget
       const cOOP = safeClientExpenses.filter(e => {
-        if(!e || e.clientId !== client.id || e.status !== 'approved' || !e.date) return false;
+        if(!e || e.clientId !== client.id || (e.status !== 'approved' && e.status !== 'paid') || !e.date) return false;
         const d = parseLocal(e.date);
         return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
       });
@@ -84,14 +87,16 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
     const amount = -Math.abs(Number(topUpAmount));
     const todayStr = new Date().toISOString().split('T')[0];
 
+    // PATCH 2: Explicitly tag top-ups so they avoid the staff payroll loop
     if(onAddClientExpense) {
        onAddClientExpense({
          clientId: topUpModal.id,
-         employeeId: 'admin',
+         employeeId: 'admin_topup', 
          date: todayStr,
          amount: amount,
          description: `[FUNDS TOP-UP]: ${topUpNote}`,
-         status: 'approved'
+         status: 'approved',
+         isTopUp: true 
        });
     }
     setTopUpModal(null);
@@ -127,7 +132,8 @@ export default function AdminClientFundsManager({ clients = [], expenses = [], c
     
     const rows = client.transactions.map(tx => {
       const emp = safeEmployees.find(e => e.id === tx.employeeId);
-      const empName = emp?.name || (tx.employeeId === 'admin' ? 'Admin' : 'Unknown Staff');
+      // Small fix here to catch the new 'admin_topup' ID
+      const empName = emp?.name || (tx.employeeId === 'admin' || tx.employeeId === 'admin_topup' ? 'Admin' : 'Unknown Staff');
       const dateStr = tx.date ? parseLocal(tx.date).toLocaleDateString() : 'Unknown';
       
       let txType = '';

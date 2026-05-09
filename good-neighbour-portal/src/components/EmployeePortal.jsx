@@ -87,7 +87,7 @@ export default function EmployeeDashboard({
   onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, 
   onEmployeeFileUpload, onAddTimeOff, onRequestShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
-  kudos = [], prizes = [], onAcknowledgeReward, onUpdateShift
+  kudos = [], prizes = [], prizeTiers = [], onAddPrize, onAcknowledgeReward, onUpdateShift
 }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [scheduleView, setScheduleView] = useState('calendar');
@@ -1022,17 +1022,17 @@ export default function EmployeeDashboard({
     <EmployeeMileageLog 
       myExpenses={myExpenses} 
       clients={clients} 
-      myShifts={myShifts} // <-- New Prop
+      myShifts={myShifts} 
       onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
-      onRemoveExpense={(id) => runMutation('gn_expenses', id, 'delete')} // <-- New Prop
+      onRemoveExpense={(id) => runMutation('gn_expenses', id, 'delete')} 
       getClientRemainingBalance={getClientRemainingBalance}
     />
     <EmployeeClientExpenseLog 
       myClientExpenses={myClientExpenses} 
       clients={clients} 
-      myShifts={myShifts} // <-- New Prop
+      myShifts={myShifts} 
       onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
-      onRemoveClientExpense={(id) => runMutation('gn_clientExpenses', id, 'delete')} // <-- New Prop
+      onRemoveClientExpense={(id) => runMutation('gn_clientExpenses', id, 'delete')} 
       getClientRemainingBalance={getClientRemainingBalance}
     />
   </div>
@@ -1098,6 +1098,8 @@ export default function EmployeeDashboard({
                     clientExpenses={clientExpenses} 
                     kudos={kudos}
                     prizes={prizes}
+                    prizeTiers={prizeTiers}
+                    onAddPrize={onAddPrize}
                     isBonusActive={isBonusActive} 
                     bonusSettings={bonusSettings}
                   />

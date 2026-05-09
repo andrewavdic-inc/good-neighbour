@@ -148,11 +148,12 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return getMonthlyLeaderboard(parseInt(y, 10), parseInt(m, 10) - 1, shifts, expenses, clientExpenses, safeEmployees, kudos, prizes);
   }, [selectedLeaderboardMonth, shifts, expenses, clientExpenses, safeEmployees, kudos, prizes]);
 
+  // --- TIME-LOCKED MONTHLY SCORE ---
   const currentMonthShifts = useMemo(() => {
     return shifts.filter(s => {
       if (s.employeeId !== currentUser.id || !s.date || !s.endTime) return false;
-      const d = parseLocalSafe(s.date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      const d = new Date(`${s.date}T${s.endTime}`);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() && d <= now;
     });
   }, [shifts, currentUser.id, now]);
   
@@ -212,7 +213,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
       return mKey === selectedKudosMonth;
   }), [myKudos, selectedKudosMonth]);
 
-  // --- ANNUAL STANDINGS WITH JEOPARDY DEDUCTIONS ---
+  // --- TIME-LOCKED ANNUAL STANDINGS WITH JEOPARDY DEDUCTIONS ---
   const annualStandings = useMemo(() => {
     if(safeEmployees.length === 0) return []; 
     const currentYear = now.getFullYear();
@@ -224,7 +225,9 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
       let baseScore = 0;
       const empShifts = shifts.filter(sh => {
         if (sh.employeeId !== emp.id || !sh.date || !sh.endTime) return false;
-        return new Date(`${sh.date}T${sh.endTime}`).getFullYear() === currentYear;
+        const shiftEndDt = new Date(`${sh.date}T${sh.endTime}`);
+        // ONLY count shifts that have actually occurred
+        return shiftEndDt.getFullYear() === currentYear && shiftEndDt <= now;
       });
 
       empShifts.forEach(sh => {
@@ -326,7 +329,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         </div>
       </div>
 
-      {/* --- INJECTED: NEW WALLET & REDEMPTION STORE --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-lg p-6 text-white relative overflow-hidden h-full flex flex-col justify-center">
@@ -383,7 +385,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           </div>
         </div>
       </div>
-      {/* --- END OF INJECTED SECTION --- */}
 
       <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>

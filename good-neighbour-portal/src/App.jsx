@@ -154,11 +154,39 @@ export default function App() {
     return () => unsubs.forEach(unsub => unsub());
   }, [firebaseUser]);
 
+  // --- UPGRADED HARD-RESET SEED FUNCTION ---
   const handleSeedData = async () => {
     if (!firebaseUser || !db) return;
+    
+    const confirmReset = window.confirm("WARNING: This will permanently DELETE all current data in the system and reset it to the original mock data. Are you absolutely sure?");
+    if (!confirmReset) return;
+
     try {
       const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, String(docId));
 
+      // 1. WIPE EXISTING DATA
+      const wipeCollection = async (colName, dataArray) => {
+        for (const item of dataArray) {
+          await deleteDoc(getDocRef(colName, item.id));
+        }
+      };
+
+      // Wipe all collections currently loaded in state
+      await wipeCollection('gn_employees', employees);
+      await wipeCollection('gn_clients', clients);
+      await wipeCollection('gn_shifts', shifts);
+      await wipeCollection('gn_expenses', expenses);
+      await wipeCollection('gn_clientExpenses', clientExpenses);
+      await wipeCollection('gn_paystubs', paystubs);
+      await wipeCollection('gn_timeOffLogs', timeOffLogs);
+      await wipeCollection('gn_messages', messages);
+      await wipeCollection('gn_shiftAuditLogs', shiftAuditLogs);
+      await wipeCollection('gn_payroll_logs', payrollLogs);
+      
+      // Wipe local storage snapshots so the UI doesn't show fake "deleted" notifications
+      localStorage.clear();
+
+      // 2. SEED FRESH MOCK DATA
       for (const e of MOCK_EMPLOYEES) await setDoc(getDocRef('gn_employees', e.id), e);
       for (const c of MOCK_CLIENTS) await setDoc(getDocRef('gn_clients', c.id), c);
       for (const s of INITIAL_SHIFTS) await setDoc(getDocRef('gn_shifts', s.id.toString()), { ...s, id: s.id.toString() });
@@ -168,10 +196,10 @@ export default function App() {
       for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
       for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
       
-      alert("Demo database initialized successfully!");
+      alert("Database successfully wiped and reset to clean mock data!");
     } catch (err) {
-      console.error("Error seeding data:", err);
-      alert("Error seeding data. Check console logs.");
+      console.error("Error resetting data:", err);
+      alert("Error resetting data. Check console logs.");
     }
   };
 

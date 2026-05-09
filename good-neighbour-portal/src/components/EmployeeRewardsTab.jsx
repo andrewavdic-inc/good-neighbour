@@ -119,7 +119,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   const safePrizeTiers = Array.isArray(prizeTiers) ? prizeTiers : [];
   
-  const [isClaiming, setIsClaiming] = useState(null); // Locks UI during Firebase sync
+  const [isClaiming, setIsClaiming] = useState(null); 
   
   const safeEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
@@ -227,7 +227,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
       const empShifts = shifts.filter(sh => {
         if (sh.employeeId !== emp.id || !sh.date || !sh.endTime) return false;
         const shiftEndDt = new Date(`${sh.date}T${sh.endTime}`);
-        // ONLY count shifts that have actually occurred
         return shiftEndDt.getFullYear() === currentYear && shiftEndDt <= now;
       });
 
@@ -279,6 +278,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           employeeId: currentUser.id,
           name: tier.label,
           cost: tier.cost,
+          icon: tier.icon, // <-- Pass the custom icon to the database!
           date: new Date().toISOString().split('T')[0],
           status: 'pending',
           acknowledged: true 
@@ -289,20 +289,21 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   };
 
   // ==========================================
-  // THE POINTS LEDGER GENERATOR
+  // MILLISECOND-ACCURATE POINTS LEDGER
   // ==========================================
   const pointsLedger = useMemo(() => {
     let items = [];
     
     // 1. Earned: Shifts & Attached Expenses
     allTimeShifts.forEach(s => {
+      const shiftTime = new Date(`${s.date}T${s.endTime}`).getTime();
       items.push({
         id: `s_${s.id}`,
         date: s.date,
         icon: s.isInternal ? '🏢' : '⏱️',
         desc: s.isInternal ? `Internal: ${s.internalTask}` : 'Completed Shift',
         points: 100,
-        sortDate: new Date(`${s.date}T${s.endTime}`).getTime()
+        sortDate: shiftTime
       });
       
       const hasMileage = expenses.some(e => e.employeeId === currentUser.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
@@ -313,7 +314,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           icon: '🚗',
           desc: 'Approved Mileage',
           points: 50,
-          sortDate: new Date(`${s.date}T${s.endTime}`).getTime() + 1
+          sortDate: shiftTime + 1000 // offset slightly to group predictably
         });
       }
       
@@ -325,33 +326,36 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           icon: '🧾',
           desc: 'Approved Expense',
           points: 50,
-          sortDate: new Date(`${s.date}T${s.endTime}`).getTime() + 2
+          sortDate: shiftTime + 2000
         });
       }
     });
     
     // 2. Earned: Kudos
     (kudos || []).filter(k => k.employeeId === currentUser.id).forEach(k => {
+      // Millisecond timestamp ID ensures perfectly accurate chronological sorting
+      const kudoTime = Number(k.id) > 1000000000000 ? Number(k.id) : new Date(k.date).getTime();
       items.push({
         id: `k_${k.id}`,
         date: k.date,
         icon: k.badgeIcon || '🌟',
         desc: `Kudos: ${k.badgeLabel || 'Bonus'}`,
         points: Number(k.points) || 0,
-        sortDate: new Date(k.date).getTime()
+        sortDate: kudoTime
       });
     });
     
-    // 3. Spent: Claimed Prizes
+    // 3. Spent: Claimed Prizes (Using Custom Icons and Pending/Redeemed Labels)
     myPrizes.forEach(p => {
       if(Number(p.cost) > 0) {
+        const prizeTime = Number(p.id) > 1000000000000 ? Number(p.id) : new Date(p.date).getTime();
         items.push({
           id: `p_${p.id}`,
           date: p.date,
-          icon: '🎁',
-          desc: `Redeemed: ${p.name}`,
+          icon: p.icon || '🎁', // Grab the custom store icon!
+          desc: p.status === 'pending' ? `Pending: ${p.name}` : `Redeemed: ${p.name}`,
           points: -(Number(p.cost) || 0),
-          sortDate: new Date(p.date).getTime()
+          sortDate: prizeTime
         });
       }
     });
@@ -421,6 +425,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
             </div>
           </div>
 
+          {/* ACCURATE POINTS LEDGER */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[400px]">
             <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center">
               <List className="h-4 w-4 mr-2 text-slate-500"/>

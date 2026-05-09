@@ -37,6 +37,7 @@ export default function AdminRewardsManager({
   const [kudosBadge, setKudosBadge] = useState(STANDARD_BADGES[0].label);
   const [kudosPoints, setKudosPoints] = useState(100); 
   const [kudosMessage, setKudosMessage] = useState('');
+  const [isSubmittingKudos, setIsSubmittingKudos] = useState(false); // <-- INJECTED LOCK STATE
 
   const [prizeEmpId, setPrizeEmpId] = useState(safeEmployees[0]?.id || '');
   const [prizeName, setPrizeName] = useState('');
@@ -188,38 +189,45 @@ export default function AdminRewardsManager({
   }, [kudos, prizes]);
 
   // --- HANDLERS ---
-  const handleIssueKudos = (e) => {
+  const handleIssueKudos = async (e) => {
     e.preventDefault();
-    if (!kudosEmpId || !kudosMessage) return;
+    if (!kudosEmpId || !kudosMessage || isSubmittingKudos) return; // <-- INJECTED EARLY RETURN
+    setIsSubmittingKudos(true); // <-- INJECTED LOCK
     const badgeObj = STANDARD_BADGES.find(b => b.label === kudosBadge);
-    onAddKudos({
-      employeeId: kudosEmpId,
-      date: new Date().toISOString().split('T')[0],
-      badgeIcon: badgeObj?.icon || '⭐',
-      badgeLabel: kudosBadge,
-      points: Number(kudosPoints),
-      message: kudosMessage,
-      acknowledged: false
-    });
+    
+    if (onAddKudos) {
+      await onAddKudos({
+        employeeId: kudosEmpId,
+        date: new Date().toISOString().split('T')[0],
+        badgeIcon: badgeObj?.icon || '⭐',
+        badgeLabel: kudosBadge,
+        points: Number(kudosPoints),
+        message: kudosMessage,
+        acknowledged: false
+      });
+    }
     setKudosMessage('');
     setKudosPoints(100); 
+    setIsSubmittingKudos(false); // <-- INJECTED UNLOCK
   };
 
   const handleIssuePrize = async (e) => {
     e.preventDefault();
-    if (!prizeEmpId || !prizeName) return;
+    if (!prizeEmpId || !prizeName || isPrizeUploading) return; // <-- INJECTED EARLY RETURN
     setIsPrizeUploading(true);
     
-    await onAddPrize({
-      employeeId: prizeEmpId,
-      date: new Date().toISOString().split('T')[0],
-      name: prizeName,
-      value: Number(prizeValue || 0),
-      note: prizeNote,
-      code: prizeCode,
-      link: prizeLink,
-      acknowledged: false
-    }, prizeFile);
+    if (onAddPrize) {
+      await onAddPrize({
+        employeeId: prizeEmpId,
+        date: new Date().toISOString().split('T')[0],
+        name: prizeName,
+        value: Number(prizeValue || 0),
+        note: prizeNote,
+        code: prizeCode,
+        link: prizeLink,
+        acknowledged: false
+      }, prizeFile);
+    }
 
     setIsPrizeUploading(false);
     setPrizeName('');
@@ -391,8 +399,8 @@ export default function AdminRewardsManager({
                   <label className="block text-sm font-bold text-slate-700 mb-1">Congratulatory Message</label>
                   <textarea value={kudosMessage} onChange={(e)=>setKudosMessage(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm" rows="3" placeholder="Thank you for covering the overnight shift!" required />
                 </div>
-                <button type="submit" className="w-full mt-2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-md transition flex items-center justify-center shadow-sm">
-                  <Zap className="h-4 w-4 mr-2" fill="currentColor"/> Issue Kudos
+                <button type="submit" disabled={isSubmittingKudos} className="w-full mt-2 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-400 text-white font-bold py-2.5 rounded-md transition flex items-center justify-center shadow-sm">
+                  {isSubmittingKudos ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Issuing...</> : <><Zap className="h-4 w-4 mr-2" fill="currentColor"/> Issue Kudos</>}
                 </button>
               </form>
             </div>
@@ -414,7 +422,7 @@ export default function AdminRewardsManager({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Prize Name</label>
-                    <input type="text" value={prizeName} onChange={(e)=>setPrizeName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm" placeholder="e.g. Tim Hortons Card" required disabled={isPrizeUploading} />
+                    <input type="text" value={prizeName} onChange={(e)=>setPrizeName(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm" placeholder="e.g. $50 Grocery Card" required disabled={isPrizeUploading} />
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1">Value ($)</label>

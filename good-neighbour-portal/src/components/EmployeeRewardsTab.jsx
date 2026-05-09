@@ -8,7 +8,8 @@ import {
   Clock, 
   Gift, 
   ExternalLink, 
-  FileText 
+  FileText,
+  Loader2 
 } from 'lucide-react';
 
 // ==========================================
@@ -36,6 +37,13 @@ const parseLocalSafe = (dateStr) => {
     return new Date(); 
   }
 };
+
+const PRIZE_TIERS = [
+  { label: 'Bronze', cost: 500, icon: '🥉', desc: '$10 Coffee Gift Card' },
+  { label: 'Silver', cost: 1500, icon: '🥈', desc: '$25 Gas Gift Card' },
+  { label: 'Gold', cost: 3000, icon: '🥇', desc: '$50 Grocery Gift Card' },
+  { label: 'Platinum', cost: 5000, icon: '💎', desc: '$100 Amazon Gift Card' }
+];
 
 const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, kudos = []) => {
   if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, activityScore: 0, totalEarnings: 0 };
@@ -107,9 +115,11 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
 // ==========================================
 // COMPONENT
 // ==========================================
-export default function EmployeeRewardsTab({ currentUser, employees, shifts, expenses, clientExpenses, kudos = [], prizes = [], isBonusActive, bonusSettings }) {
+export default function EmployeeRewardsTab({ currentUser, employees, shifts, expenses, clientExpenses, kudos = [], prizes = [], isBonusActive, bonusSettings, onAddPrize }) {
   const now = new Date();
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
+  
+  const [isClaiming, setIsClaiming] = useState(null); // Locks UI during Firebase sync
   
   const safeEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
@@ -228,6 +238,43 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return Object.values(scores).filter(s => s.totalGalaScore > 0 || s.emp.id === currentUser.id).sort((a, b) => b.totalGalaScore - a.totalGalaScore);
   }, [shifts, expenses, clientExpenses, safeEmployees, kudos, prizes, now, currentUser.id]);
 
+  // ==========================================
+  // ALL-TIME WALLET MATH & CLAIM HANDLER
+  // ==========================================
+  const allTimeShifts = (shifts || []).filter(s => {
+    if (s.employeeId !== currentUser.id || !s.date || !s.endTime) return false;
+    return new Date(`${s.date}T${s.endTime}`) <= now;
+  });
+
+  let walletActivityScore = 0;
+  allTimeShifts.forEach(s => {
+    walletActivityScore += 100;
+    if (expenses.some(e => e.employeeId === currentUser.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved')) walletActivityScore += 50;
+    if (clientExpenses.some(e => e.employeeId === currentUser.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved')) walletActivityScore += 50;
+  });
+
+  const walletKudos = (kudos || []).filter(k => k.employeeId === currentUser.id).reduce((sum, k) => sum + (Number(k.points) || 0), 0);
+  const lifetimeEarned = walletActivityScore + walletKudos;
+  const lifetimeSpent = myPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
+  const redeemablePoints = lifetimeEarned - lifetimeSpent;
+
+  const handleClaimPrize = async (tier) => {
+    if (redeemablePoints >= tier.cost && !isClaiming) {
+      setIsClaiming(tier.label);
+      if(onAddPrize) {
+        await onAddPrize({
+          employeeId: currentUser.id,
+          name: `${tier.label} Prize Tier`,
+          cost: tier.cost,
+          date: new Date().toISOString().split('T')[0],
+          status: 'pending',
+          acknowledged: true 
+        }, null);
+      }
+      setIsClaiming(null);
+    }
+  };
+
   if (!isBonusActive) return (
     <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-slate-200">
       <Award className="h-12 w-12 text-slate-300 mx-auto mb-3" />
@@ -269,6 +316,58 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
            </div>
         </div>
       </div>
+
+      {/* --- INJECTED: NEW WALLET & REDEMPTION STORE --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-lg p-6 text-white relative overflow-hidden h-full flex flex-col justify-center">
+            <div className="absolute -right-4 -bottom-4 opacity-10"><Award size={150} /></div>
+            <div className="relative z-10">
+              <h3 className="text-amber-100 font-bold text-sm flex items-center mb-2 uppercase tracking-widest"><Star className="h-4 w-4 mr-1.5" /> My Gala Wallet</h3>
+              <div className="text-4xl font-black text-white tracking-tight mb-6">{redeemablePoints.toLocaleString()} <span className="text-lg font-medium text-amber-200">pts</span></div>
+              <div className="space-y-2 text-sm font-medium text-amber-100">
+                <div className="flex justify-between border-b border-amber-600/50 pb-1">
+                  <span>Lifetime Earned:</span>
+                  <span className="text-white">{lifetimeEarned.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between border-b border-amber-600/50 pb-1">
+                  <span>Lifetime Spent:</span>
+                  <span className="text-white">{lifetimeSpent.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-500"/> Redeem Prizes</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {PRIZE_TIERS.map(tier => {
+              const canAfford = redeemablePoints >= tier.cost;
+              const isProcessing = isClaiming === tier.label;
+              return (
+                <div key={tier.label} className={`border rounded-xl p-4 flex flex-col justify-between transition-all ${canAfford ? 'border-amber-200 bg-amber-50 hover:shadow-md' : 'border-slate-200 bg-slate-50 opacity-75'}`}>
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-3xl">{tier.icon}</span>
+                      <span className="text-xs font-black px-2 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-slate-700">{tier.cost.toLocaleString()} pts</span>
+                    </div>
+                    <h4 className="font-black text-slate-800">{tier.label} Tier</h4>
+                    <p className="text-xs font-medium text-slate-500 mt-1">{tier.desc}</p>
+                  </div>
+                  <button 
+                    onClick={() => handleClaimPrize(tier)} 
+                    disabled={!canAfford || isClaiming !== null}
+                    className={`mt-4 w-full py-2 rounded-lg font-bold text-sm flex items-center justify-center transition ${isProcessing ? 'bg-slate-800 text-white cursor-wait' : canAfford ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                  >
+                    {isProcessing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</> : canAfford ? 'Claim Reward' : 'Need More Points'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+      {/* --- END OF INJECTED SECTION --- */}
 
       <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>

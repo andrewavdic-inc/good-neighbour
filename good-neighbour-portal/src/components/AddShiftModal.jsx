@@ -138,6 +138,16 @@ export default function AddShiftModal({
          
          return (nStartM < sEndM && nEndM > sStartM); 
       });
+
+      // --- EXACT DUPLICATE BLOCKER ---
+      const exactDuplicate = conflicting.find(c => 
+         isInternal ? (c.isInternal && String(c.internalTask).toLowerCase().trim() === String(internalTask).toLowerCase().trim()) : (!c.isInternal && c.clientId === clientId)
+      );
+
+      if (exactDuplicate) {
+          alert("Duplicate Booking Error: This employee is already scheduled for this exact client or task during this overlapping timeframe. You cannot double-book the same client at the same time.");
+          return;
+      }
       
       if (conflicting.length > 0) {
          setWarningState({ type: 'overlap', details: conflicting });
@@ -196,7 +206,6 @@ export default function AddShiftModal({
     }
 
     // --- AUDIT LOG GENERATOR HELPER ---
-    // Now uniquely targets a specific date so the calendar icon groups perfectly
     const generateAuditLog = (actionType, details, overrideShiftId = null, specificShiftDate = null) => {
       if (onAddShiftAuditLog && currentUser) {
         onAddShiftAuditLog({
@@ -217,26 +226,22 @@ export default function AddShiftModal({
     if (editingShift && onUpdate) {
       const changes = [];
 
-      // 1. Employee Diff
       if (editingShift.employeeId !== baseShift.employeeId) {
         const oldEmp = safeEmps.find(e => e.id === editingShift.employeeId)?.name || 'Unassigned';
         const newEmp = safeEmps.find(e => e.id === baseShift.employeeId)?.name || 'Unassigned';
         changes.push(`Employee changed from ${oldEmp} to ${newEmp}`);
       }
 
-      // 2. Time Diff
       if (editingShift.startTime !== baseShift.startTime || editingShift.endTime !== baseShift.endTime) {
         changes.push(`Time changed from ${editingShift.startTime}-${editingShift.endTime} to ${baseShift.startTime}-${baseShift.endTime}`);
       }
 
-      // 3. Client / Task Diff
       if (editingShift.isInternal !== baseShift.isInternal || editingShift.clientId !== baseShift.clientId || editingShift.internalTask !== baseShift.internalTask) {
         const oldTarget = editingShift.isInternal ? `Internal Task (${editingShift.internalTask})` : (safeClients.find(c => c.id === editingShift.clientId)?.name || 'Unknown Client');
         const newTarget = baseShift.isInternal ? `Internal Task (${baseShift.internalTask})` : (safeClients.find(c => c.id === baseShift.clientId)?.name || 'Unknown Client');
         changes.push(`Task/Client changed from ${oldTarget} to ${newTarget}`);
       }
 
-      // 4. Punch Clock Diff (Manual overrides)
       if (requirePunchClock && showPunchToggle) {
         const oldIn = parseTimeFromISO(editingShift.actualStartTime);
         if (oldIn !== actualStartTime) changes.push(`Actual Punch In changed from ${oldIn || 'None'} to ${actualStartTime || 'None'}`);
@@ -245,7 +250,6 @@ export default function AddShiftModal({
         if (oldOut !== actualEndTime) changes.push(`Actual Punch Out changed from ${oldOut || 'None'} to ${actualEndTime || 'None'}`);
       }
 
-      // 5. Atypical Pay Diff
       if (editingShift.isHourlyOverride !== baseShift.isHourlyOverride || editingShift.hourlyRate !== baseShift.hourlyRate) {
         changes.push(`Atypical Pay changed to ${baseShift.isHourlyOverride ? 'Yes ($' + baseShift.hourlyRate + ')' : 'No'}`);
       }
@@ -273,7 +277,6 @@ export default function AddShiftModal({
         
         if (getHoliday(dateStr)) continue;
         
-        // --- NEW FIX: SKIP FUTURE VACATION DAYS ---
         const isDayBlocked = safeTimeOff.some(log => {
           if (log.employeeId !== employeeId || log.status !== 'approved') return false;
           const logStart = parseLocalSafe(log.startDate);
@@ -293,7 +296,6 @@ export default function AddShiftModal({
     
     if (onSave) onSave(newShifts);
     
-    // Log EACH shift individually so they route to the correct calendar day
     newShifts.forEach(ns => {
        generateAuditLog(
          isPastShift ? 'Retroactive Creation' : 'Created',

@@ -206,6 +206,72 @@ export default function App() {
     }
   };
 
+  // --- CHAOS MONKEY STRESS TEST SCRIPT ---
+  const handleChaosMonkey = async () => {
+    if (!firebaseUser || !db) return;
+    
+    const confirmRun = window.confirm("🐒 CHAOS MONKEY WARNING: This will instantly dump 500 randomly generated overlapping shifts into the live database to stress-test Firebase and the UI rendering. Your browser might freeze for a moment. Proceed?");
+    if (!confirmRun) return;
+
+    try {
+      const getDocRef = (colName, docId) => doc(db, 'artifacts', appId, 'public', 'data', colName, String(docId));
+      
+      const safeEmps = employees.length > 0 ? employees.filter(e => e.id !== 'admin1') : MOCK_EMPLOYEES.filter(e => e.id !== 'admin1');
+      const safeClients = clients.length > 0 ? clients : MOCK_CLIENTS;
+
+      if (safeEmps.length === 0 || safeClients.length === 0) {
+        alert("You need at least one employee and one client in the system to run Chaos Monkey.");
+        return;
+      }
+
+      const newShifts = [];
+      const today = new Date();
+
+      for (let i = 0; i < 500; i++) {
+        const randomEmp = safeEmps[Math.floor(Math.random() * safeEmps.length)];
+        const randomClient = safeClients[Math.floor(Math.random() * safeClients.length)];
+
+        // Spread the chaos randomly across the next 7 days
+        const targetDate = new Date(today);
+        targetDate.setDate(today.getDate() + Math.floor(Math.random() * 7));
+        const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+
+        // Random start hour (08:00 to 18:00)
+        const startHour = 8 + Math.floor(Math.random() * 10);
+        const startStr = `${String(startHour).padStart(2, '0')}:00`;
+        const endStr = `${String(startHour + 2).padStart(2, '0')}:00`;
+
+        const shiftId = `chaos_${Date.now()}_${i}_${Math.random().toString(36).substring(2,7)}`;
+
+        newShifts.push({
+          id: shiftId,
+          employeeId: randomEmp.id,
+          clientId: randomClient.id,
+          date: dateStr,
+          startTime: startStr,
+          endTime: endStr,
+          isInternal: false,
+          internalTask: '',
+          isHourlyOverride: false,
+          hourlyRate: null,
+          requirePunchClock: true,
+          cancelRequest: null,
+          actualStartTime: null,
+          actualEndTime: null
+        });
+      }
+
+      // We use Promise.all to blast Firebase with all 500 concurrent requests 
+      // simultaneously to see if the websocket chokes or if React re-renders crash.
+      await Promise.all(newShifts.map(s => setDoc(getDocRef('gn_shifts', s.id), s)));
+
+      alert("💥 Chaos Monkey successful! 500 shifts just hit the database. Check the schedule performance.");
+    } catch (err) {
+      console.error("Chaos Monkey Error:", err);
+      alert("Chaos Monkey failed. Check console for limits/errors.");
+    }
+  };
+
   const handleLogin = async (email, password) => {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -374,6 +440,18 @@ export default function App() {
       <nav className="bg-teal-700 text-white shadow-md px-6 py-4 flex justify-between items-center">
         <div className="font-bold text-xl flex items-center"><Briefcase className="mr-2 h-6 w-6 text-teal-200"/> Good Neighbour</div>
         <div className="flex items-center space-x-4">
+          
+          {/* FLOATING CHAOS MONKEY BUTTON FOR ADMINS ONLY */}
+          {isAdmin && (
+            <button 
+              onClick={handleChaosMonkey} 
+              className="text-xs bg-orange-600 hover:bg-orange-700 px-3 py-1.5 rounded font-bold transition shadow-sm text-white flex items-center" 
+              title="Stress Test Database with 500 Shifts"
+            >
+              🐒 Chaos Monkey
+            </button>
+          )}
+
           {isAdmin && (
             <button onClick={() => { setViewMode(viewMode === 'admin' ? 'employee' : 'admin'); }} className="text-xs bg-teal-800 hover:bg-teal-900 px-3 py-1.5 rounded font-bold transition shadow-sm">
               {viewMode === 'admin' ? 'Switch to Employee View' : 'Switch to Admin View'}
@@ -414,7 +492,6 @@ export default function App() {
                 }
               }
               
-              // --- NEW FIX: DUMP GHOST SHIFTS ON DEACTIVATION ---
               if (d.isActive === false && existingEmp?.isActive !== false) {
                  const now = new Date();
                  const upcoming = shifts.filter(s => s.employeeId === id && new Date(`${s.date}T${s.endTime || '23:59'}`) >= now);

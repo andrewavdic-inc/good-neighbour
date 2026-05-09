@@ -9,7 +9,8 @@ import {
   Gift, 
   ExternalLink, 
   FileText,
-  Loader2 
+  Loader2,
+  List
 } from 'lucide-react';
 
 // ==========================================
@@ -287,6 +288,77 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     }
   };
 
+  // ==========================================
+  // NEW: THE POINTS LEDGER GENERATOR
+  // ==========================================
+  const pointsLedger = useMemo(() => {
+    let items = [];
+    
+    // 1. Earned: Shifts & Attached Expenses
+    allTimeShifts.forEach(s => {
+      items.push({
+        id: `s_${s.id}`,
+        date: s.date,
+        icon: s.isInternal ? '🏢' : '⏱️',
+        desc: s.isInternal ? `Internal: ${s.internalTask}` : 'Completed Shift',
+        points: 100,
+        sortDate: new Date(`${s.date}T${s.endTime}`).getTime()
+      });
+      
+      const hasMileage = expenses.some(e => e.employeeId === currentUser.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
+      if (hasMileage) {
+        items.push({
+          id: `m_${s.id}`,
+          date: s.date,
+          icon: '🚗',
+          desc: 'Approved Mileage',
+          points: 50,
+          sortDate: new Date(`${s.date}T${s.endTime}`).getTime() + 1
+        });
+      }
+      
+      const hasOop = clientExpenses.some(e => e.employeeId === currentUser.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
+      if (hasOop) {
+        items.push({
+          id: `o_${s.id}`,
+          date: s.date,
+          icon: '🧾',
+          desc: 'Approved Expense',
+          points: 50,
+          sortDate: new Date(`${s.date}T${s.endTime}`).getTime() + 2
+        });
+      }
+    });
+    
+    // 2. Earned: Kudos
+    (kudos || []).filter(k => k.employeeId === currentUser.id).forEach(k => {
+      items.push({
+        id: `k_${k.id}`,
+        date: k.date,
+        icon: k.badgeIcon || '🌟',
+        desc: `Kudos: ${k.badgeLabel || 'Bonus'}`,
+        points: Number(k.points) || 0,
+        sortDate: new Date(k.date).getTime()
+      });
+    });
+    
+    // 3. Spent: Claimed Prizes
+    myPrizes.forEach(p => {
+      if(Number(p.cost) > 0) {
+        items.push({
+          id: `p_${p.id}`,
+          date: p.date,
+          icon: '🎁',
+          desc: `Redeemed: ${p.name}`,
+          points: -(Number(p.cost) || 0),
+          sortDate: new Date(p.date).getTime()
+        });
+      }
+    });
+    
+    return items.sort((a, b) => b.sortDate - a.sortDate);
+  }, [allTimeShifts, expenses, clientExpenses, kudos, myPrizes, currentUser.id]);
+
   if (!isBonusActive) return (
     <div className="p-8 text-center bg-white rounded-xl shadow-sm border border-slate-200">
       <Award className="h-12 w-12 text-slate-300 mx-auto mb-3" />
@@ -329,9 +401,10 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         </div>
       </div>
 
+      {/* --- INJECTED: NEW WALLET & REDEMPTION STORE --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-lg p-6 text-white relative overflow-hidden h-full flex flex-col justify-center">
+          <div className="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-lg p-6 text-white relative overflow-hidden flex flex-col justify-center">
             <div className="absolute -right-4 -bottom-4 opacity-10"><Award size={150} /></div>
             <div className="relative z-10">
               <h3 className="text-amber-100 font-bold text-sm flex items-center mb-2 uppercase tracking-widest"><Star className="h-4 w-4 mr-1.5" /> My Gala Wallet</h3>
@@ -348,6 +421,37 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
               </div>
             </div>
           </div>
+
+          {/* --- NEW POINTS LEDGER --- */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[400px]">
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center">
+              <List className="h-4 w-4 mr-2 text-slate-500"/>
+              <h3 className="font-bold text-slate-800 text-sm">Points Ledger</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-0">
+              {pointsLedger.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 text-xs">No points history yet.</div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {pointsLedger.map(item => (
+                    <div key={item.id} className="p-3 flex items-center justify-between hover:bg-slate-50 transition">
+                      <div className="flex items-center space-x-3 overflow-hidden pr-2">
+                        <div className="text-xl shrink-0">{item.icon}</div>
+                        <div className="truncate">
+                          <div className="text-xs font-bold text-slate-800 truncate">{item.desc}</div>
+                          <div className="text-[10px] text-slate-500">{parseLocalSafe(item.date).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                      <div className={`text-xs font-black shrink-0 ${item.points > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {item.points > 0 ? '+' : ''}{item.points} pts
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-500"/> Redeem Prizes</h3>
@@ -385,6 +489,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           </div>
         </div>
       </div>
+      {/* --- END OF INJECTED SECTION --- */}
 
       <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>

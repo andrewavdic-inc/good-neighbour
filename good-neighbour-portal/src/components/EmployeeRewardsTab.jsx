@@ -289,7 +289,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   };
 
   // ==========================================
-  // NEW: THE POINTS LEDGER GENERATOR
+  // THE POINTS LEDGER GENERATOR
   // ==========================================
   const pointsLedger = useMemo(() => {
     let items = [];
@@ -401,7 +401,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         </div>
       </div>
 
-      {/* --- INJECTED: NEW WALLET & REDEMPTION STORE --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-lg p-6 text-white relative overflow-hidden flex flex-col justify-center">
@@ -422,13 +421,12 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
             </div>
           </div>
 
-          {/* --- NEW POINTS LEDGER --- */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[400px]">
             <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center">
               <List className="h-4 w-4 mr-2 text-slate-500"/>
               <h3 className="font-bold text-slate-800 text-sm">Points Ledger</h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-0">
+            <div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-slate-200">
               {pointsLedger.length === 0 ? (
                 <div className="p-6 text-center text-slate-400 text-xs">No points history yet.</div>
               ) : (
@@ -453,9 +451,9 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           </div>
 
         </div>
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-500"/> Redeem Prizes</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
+          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center shrink-0"><Gift className="h-5 w-5 mr-2 text-purple-500"/> Redeem Prizes</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 p-1">
             {safePrizeTiers.length === 0 ? (
               <div className="col-span-2 text-center text-slate-400 py-8 border border-dashed border-slate-300 rounded-xl bg-slate-50">The prize store is currently empty.</div>
             ) : (
@@ -478,7 +476,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
                     <button 
                       onClick={() => handleClaimPrize(tier)} 
                       disabled={!canAfford || isClaiming !== null}
-                      className={`mt-4 w-full py-2 rounded-lg font-bold text-sm flex items-center justify-center transition ${isProcessing ? 'bg-slate-800 text-white cursor-wait' : canAfford ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm' : hasReachedLimit ? 'bg-rose-100 text-rose-500 border border-rose-200 cursor-not-allowed' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                      className={`mt-4 w-full py-2 rounded-lg font-bold text-sm flex items-center justify-center transition shadow-sm ${isProcessing ? 'bg-slate-800 text-white cursor-wait' : canAfford ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm' : hasReachedLimit ? 'bg-rose-100 text-rose-500 border border-rose-200 cursor-not-allowed' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                     >
                       {isProcessing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</> : hasReachedLimit ? 'Limit Reached' : canAfford ? 'Claim Reward' : 'Need More Points'}
                     </button>
@@ -489,7 +487,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           </div>
         </div>
       </div>
-      {/* --- END OF INJECTED SECTION --- */}
 
       <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>
@@ -564,7 +561,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
             <div><h2 className="text-lg font-bold text-slate-800 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-600" /> Prize Wallet</h2><p className="text-xs text-slate-500 mt-1 font-medium">Digital gift cards & rewards.</p></div>
             <div className="flex items-center space-x-2"><select value={selectedPrizeYear} onChange={(e) => setSelectedPrizeYear(e.target.value)} className="bg-purple-100 border border-purple-200 text-purple-800 font-bold px-2 py-1 rounded text-xs focus:outline-none">{yearOptions.map(y => <option key={y} value={y}>{y}</option>)}</select></div>
           </div>
-          <div className="p-6 bg-slate-50/50 flex-1 overflow-y-auto max-h-[400px]">
+          <div className="p-6 bg-slate-50/50 flex-1 overflow-y-auto max-h-[400px] scrollbar-thin scrollbar-thumb-slate-200">
             {filteredPrizes.length === 0 ? (
               <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">No prizes awarded in {selectedPrizeYear}.</div>
             ) : (
@@ -601,7 +598,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
             <div><h2 className="text-lg font-bold text-slate-800 flex items-center"><Award className="h-5 w-5 mr-2 text-amber-500" /> My Badges & Kudos</h2><p className="text-xs text-slate-500 mt-1 font-medium">Recognition from administration.</p></div>
             <div className="flex items-center space-x-2"><select value={selectedKudosMonth} onChange={(e) => setSelectedKudosMonth(e.target.value)} className="bg-amber-100 border border-amber-200 text-amber-800 font-bold px-2 py-1 rounded text-xs focus:outline-none max-w-[100px]">{kudosMonthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
           </div>
-          <div className="p-6 bg-slate-50/50 flex-1 overflow-y-auto max-h-[400px]">
+          <div className="p-6 bg-slate-50/50 flex-1 overflow-y-auto max-h-[400px] scrollbar-thin scrollbar-thumb-slate-200">
             {filteredKudos.length === 0 ? (
               <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">No badges earned in this period. </div>
             ) : (
@@ -630,17 +627,18 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
             <div className="bg-amber-900/20 border border-amber-700/30 text-amber-600 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-widest text-center shadow-sm whitespace-nowrap">3rd Place: Good Neighbour ($1000)</div>
           </div>
         </div>
-        <div className="p-0 overflow-x-auto relative z-10">
-          <table className="w-full text-left border-collapse min-w-[800px]">
+        
+        <div className="p-0 overflow-x-auto relative z-10 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+          <table className="w-full text-left border-collapse min-w-[600px]">
             <thead className="bg-slate-800/80 backdrop-blur sticky top-0">
               <tr className="text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-700">
-                <th className="px-6 py-4 font-bold">Rank</th>
-                <th className="px-6 py-4 font-bold">Employee</th>
-                <th className="px-6 py-4 font-bold">Role</th>
-                <th className="px-6 py-4 font-bold text-center text-slate-300">Base Activity Pts</th>
-                <th className="px-6 py-4 font-bold text-center text-blue-400">Kudos Pts</th>
-                <th className="px-6 py-4 font-bold text-center text-red-400">Points Spent</th>
-                <th className="px-6 py-4 font-bold text-right text-amber-400">Total Gala Score</th>
+                <th className="px-4 py-3 font-bold">Rank</th>
+                <th className="px-4 py-3 font-bold">Employee</th>
+                <th className="px-4 py-3 font-bold hidden sm:table-cell">Role</th>
+                <th className="px-4 py-3 font-bold text-center text-slate-300">Activity Pts</th>
+                <th className="px-4 py-3 font-bold text-center text-blue-400">Kudos</th>
+                <th className="px-4 py-3 font-bold text-center text-red-400">Spent</th>
+                <th className="px-4 py-3 font-bold text-right text-amber-400">Total Score</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
@@ -649,13 +647,18 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
                ) : (
                  annualStandings.map((r, idx) => (
                     <tr key={r.emp.id} className={`transition ${r.emp.id === currentUser.id ? 'bg-amber-900/40 border-l-4 border-amber-500' : 'hover:bg-slate-800/50 border-l-4 border-transparent'}`}>
-                      <td className="px-6 py-4 font-black text-slate-500">{idx === 0 ? <span className="text-yellow-400 text-lg">1st</span> : idx === 1 ? <span className="text-slate-300 text-lg">2nd</span> : idx === 2 ? <span className="text-amber-600 text-lg">3rd</span> : `${idx + 1}th`}</td>
-                      <td className="px-6 py-4 font-bold text-slate-200 flex items-center">{r.emp.name} {r.emp.id === currentUser.id && <span className="ml-3 bg-amber-500 text-slate-900 text-[10px] px-2 py-0.5 rounded-full uppercase tracking-widest font-black shadow-sm">You</span>}</td>
-                      <td className="px-6 py-4 text-slate-400 font-medium">{r.emp.role}</td>
-                      <td className="px-6 py-4 text-center font-medium text-slate-300">{r.baseActivityScore.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-center font-medium text-blue-400">{r.kudosPts.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-center font-medium text-red-400">{r.prizePts > 0 ? `-${r.prizePts.toLocaleString()}` : '0'}</td>
-                      <td className="px-6 py-4 text-right font-black text-amber-400 text-lg">{r.totalGalaScore.toLocaleString()} pts</td>
+                      <td className="px-4 py-3 font-black text-slate-500">{idx === 0 ? <span className="text-yellow-400 text-lg">1st</span> : idx === 1 ? <span className="text-slate-300 text-lg">2nd</span> : idx === 2 ? <span className="text-amber-600 text-lg">3rd</span> : `${idx + 1}th`}</td>
+                      <td className="px-4 py-3 font-bold text-slate-200">
+                        <div className="flex items-center">
+                          {r.emp.name} {r.emp.id === currentUser.id && <span className="ml-2 bg-amber-500 text-slate-900 text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-widest font-black shadow-sm">You</span>}
+                        </div>
+                        <div className="text-[10px] text-slate-400 sm:hidden mt-0.5 font-normal">{r.emp.role}</div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-400 font-medium hidden sm:table-cell">{r.emp.role}</td>
+                      <td className="px-4 py-3 text-center font-medium text-slate-300">{r.baseActivityScore.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-center font-medium text-blue-400">{r.kudosPts.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-center font-medium text-red-400">{r.prizePts > 0 ? `-${r.prizePts.toLocaleString()}` : '0'}</td>
+                      <td className="px-4 py-3 text-right font-black text-amber-400 text-lg">{r.totalGalaScore.toLocaleString()} <span className="text-[10px] font-bold text-amber-600/50">pts</span></td>
                     </tr>
                  ))
                )}

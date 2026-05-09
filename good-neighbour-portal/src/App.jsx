@@ -499,7 +499,6 @@ export default function App() {
               if (!firebaseUser) return;
               const arr = Array.isArray(newShifts) ? newShifts : [newShifts];
               for (const s of arr) {
-                // BUG FIX: Respect pre-generated IDs from AddShiftModal for Audit Log linking
                 const id = s.id || (Date.now().toString() + Math.random().toString(36).substring(2, 7));
                 await setDoc(getDocRef('gn_shifts', id), { ...s, id });
               }
@@ -575,12 +574,11 @@ export default function App() {
             payrollLogs={payrollLogs}
             onFinalizePayroll={handleFinalizePayroll}
 
-            // --- ADMIN EDIT SHIFT PROP ---
             onUpdateShift={(shiftId, data) => runMutation('gn_shifts', shiftId, 'update', data)}
             
-            // --- NEW: AUDIT LOG PROPS ---
             shiftAuditLogs={shiftAuditLogs}
             onAddShiftAuditLog={(data) => runMutation('gn_shiftAuditLogs', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })}
+            onHardReset={handleSeedData} 
           />
         ) : (
           <EmployeeDashboard 
@@ -641,7 +639,6 @@ export default function App() {
             prizes={prizes}
             onAcknowledgeReward={handleAcknowledgeReward}
             
-            // --- TIMECLOCK HOOK ---
             onUpdateShift={(shiftId, data) => runMutation('gn_shifts', shiftId, 'update', data)}
           />
         )}

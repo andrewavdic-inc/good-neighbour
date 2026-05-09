@@ -62,7 +62,7 @@ export default function AdminDashboard({
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
   payrollLogs = [], onFinalizePayroll, onUpdateShift,
-  shiftAuditLogs = [], onAddShiftAuditLog 
+  shiftAuditLogs = [], onAddShiftAuditLog, onHardReset
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -207,7 +207,6 @@ export default function AdminDashboard({
     document.body.removeChild(link);
   };
 
-  // --- ADDED shiftDate TO QUICK ACTIONS ---
   const handleDeleteShiftWithLog = (e, shift) => {
     e.stopPropagation();
     if (window.confirm('Are you sure you want to delete this shift?')) {
@@ -218,7 +217,7 @@ export default function AdminDashboard({
           adminName: currentUser.name,
           actionType: 'Deleted',
           shiftId: shift.id,
-          shiftDate: shift.date, // INJECTED SHIFT DATE
+          shiftDate: shift.date, 
           details: `Deleted shift for ${emp?.name || 'Unassigned'} on ${shift.date} (${shift.startTime}-${shift.endTime}).`
         });
       }
@@ -236,7 +235,7 @@ export default function AdminDashboard({
            adminName: currentUser.name,
            actionType: 'Marked Open',
            shiftId: shift.id,
-           shiftDate: shift.date, // INJECTED SHIFT DATE
+           shiftDate: shift.date, 
            details: `Removed ${emp?.name || 'Unknown'} from shift on ${shift.date} and marked it as open.`
          });
        }
@@ -332,7 +331,6 @@ export default function AdminDashboard({
     const holiday = getHoliday(dateStr);
     const isToday = dateStr === todayStr; 
     
-    // --- CHECK IF THIS DAY HAS LOGS ---
     const dayHasLogs = safeAuditLogs.some(log => log.shiftDate === dateStr);
     
     const dayShifts = filteredShifts
@@ -369,7 +367,6 @@ export default function AdminDashboard({
               {d.getDate()}
             </span>
             
-            {/* THE NEW CLICKABLE DAILY AUDIT ICON */}
             {dayHasLogs && (
               <button 
                  onClick={(e) => { e.stopPropagation(); setDayAuditLogDate(dateStr); }}
@@ -523,7 +520,7 @@ export default function AdminDashboard({
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} onSendMessage={onSendMessage} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
       case 'rewards': return <AdminRewardsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} kudos={kudos} prizes={prizes} onAddKudos={onAddKudos} onRemoveKudos={onRemoveKudos} onAddPrize={onAddPrize} onRemovePrize={onRemovePrize} isBonusActive={isBonusActive} bonusSettings={bonusSettings} updateEmployee={updateEmployee} />;
-      case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
+      case 'settings': return <SettingsManager onHardReset={onHardReset} payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
       case 'schedule':
       default: return (
         <div className="space-y-4">
@@ -553,7 +550,6 @@ export default function AdminDashboard({
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-                        {/* INJECTED shiftDate FOR CANCELLATIONS */}
                         <button onClick={() => {
                           if (onAddShiftAuditLog) onAddShiftAuditLog({ timestamp: new Date().toISOString(), adminName: currentUser.name, actionType: 'Cancellation Approved (Deleted)', shiftId: shift.id, shiftDate: shift.date, details: `Approved cancellation and deleted shift on ${shift.date}. Reason: ${shift.cancelRequest.reason}`});
                           onApproveShiftCancelDelete(shift.id);

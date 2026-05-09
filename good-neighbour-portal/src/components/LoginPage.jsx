@@ -82,7 +82,7 @@ export default function LoginPage({ onLogin, onSeedData, isDbReady, hasData }) {
             </div>
           </form>
 
-          {dbReady && !dataExists && (
+          {dbReady && (
             <div className="mt-6 border-t border-slate-200 pt-6">
               <div className="rounded-md bg-amber-50 border border-amber-200 p-4 text-center shadow-inner">
                 <AlertCircle className="h-6 w-6 text-amber-500 mx-auto mb-2" />

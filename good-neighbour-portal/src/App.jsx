@@ -78,9 +78,10 @@ export default function App() {
   const [cabinetDocuments, setCabinetDocuments] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
-  // NEW DATABASES FOR REWARDS
+  // NEW DATABASES FOR REWARDS & STORE
   const [kudos, setKudos] = useState([]);
   const [prizes, setPrizes] = useState([]);
+  const [prizeTiers, setPrizeTiers] = useState([]);
   const [shiftAuditLogs, setShiftAuditLogs] = useState([]);
   
   // DATABASE FOR PAYROLL
@@ -137,6 +138,7 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_appointments'), snap => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_kudos'), snap => setKudos(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_prizes'), snap => setPrizes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_prizeTiers'), snap => setPrizeTiers(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_shiftAuditLogs'), snap => setShiftAuditLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
     // PAYROLL LOGS LISTENER
@@ -185,6 +187,7 @@ export default function App() {
       await wipeCollection('gn_directMessages', directMessages);
       await wipeCollection('gn_shiftAuditLogs', shiftAuditLogs);
       await wipeCollection('gn_payroll_logs', payrollLogs);
+      await wipeCollection('gn_prizeTiers', prizeTiers);
       
       // Wipe local storage snapshots so the UI doesn't show fake "deleted" notifications
       localStorage.clear();
@@ -199,6 +202,15 @@ export default function App() {
       for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
       for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
       
+      // Seed default Storefront Prizes
+      const DEFAULT_TIERS = [
+        { id: 't1', label: 'Bronze', cost: 500, icon: '🥉', desc: '$10 Coffee Gift Card', limitOnePerYear: false },
+        { id: 't2', label: 'Silver', cost: 1500, icon: '🥈', desc: '$25 Gas Gift Card', limitOnePerYear: false },
+        { id: 't3', label: 'Gold', cost: 3000, icon: '🥇', desc: '$50 Grocery Gift Card', limitOnePerYear: false },
+        { id: 't4', label: 'Platinum', cost: 5000, icon: '💎', desc: '$100 Amazon Gift Card', limitOnePerYear: false }
+      ];
+      for (const t of DEFAULT_TIERS) await setDoc(getDocRef('gn_prizeTiers', t.id), t);
+
       alert("Database successfully wiped and reset to clean mock data!");
     } catch (err) {
       console.error("Error resetting data:", err);
@@ -261,8 +273,6 @@ export default function App() {
         });
       }
 
-      // We use Promise.all to blast Firebase with all 500 concurrent requests 
-      // simultaneously to see if the websocket chokes or if React re-renders crash.
       await Promise.all(newShifts.map(s => setDoc(getDocRef('gn_shifts', s.id), s)));
 
       alert("💥 Chaos Monkey successful! 500 shifts just hit the database. Check the schedule performance.");
@@ -318,12 +328,11 @@ export default function App() {
     }
   };
 
-// --- THE PAYROLL PIPELINE ENGINE ---
+  // --- THE PAYROLL PIPELINE ENGINE ---
   const handleFinalizePayroll = async (payrollData, paystubFiles) => {
     if (!firebaseUser) return;
     const payrollId = Date.now().toString();
 
-    // 1. Process Paystubs Securely
     for (const [empId, file] of Object.entries(paystubFiles)) {
       if (file) {
         const url = await handleFileUpload(file, 'paystubs');
@@ -340,18 +349,15 @@ export default function App() {
       }
     }
 
-    // 2. Lock the Master Payroll Record into the Database
     await setDoc(getDocRef('gn_payroll_logs', payrollId), {
       ...payrollData,
       id: payrollId,
       dateProcessed: new Date().toISOString()
     });
 
-    // 3. SECURE THE AUDIT TRAIL: Stamp all processed shifts and expenses as 'paid'
     const pStart = new Date(payrollData.periodStart);
     const pEnd = new Date(payrollData.periodEnd);
     
-    // Lock Shifts
     shifts.forEach(async (shift) => {
       const d = new Date(shift.date);
       if (d >= pStart && d <= pEnd && shift.status !== 'paid') {
@@ -359,7 +365,6 @@ export default function App() {
       }
     });
 
-    // Lock Mileage
     expenses.forEach(async (exp) => {
       const d = new Date(exp.date);
       if (d >= pStart && d <= pEnd && exp.status === 'approved') {
@@ -367,7 +372,6 @@ export default function App() {
       }
     });
 
-    // Lock Receipts
     clientExpenses.forEach(async (ce) => {
       const d = new Date(ce.date);
       if (d >= pStart && d <= pEnd && ce.status === 'approved') {
@@ -375,7 +379,7 @@ export default function App() {
       }
     });
   };
-  
+
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
     
@@ -406,7 +410,7 @@ export default function App() {
     
     const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
     const spentThisMonth = safeCE
-      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+      .filter(e => e && e.clientId === clientId && (e.status === 'approved' || e.status === 'paid'))
       .filter(e => {
         const d = parseLocalSafe(e.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
@@ -415,7 +419,7 @@ export default function App() {
       
     const safeExp = Array.isArray(expenses) ? expenses : [];
     const mileageThisMonth = safeExp
-      .filter(e => e && e.clientId === clientId && e.status === 'approved')
+      .filter(e => e && e.clientId === clientId && (e.status === 'approved' || e.status === 'paid'))
       .filter(e => {
         const d = parseLocalSafe(e.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
@@ -469,7 +473,6 @@ export default function App() {
         <div className="font-bold text-xl flex items-center"><Briefcase className="mr-2 h-6 w-6 text-teal-200"/> Good Neighbour</div>
         <div className="flex items-center space-x-4">
           
-          {/* FLOATING CHAOS MONKEY BUTTON FOR ADMINS ONLY */}
           {isAdmin && (
             <button 
               onClick={handleChaosMonkey} 
@@ -680,6 +683,7 @@ export default function App() {
 
             kudos={kudos}
             prizes={prizes}
+            prizeTiers={prizeTiers}
             onAddKudos={(d) => runMutation('gn_kudos', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })}
             onRemoveKudos={(id) => runMutation('gn_kudos', id, 'delete')}
             
@@ -688,8 +692,12 @@ export default function App() {
               if (file) url = await handleFileUpload(file, 'documents'); 
               runMutation('gn_prizes', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
             }}
-            
+            onUpdatePrize={(id, data) => runMutation('gn_prizes', id, 'update', data)}
             onRemovePrize={(id) => runMutation('gn_prizes', id, 'delete')}
+
+            onAddPrizeTier={(data) => runMutation('gn_prizeTiers', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })}
+            onUpdatePrizeTier={(id, data) => runMutation('gn_prizeTiers', id, 'update', data)}
+            onRemovePrizeTier={(id) => runMutation('gn_prizeTiers', id, 'delete')}
             
             payrollLogs={payrollLogs}
             onFinalizePayroll={handleFinalizePayroll}
@@ -759,6 +767,12 @@ export default function App() {
             
             kudos={kudos}
             prizes={prizes}
+            prizeTiers={prizeTiers}
+            onAddPrize={async (d, file) => {
+              let url = d.fileUrl || '';
+              if (file) url = await handleFileUpload(file, 'documents'); 
+              runMutation('gn_prizes', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
+            }}
             onAcknowledgeReward={handleAcknowledgeReward}
             
             onUpdateShift={(shiftId, data) => runMutation('gn_shifts', shiftId, 'update', data)}

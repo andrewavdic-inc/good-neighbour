@@ -61,6 +61,7 @@ export default function AdminDashboard({
   onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
+  prizeTiers = [], onAddPrizeTier, onUpdatePrizeTier, onRemovePrizeTier, onUpdatePrize, // <-- NEW STORE PROPS ADDED
   payrollLogs = [], onFinalizePayroll, onUpdateShift,
   shiftAuditLogs = [], onAddShiftAuditLog 
 }) {
@@ -519,7 +520,29 @@ export default function AdminDashboard({
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} directMessages={directMessages} onSendMessage={onSendMessage} onSendDirectMessage={onSendDirectMessage} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
-      case 'rewards': return <AdminRewardsManager employees={safeEmployees} shifts={safeShifts} expenses={expenses} clientExpenses={clientExpenses} kudos={kudos} prizes={prizes} onAddKudos={onAddKudos} onRemoveKudos={onRemoveKudos} onAddPrize={onAddPrize} onRemovePrize={onRemovePrize} isBonusActive={isBonusActive} bonusSettings={bonusSettings} updateEmployee={updateEmployee} />;
+      
+      // --- NEW STORE PROPS PASSED HERE ---
+      case 'rewards': return <AdminRewardsManager 
+                        employees={safeEmployees} 
+                        shifts={safeShifts} 
+                        expenses={expenses} 
+                        clientExpenses={clientExpenses} 
+                        kudos={kudos} 
+                        prizes={prizes} 
+                        prizeTiers={prizeTiers}
+                        onAddKudos={onAddKudos} 
+                        onRemoveKudos={onRemoveKudos} 
+                        onAddPrize={onAddPrize} 
+                        onUpdatePrize={onUpdatePrize}
+                        onRemovePrize={onRemovePrize} 
+                        onAddPrizeTier={onAddPrizeTier}
+                        onUpdatePrizeTier={onUpdatePrizeTier}
+                        onRemovePrizeTier={onRemovePrizeTier}
+                        isBonusActive={isBonusActive} 
+                        bonusSettings={bonusSettings} 
+                        updateEmployee={updateEmployee} 
+                      />;
+                      
       case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
       case 'schedule':
       default: return (

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Award, Gift, Trophy, Star, Medal, Download, Plus, Heart, ThumbsUp, Zap, Trash2, CalendarDays, TrendingUp, Link as LinkIcon, Hash, Loader2, Upload, ShieldAlert, ToggleLeft, ToggleRight, List, AlertTriangle } from 'lucide-react';
+import { Award, Gift, Trophy, Star, Medal, Download, Plus, Heart, ThumbsUp, Zap, Trash2, CalendarDays, TrendingUp, Link as LinkIcon, Hash, Loader2, Upload, ShieldAlert, ToggleLeft, ToggleRight, List, AlertTriangle, Store, ShoppingCart, CheckCircle } from 'lucide-react';
 
 // --- DATE HELPER ---
 const parseLocalSafe = (dateStr) => {
@@ -23,7 +23,8 @@ const STANDARD_BADGES = [
 
 export default function AdminRewardsManager({ 
   employees = [], shifts = [], expenses = [], clientExpenses = [], 
-  kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
+  kudos = [], prizes = [], prizeTiers = [], onAddKudos, onRemoveKudos, 
+  onAddPrize, onUpdatePrize, onRemovePrize, onAddPrizeTier, onUpdatePrizeTier, onRemovePrizeTier,
   isBonusActive, bonusSettings, updateEmployee
 }) {
   const [activeTab, setActiveTab] = useState('command');
@@ -37,7 +38,7 @@ export default function AdminRewardsManager({
   const [kudosBadge, setKudosBadge] = useState(STANDARD_BADGES[0].label);
   const [kudosPoints, setKudosPoints] = useState(100); 
   const [kudosMessage, setKudosMessage] = useState('');
-  const [isSubmittingKudos, setIsSubmittingKudos] = useState(false); // <-- INJECTED LOCK STATE
+  const [isSubmittingKudos, setIsSubmittingKudos] = useState(false); 
 
   const [prizeEmpId, setPrizeEmpId] = useState(safeEmployees[0]?.id || '');
   const [prizeName, setPrizeName] = useState('');
@@ -47,6 +48,21 @@ export default function AdminRewardsManager({
   const [prizeLink, setPrizeLink] = useState('');
   const [prizeFile, setPrizeFile] = useState(null);
   const [isPrizeUploading, setIsPrizeUploading] = useState(false);
+
+  // --- FULFILLMENT QUEUE STATE ---
+  const [fulfillmentModal, setFulfillmentModal] = useState(null);
+  const [fulfillNote, setFulfillNote] = useState('');
+  const [fulfillCode, setFulfillCode] = useState('');
+  const [fulfillLink, setFulfillLink] = useState('');
+  const [isFulfilling, setIsFulfilling] = useState(false);
+
+  // --- STORE MANAGER STATE ---
+  const [tierLabel, setTierLabel] = useState('');
+  const [tierCost, setTierCost] = useState('');
+  const [tierIcon, setTierIcon] = useState('🎁');
+  const [tierDesc, setTierDesc] = useState('');
+  const [tierLimitOne, setTierLimitOne] = useState(false);
+  const [isSubmittingTier, setIsSubmittingTier] = useState(false);
 
   // --- COMPREHENSIVE LOG STATE ---
   const [logFilterMonth, setLogFilterMonth] = useState('All');
@@ -78,7 +94,7 @@ export default function AdminRewardsManager({
     return [...years].sort((a, b) => b - a);
   }, [shifts]);
 
-  // --- MATH ENGINE: PRIVACY-SAFE "ACTIVITY SCORE" (MONTHLY) ---
+  // --- MATH ENGINE: PRIVACY-SAFE "ACTIVITY SCORE" (MONTHLY WITH JEOPARDY DEDUCTIONS) ---
   const getLeaderboardForMonth = (yearStr, monthStr) => {
     const targetYear = parseInt(yearStr, 10);
     const targetMonth = parseInt(monthStr, 10) - 1;
@@ -103,9 +119,14 @@ export default function AdminRewardsManager({
 
       const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date) >= start && parseLocalSafe(k.date) <= end);
       const kPoints = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
-      activityScore += kPoints;
+      
+      // JEOPARDY MATH: Deduct points spent on storefront prizes (manual 'value' prizes cost 0)
+      const empPrizes = prizes.filter(p => p.employeeId === emp.id && parseLocalSafe(p.date) >= start && parseLocalSafe(p.date) <= end);
+      const spentPts = empPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
 
-      return { emp, shiftCount: empShifts.length, kudosPoints: kPoints, activityScore };
+      activityScore += kPoints - spentPts;
+
+      return { emp, shiftCount: empShifts.length, kudosPoints: kPoints, spentPts, activityScore };
     });
 
     const eligible = results.filter(r => r.shiftCount >= 10).sort((a, b) => b.activityScore - a.activityScore);
@@ -117,9 +138,9 @@ export default function AdminRewardsManager({
   const activeLeaderboard = useMemo(() => {
     const [y, m] = selectedMonth.split('-');
     return getLeaderboardForMonth(y, m);
-  }, [selectedMonth, safeEmployees, shifts, expenses, clientExpenses, kudos]);
+  }, [selectedMonth, safeEmployees, shifts, expenses, clientExpenses, kudos, prizes]);
 
-  // --- MATH ENGINE: "BEST NEIGHBOUR" ANNUAL AWARDS ---
+  // --- MATH ENGINE: "BEST NEIGHBOUR" ANNUAL AWARDS (WITH JEOPARDY DEDUCTIONS) ---
   const annualGalaStandings = useMemo(() => {
     const targetYear = parseInt(galaYear, 10);
     const scores = {}; 
@@ -151,10 +172,11 @@ export default function AdminRewardsManager({
       const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date).getFullYear() === targetYear);
       s.kudosPts = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
       
+      // JEOPARDY MATH: Deduct points spent on storefront prizes
       const empPrizes = prizes.filter(p => p.employeeId === emp.id && parseLocalSafe(p.date).getFullYear() === targetYear);
-      s.prizePts = empPrizes.length * 50;
+      s.prizePts = empPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
 
-      s.totalGalaScore = s.baseActivityScore + s.kudosPts + s.prizePts;
+      s.totalGalaScore = s.baseActivityScore + s.kudosPts - s.prizePts;
     });
 
     return Object.values(scores).sort((a, b) => b.totalGalaScore - a.totalGalaScore);
@@ -188,11 +210,13 @@ export default function AdminRewardsManager({
     });
   }, [kudos, prizes]);
 
+  const pendingClaims = useMemo(() => prizes.filter(p => p.status === 'pending'), [prizes]);
+
   // --- HANDLERS ---
   const handleIssueKudos = async (e) => {
     e.preventDefault();
-    if (!kudosEmpId || !kudosMessage || isSubmittingKudos) return; // <-- INJECTED EARLY RETURN
-    setIsSubmittingKudos(true); // <-- INJECTED LOCK
+    if (!kudosEmpId || !kudosMessage || isSubmittingKudos) return; 
+    setIsSubmittingKudos(true); 
     const badgeObj = STANDARD_BADGES.find(b => b.label === kudosBadge);
     
     if (onAddKudos) {
@@ -208,12 +232,12 @@ export default function AdminRewardsManager({
     }
     setKudosMessage('');
     setKudosPoints(100); 
-    setIsSubmittingKudos(false); // <-- INJECTED UNLOCK
+    setIsSubmittingKudos(false); 
   };
 
   const handleIssuePrize = async (e) => {
     e.preventDefault();
-    if (!prizeEmpId || !prizeName || isPrizeUploading) return; // <-- INJECTED EARLY RETURN
+    if (!prizeEmpId || !prizeName || isPrizeUploading) return; 
     setIsPrizeUploading(true);
     
     if (onAddPrize) {
@@ -225,6 +249,7 @@ export default function AdminRewardsManager({
         note: prizeNote,
         code: prizeCode,
         link: prizeLink,
+        status: 'fulfilled',
         acknowledged: false
       }, prizeFile);
     }
@@ -236,6 +261,48 @@ export default function AdminRewardsManager({
     setPrizeCode('');
     setPrizeLink('');
     setPrizeFile(null);
+  };
+
+  const handleAddPrizeTier = async (e) => {
+    e.preventDefault();
+    if(!tierLabel || !tierCost || !tierIcon || isSubmittingTier) return;
+    setIsSubmittingTier(true);
+    if(onAddPrizeTier) {
+      await onAddPrizeTier({
+        label: tierLabel,
+        cost: Number(tierCost),
+        icon: tierIcon,
+        desc: tierDesc,
+        limitOnePerYear: tierLimitOne
+      });
+    }
+    setIsSubmittingTier(false);
+    setTierLabel('');
+    setTierCost('');
+    setTierIcon('🎁');
+    setTierDesc('');
+    setTierLimitOne(false);
+  };
+
+  const handleFulfillSubmit = async (e) => {
+    e.preventDefault();
+    if(!fulfillmentModal || isFulfilling) return;
+    setIsFulfilling(true);
+    
+    if (onUpdatePrize) {
+      await onUpdatePrize(fulfillmentModal.id, {
+        status: 'fulfilled',
+        note: fulfillNote,
+        code: fulfillCode,
+        link: fulfillLink
+      });
+    }
+    
+    setIsFulfilling(false);
+    setFulfillmentModal(null);
+    setFulfillNote('');
+    setFulfillCode('');
+    setFulfillLink('');
   };
 
   const toggleGalaEligibility = (emp) => {
@@ -260,7 +327,7 @@ export default function AdminRewardsManager({
     let awardedCount = 0;
 
     top3.forEach((winner, index) => {
-      if (winner.totalGalaScore === 0) return; // Don't award 0 points
+      if (winner.totalGalaScore <= 0) return; // Don't award 0 points
       
       const emp = winner.emp;
       const newTrophy = {
@@ -272,7 +339,6 @@ export default function AdminRewardsManager({
 
       const currentTrophies = Array.isArray(emp.pastTrophies) ? emp.pastTrophies : [];
       
-      // Prevent duplicate awards for the exact same year
       if (!currentTrophies.some(t => t.year === galaYear)) {
         if (updateEmployee) {
           updateEmployee(emp.id, { pastTrophies: [...currentTrophies, newTrophy] });
@@ -328,9 +394,9 @@ export default function AdminRewardsManager({
   };
 
   const exportGalaRoster = () => {
-    const headers = ['Rank', 'Employee', 'Role', 'Base Activity Pts', 'Kudos Pts', 'Prize Pts', 'Total Gala Score'];
+    const headers = ['Rank', 'Employee', 'Role', 'Base Activity Pts', 'Kudos Pts', 'Points Spent', 'Total Gala Score'];
     const rows = annualGalaStandings.map((r, idx) => [
-      idx + 1, `"${r.emp.name}"`, `"${r.emp.role}"`, r.baseActivityScore, r.kudosPts, r.prizePts, r.totalGalaScore
+      idx + 1, `"${r.emp.name}"`, `"${r.emp.role}"`, r.baseActivityScore, r.kudosPts, `-${r.prizePts}`, r.totalGalaScore
     ]);
 
     const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -353,10 +419,11 @@ export default function AdminRewardsManager({
           <h1 className="text-2xl font-black text-slate-800 flex items-center">
             <Star className="h-8 w-8 mr-3 text-yellow-500 fill-current" /> Rewards & Culture Dashboard
           </h1>
-          <p className="text-slate-500 mt-1 font-medium">Issue kudos, track leaderboards, and plan the Annual Awards.</p>
+          <p className="text-slate-500 mt-1 font-medium">Issue kudos, manage the prize store, and plan the Annual Awards.</p>
         </div>
         <div className="flex space-x-2 bg-slate-200 p-1 rounded-lg w-full sm:w-auto overflow-x-auto scrollbar-hide shrink-0">
           <button onClick={() => setActiveTab('command')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${activeTab === 'command' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Command Center</button>
+          <button onClick={() => setActiveTab('store')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${activeTab === 'store' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Store Manager</button>
           <button onClick={() => setActiveTab('monthly')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${activeTab === 'monthly' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Monthly Battlefield</button>
           <button onClick={() => setActiveTab('gala')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded-md transition whitespace-nowrap ${activeTab === 'gala' ? 'bg-slate-900 text-amber-400 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>The 'Best Neighbour' Awards</button>
         </div>
@@ -365,6 +432,38 @@ export default function AdminRewardsManager({
       {/* --- TAB 1: COMMAND CENTER --- */}
       {activeTab === 'command' && (
         <div className="space-y-6">
+          
+          {/* THE FULFILLMENT QUEUE */}
+          {pendingClaims.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 shadow-sm">
+              <h3 className="font-bold text-amber-900 mb-4 flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2" /> Pending Store Redemptions ({pendingClaims.length})
+              </h3>
+              <div className="space-y-3">
+                {pendingClaims.map(claim => {
+                   const emp = safeEmployees.find(e => e.id === claim.employeeId);
+                   return (
+                     <div key={claim.id} className="bg-white p-4 rounded-lg border border-amber-200 flex flex-col sm:flex-row justify-between items-start sm:items-center shadow-sm gap-4">
+                       <div>
+                         <div className="font-bold text-slate-800">{emp?.name || 'Unknown'} <span className="text-slate-500 font-medium ml-1">requested the</span></div>
+                         <div className="text-lg font-black text-amber-600 leading-tight">{claim.name}</div>
+                         <div className="text-xs text-slate-500 mt-1 font-bold">Cost: {Number(claim.cost).toLocaleString()} pts &bull; Date: {parseLocalSafe(claim.date).toLocaleDateString()}</div>
+                       </div>
+                       <div className="flex gap-2 w-full sm:w-auto">
+                         <button onClick={() => onRemovePrize(claim.id)} className="px-4 py-2 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded shadow-sm transition">
+                           Reject Claim
+                         </button>
+                         <button onClick={() => setFulfillmentModal(claim)} className="px-4 py-2 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 rounded shadow-sm transition flex items-center">
+                           <CheckCircle className="h-4 w-4 mr-2"/> Fulfill Request
+                         </button>
+                       </div>
+                     </div>
+                   )
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
             {/* Issue Kudos Form */}
@@ -405,14 +504,14 @@ export default function AdminRewardsManager({
               </form>
             </div>
 
-            {/* Issue Prize Form */}
+            {/* Issue Prize Form (MANUAL GIFTING) */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
               <div className="px-6 py-4 border-b border-slate-200 bg-purple-50 flex items-center">
                 <Gift className="h-5 w-5 mr-2 text-purple-600" />
                 <h2 className="text-lg font-bold text-purple-900">Award a Tangible Prize</h2>
               </div>
               <form onSubmit={handleIssuePrize} className="p-6 space-y-4 flex-1">
-                <p className="text-xs text-slate-500 font-medium mb-4">Prizes are displayed in the employee's digital wallet and grant flat 50 Gala points.</p>
+                <p className="text-xs text-slate-500 font-medium mb-4">Gifts sent from here DO NOT deduct points from the employee's leaderboard.</p>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1">Select Employee</label>
                   <select value={prizeEmpId} onChange={(e)=>setPrizeEmpId(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm">
@@ -452,7 +551,7 @@ export default function AdminRewardsManager({
                   <label className="block text-sm font-bold text-slate-700 mb-1">Congratulatory Message to Employee</label>
                   <textarea value={prizeNote} onChange={(e)=>setPrizeNote(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-purple-500 text-sm" rows="2" placeholder="e.g. Thanks for stepping up!" disabled={isPrizeUploading} />
                 </div>
-                <button type="submit" disabled={isPrizeUploading} className="w-full mt-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-400 text-white font-bold py-2.5 rounded-md transition flex items-center justify-center shadow-sm">
+                <button type="submit" disabled={isPrizeUploading} className="w-full mt-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-400 text-white font-black tracking-wide py-3 rounded-lg shadow-sm transition flex items-center justify-center mt-2">
                   {isPrizeUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading Prize...</> : <><Gift className="h-4 w-4 mr-2" /> Award Prize & Send to Wallet</>}
                 </button>
               </form>
@@ -529,7 +628,7 @@ export default function AdminRewardsManager({
                                 <span className="inline-flex items-center bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full text-xs font-bold border border-purple-200"><Gift className="h-3 w-3 mr-1"/> Prize</span>
                               )}
                             </td>
-                            <td className="px-6 py-3 text-slate-500 text-sm font-medium">{log.date}</td>
+                            <td className="px-6 py-3 text-slate-500 text-sm font-medium">{parseLocalSafe(log.date).toLocaleDateString()}</td>
                             <td className="px-6 py-3 font-bold text-slate-800">{emp?.name || 'Unknown'}</td>
                             <td className="px-6 py-3">
                               {isKudo ? (
@@ -539,8 +638,12 @@ export default function AdminRewardsManager({
                                 </div>
                               ) : (
                                 <div>
-                                  <div className="text-sm font-bold text-slate-700 flex items-center">{log.name} {log.value ? <span className="ml-2 text-emerald-600">${log.value}</span> : ''}</div>
-                                  <div className="text-xs text-slate-500 truncate max-w-[200px]" title={log.note}>"{log.note}"</div>
+                                  <div className="text-sm font-bold text-slate-700 flex items-center">
+                                    {log.name} 
+                                    {log.value > 0 && <span className="ml-2 text-emerald-600">${log.value}</span>}
+                                    {log.cost > 0 && <span className="ml-2 text-red-500 uppercase text-[10px]">-{log.cost} pts</span>}
+                                  </div>
+                                  <div className="text-xs text-slate-500 truncate max-w-[200px]" title={log.note || 'No note'}>"{log.note || 'No note'}"</div>
                                 </div>
                               )}
                             </td>
@@ -566,7 +669,73 @@ export default function AdminRewardsManager({
         </div>
       )}
 
-      {/* --- TAB 2: MONTHLY BATTLEFIELD --- */}
+      {/* --- NEW TAB: STORE MANAGER --- */}
+      {activeTab === 'store' && (
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="bg-white border border-indigo-200 rounded-xl p-6 shadow-sm h-fit">
+            <h3 className="font-bold text-indigo-900 mb-4 flex items-center border-b border-indigo-100 pb-3"><Store className="h-5 w-5 mr-2 text-indigo-500"/> Build Store Item</h3>
+            <form onSubmit={handleAddPrizeTier} className="space-y-4">
+              <div className="grid grid-cols-4 gap-4">
+                <div className="col-span-1">
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Icon</label>
+                  <input type="text" value={tierIcon} onChange={e=>setTierIcon(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 text-xl text-center" placeholder="☕" required />
+                </div>
+                <div className="col-span-3">
+                  <label className="block text-sm font-bold text-slate-700 mb-1">Prize Name</label>
+                  <input type="text" value={tierLabel} onChange={e=>setTierLabel(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 text-sm" placeholder="e.g. Paid Day Off" required />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Point Cost</label>
+                <input type="number" min="0" value={tierCost} onChange={e=>setTierCost(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 text-lg font-black text-indigo-600" required />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Description</label>
+                <textarea value={tierDesc} onChange={e=>setTierDesc(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 text-sm" rows="2" placeholder="e.g. Stay home and get paid for a full day." required />
+              </div>
+
+              <label className="flex items-center space-x-2 text-sm font-bold text-slate-700 cursor-pointer bg-slate-50 px-3 py-2 rounded border border-slate-200">
+                <input type="checkbox" checked={tierLimitOne} onChange={(e)=>setTierLimitOne(e.target.checked)} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4" />
+                <span>Enforce Limit: 1 Per Year</span>
+              </label>
+
+              <button type="submit" disabled={isSubmittingTier} className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold py-2.5 rounded-md transition flex items-center justify-center shadow-sm">
+                {isSubmittingTier ? <Loader2 className="h-4 w-4 mr-2 animate-spin"/> : <Plus className="h-4 w-4 mr-2"/>} Add to Store
+              </button>
+            </form>
+          </div>
+
+          <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col shadow-sm max-h-[600px]">
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200"><h3 className="font-bold text-slate-800 flex items-center"><ShoppingCart className="h-5 w-5 mr-2 text-slate-500"/> Active Storefront Catalogue</h3></div>
+            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {prizeTiers.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-6 col-span-2">No items in the store yet.</p>
+              ) : (
+                prizeTiers.sort((a,b)=>a.cost - b.cost).map(tier => (
+                  <div key={tier.id} className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between bg-slate-50 relative overflow-hidden group">
+                    {tier.limitOnePerYear && <div className="absolute top-0 right-0 bg-rose-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-bl-lg">Limit 1/Yr</div>}
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-3xl">{tier.icon}</span>
+                        <span className="text-xs font-black px-2 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-slate-700">{Number(tier.cost).toLocaleString()} pts</span>
+                      </div>
+                      <h4 className="font-black text-slate-800">{tier.label}</h4>
+                      <p className="text-xs font-medium text-slate-500 mt-1">{tier.desc}</p>
+                    </div>
+                    <button onClick={() => onRemovePrizeTier(tier.id)} className="mt-4 w-full py-1.5 rounded text-xs font-bold text-slate-500 bg-white border border-slate-300 hover:text-red-600 hover:bg-red-50 transition shadow-sm opacity-0 group-hover:opacity-100 flex items-center justify-center">
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove Item
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB 3: MONTHLY BATTLEFIELD --- */}
       {activeTab === 'monthly' && (
         <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -620,7 +789,10 @@ export default function AdminRewardsManager({
                           </td>
                           <td className="px-4 py-4 font-bold text-slate-800">{r.emp.name}</td>
                           <td className="px-4 py-4 text-center font-medium text-slate-600">{r.shiftCount}</td>
-                          <td className="px-4 py-4 text-right font-black text-teal-700">{r.activityScore} pts</td>
+                          <td className="px-4 py-4 text-right font-black text-teal-700">
+                            {r.activityScore} pts
+                            {r.spentPts > 0 && <div className="text-[9px] text-red-500">-{r.spentPts} pts spent</div>}
+                          </td>
                           <td className="px-4 py-4 text-right font-black text-emerald-600">{bonus > 0 ? `+$${bonus}` : '-'}</td>
                         </tr>
                       )
@@ -645,7 +817,7 @@ export default function AdminRewardsManager({
         </div>
       )}
 
-      {/* --- TAB 3: THE 'BEST NEIGHBOUR' ANNUAL AWARDS --- */}
+      {/* --- TAB 4: THE 'BEST NEIGHBOUR' ANNUAL AWARDS --- */}
       {activeTab === 'gala' && (
         <div className="flex flex-col h-full bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden relative">
           <div className="absolute top-0 right-0 opacity-5 pointer-events-none"><Star size={400} /></div>
@@ -704,7 +876,7 @@ export default function AdminRewardsManager({
                   <th className="px-6 py-4 font-bold">Role</th>
                   <th className="px-6 py-4 font-bold text-center text-slate-300">Base Activity Pts</th>
                   <th className="px-6 py-4 font-bold text-center text-blue-400">Kudos Pts</th>
-                  <th className="px-6 py-4 font-bold text-center text-purple-400">Prize Pts</th>
+                  <th className="px-6 py-4 font-bold text-center text-red-400">Points Spent</th>
                   <th className="px-6 py-4 font-bold text-right text-amber-400">Total Gala Score</th>
                 </tr>
               </thead>
@@ -721,13 +893,53 @@ export default function AdminRewardsManager({
                       <td className="px-6 py-4 text-slate-400 font-medium">{r.emp.role}</td>
                       <td className="px-6 py-4 text-center font-medium text-slate-300">{r.baseActivityScore.toLocaleString()}</td>
                       <td className="px-6 py-4 text-center font-medium text-blue-400">{r.kudosPts.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-center font-medium text-purple-400">{r.prizePts.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-center font-medium text-red-400">{r.prizePts > 0 ? `-${r.prizePts.toLocaleString()}` : '0'}</td>
                       <td className="px-6 py-4 text-right font-black text-amber-400 text-lg">{r.totalGalaScore.toLocaleString()} pts</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* --- THE FULFILLMENT MODAL --- */}
+      {fulfillmentModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 bg-amber-500 text-white flex justify-between items-center">
+              <h3 className="text-lg font-bold">Fulfill Store Claim</h3>
+              <button onClick={() => setFulfillmentModal(null)} className="text-white hover:text-amber-200 transition text-2xl leading-none">&times;</button>
+            </div>
+            <form onSubmit={handleFulfillSubmit} className="p-6 space-y-4">
+              <div className="bg-amber-50 text-amber-800 text-xs p-3 rounded border border-amber-200 font-medium">
+                Provide the digital redemption details. Clicking Fulfill will instantly deliver this to the employee's wallet and lock in their point deduction.
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Promo/Gift Code</label>
+                  <input type="text" value={fulfillCode} onChange={e=>setFulfillCode(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm" placeholder="Optional" disabled={isFulfilling} />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Redemption Link</label>
+                  <input type="url" value={fulfillLink} onChange={e=>setFulfillLink(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm" placeholder="https://" disabled={isFulfilling} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Note to Employee</label>
+                <textarea value={fulfillNote} onChange={e=>setFulfillNote(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-amber-500 text-sm" rows="2" placeholder="e.g. Here is your coffee card!" disabled={isFulfilling} />
+              </div>
+
+              <div className="pt-4 flex justify-end space-x-3">
+                <button type="button" onClick={() => setFulfillmentModal(null)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={isFulfilling} className="px-4 py-2 text-sm font-bold text-white bg-amber-600 rounded-md hover:bg-amber-700 disabled:bg-slate-400 transition flex items-center shadow-sm">
+                  {isFulfilling ? <Loader2 className="h-4 w-4 mr-2 animate-spin"/> : <CheckCircle className="h-4 w-4 mr-2"/>} Fulfill Request
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

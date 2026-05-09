@@ -38,14 +38,7 @@ const parseLocalSafe = (dateStr) => {
   }
 };
 
-const PRIZE_TIERS = [
-  { label: 'Bronze', cost: 500, icon: '🥉', desc: '$10 Coffee Gift Card' },
-  { label: 'Silver', cost: 1500, icon: '🥈', desc: '$25 Gas Gift Card' },
-  { label: 'Gold', cost: 3000, icon: '🥇', desc: '$50 Grocery Gift Card' },
-  { label: 'Platinum', cost: 5000, icon: '💎', desc: '$100 Amazon Gift Card' }
-];
-
-const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, kudos = []) => {
+const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, kudos = [], prizes = []) => {
   if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, activityScore: 0, totalEarnings: 0 };
   
   const empShifts = shifts.filter(s => {
@@ -98,15 +91,20 @@ const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, ku
   const kPoints = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
   activityScore += kPoints;
 
+  // --- JEOPARDY MATH: Deduct Spent Points ---
+  const empPrizes = prizes.filter(p => p.employeeId === emp.id && parseLocalSafe(p.date) >= start && parseLocalSafe(p.date) <= end);
+  const spentPts = empPrizes.reduce((sum, p) => sum + Number(p.cost || 0), 0);
+  activityScore -= spentPts;
+
   return { shiftCount: empShifts.length, totalHours, shiftEarnings, kmEarnings, oop, activityScore, totalEarnings: shiftEarnings + kmEarnings + oop };
 };
 
-const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees, kudos) => {
+const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees, kudos, prizes) => {
   if(!Array.isArray(employees)) return [];
   const start = new Date(year, month, 1); 
   const end = new Date(year, month + 1, 0, 23, 59, 59);
   let results = employees.map(emp => { 
-    const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses, kudos); 
+    const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses, kudos, prizes); 
     return { emp, ...data }; 
   });
   return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.activityScore - a.activityScore);
@@ -115,9 +113,10 @@ const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, em
 // ==========================================
 // COMPONENT
 // ==========================================
-export default function EmployeeRewardsTab({ currentUser, employees, shifts, expenses, clientExpenses, kudos = [], prizes = [], isBonusActive, bonusSettings, onAddPrize }) {
+export default function EmployeeRewardsTab({ currentUser, employees, shifts, expenses, clientExpenses, kudos = [], prizes = [], prizeTiers = [], isBonusActive, bonusSettings, onAddPrize }) {
   const now = new Date();
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
+  const safePrizeTiers = Array.isArray(prizeTiers) ? prizeTiers : [];
   
   const [isClaiming, setIsClaiming] = useState(null); // Locks UI during Firebase sync
   
@@ -146,8 +145,8 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
 
   const fullLeaderboard = useMemo(() => {
     const [y, m] = selectedLeaderboardMonth.split('-');
-    return getMonthlyLeaderboard(parseInt(y, 10), parseInt(m, 10) - 1, shifts, expenses, clientExpenses, safeEmployees, kudos);
-  }, [selectedLeaderboardMonth, shifts, expenses, clientExpenses, safeEmployees, kudos]);
+    return getMonthlyLeaderboard(parseInt(y, 10), parseInt(m, 10) - 1, shifts, expenses, clientExpenses, safeEmployees, kudos, prizes);
+  }, [selectedLeaderboardMonth, shifts, expenses, clientExpenses, safeEmployees, kudos, prizes]);
 
   const currentMonthShifts = useMemo(() => {
     return shifts.filter(s => {
@@ -173,8 +172,12 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
 
     const thisMonthKudos = kudos.filter(k => k.employeeId === currentUser.id && parseLocalSafe(k.date).getMonth() === now.getMonth() && parseLocalSafe(k.date).getFullYear() === now.getFullYear());
     score += thisMonthKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
+    
+    // --- JEOPARDY MATH ---
     const thisMonthPrizes = prizes.filter(p => p.employeeId === currentUser.id && parseLocalSafe(p.date).getMonth() === now.getMonth() && parseLocalSafe(p.date).getFullYear() === now.getFullYear());
-    score += thisMonthPrizes.length * 50;
+    const spentThisMonth = thisMonthPrizes.reduce((sum, p) => sum + Number(p.cost || 0), 0);
+    score -= spentThisMonth;
+    
     return score;
   }, [currentMonthShifts, expenses, clientExpenses, kudos, prizes, currentUser.id, now]);
 
@@ -185,6 +188,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return [...new Set(years)].sort((a,b) => b - a).map(String);
   }, [myPrizes, now]);
   const filteredPrizes = useMemo(() => myPrizes.filter(p => parseLocalSafe(p.date).getFullYear().toString() === selectedPrizeYear), [myPrizes, selectedPrizeYear]);
+  const myPrizesThisYear = useMemo(() => myPrizes.filter(p => parseLocalSafe(p.date).getFullYear() === now.getFullYear()), [myPrizes, now]);
 
   const myKudos = useMemo(() => kudos.filter(k => k.employeeId === currentUser.id).sort((a, b) => new Date(b.date) - new Date(a.date)), [kudos, currentUser.id]);
   const kudosMonthOptions = useMemo(() => {
@@ -208,6 +212,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
       return mKey === selectedKudosMonth;
   }), [myKudos, selectedKudosMonth]);
 
+  // --- ANNUAL STANDINGS WITH JEOPARDY DEDUCTIONS ---
   const annualStandings = useMemo(() => {
     if(safeEmployees.length === 0) return []; 
     const currentYear = now.getFullYear();
@@ -228,11 +233,15 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         if (clientExpenses.some(e => e.employeeId === emp.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved')) baseScore += 50;
       });
       s.baseActivityScore = baseScore;
+      
       const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date).getFullYear() === currentYear);
       s.kudosPts = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
+      
+      // JEOPARDY MATH
       const empPrizes = prizes.filter(p => p.employeeId === emp.id && parseLocalSafe(p.date).getFullYear() === currentYear);
-      s.prizePts = empPrizes.length * 50;
-      s.totalGalaScore = s.baseActivityScore + s.kudosPts + s.prizePts;
+      s.prizePts = empPrizes.reduce((sum, p) => sum + Number(p.cost || 0), 0);
+      
+      s.totalGalaScore = s.baseActivityScore + s.kudosPts - s.prizePts;
     });
 
     return Object.values(scores).filter(s => s.totalGalaScore > 0 || s.emp.id === currentUser.id).sort((a, b) => b.totalGalaScore - a.totalGalaScore);
@@ -260,11 +269,11 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
 
   const handleClaimPrize = async (tier) => {
     if (redeemablePoints >= tier.cost && !isClaiming) {
-      setIsClaiming(tier.label);
+      setIsClaiming(tier.id);
       if(onAddPrize) {
         await onAddPrize({
           employeeId: currentUser.id,
-          name: `${tier.label} Prize Tier`,
+          name: tier.label,
           cost: tier.cost,
           date: new Date().toISOString().split('T')[0],
           status: 'pending',
@@ -312,7 +321,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
                <p className="text-xs text-slate-400">Your 'Best Neighbour' Gala points earned so far this month.</p>
            </div>
            <div className="w-full sm:w-1/3 flex items-center justify-start sm:justify-end relative z-10">
-               <div className="text-4xl font-black text-amber-400">{currentMonthGalaScore} <span className="text-sm font-medium text-slate-400 uppercase tracking-widest">pts</span></div>
+               <div className="text-4xl font-black text-amber-400">{currentMonthGalaScore.toLocaleString()} <span className="text-sm font-medium text-slate-400 uppercase tracking-widest">pts</span></div>
            </div>
         </div>
       </div>
@@ -341,29 +350,36 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-500"/> Redeem Prizes</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {PRIZE_TIERS.map(tier => {
-              const canAfford = redeemablePoints >= tier.cost;
-              const isProcessing = isClaiming === tier.label;
-              return (
-                <div key={tier.label} className={`border rounded-xl p-4 flex flex-col justify-between transition-all ${canAfford ? 'border-amber-200 bg-amber-50 hover:shadow-md' : 'border-slate-200 bg-slate-50 opacity-75'}`}>
-                  <div>
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-3xl">{tier.icon}</span>
-                      <span className="text-xs font-black px-2 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-slate-700">{tier.cost.toLocaleString()} pts</span>
+            {safePrizeTiers.length === 0 ? (
+              <div className="col-span-2 text-center text-slate-400 py-8 border border-dashed border-slate-300 rounded-xl bg-slate-50">The prize store is currently empty.</div>
+            ) : (
+              safePrizeTiers.sort((a,b)=>a.cost - b.cost).map(tier => {
+                const hasReachedLimit = tier.limitOnePerYear && myPrizesThisYear.some(p => p.name === tier.label);
+                const canAfford = redeemablePoints >= tier.cost && !hasReachedLimit;
+                const isProcessing = isClaiming === tier.id;
+
+                return (
+                  <div key={tier.id} className={`border rounded-xl p-4 flex flex-col justify-between transition-all ${canAfford ? 'border-amber-200 bg-amber-50 hover:shadow-md' : 'border-slate-200 bg-slate-50 opacity-75'}`}>
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-3xl">{tier.icon}</span>
+                        <span className="text-xs font-black px-2 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-slate-700">{Number(tier.cost).toLocaleString()} pts</span>
+                      </div>
+                      <h4 className="font-black text-slate-800">{tier.label}</h4>
+                      <p className="text-xs font-medium text-slate-500 mt-1">{tier.desc}</p>
+                      {tier.limitOnePerYear && <div className="text-[10px] font-bold text-rose-500 mt-2 uppercase tracking-wider">Limit 1 Per Year</div>}
                     </div>
-                    <h4 className="font-black text-slate-800">{tier.label} Tier</h4>
-                    <p className="text-xs font-medium text-slate-500 mt-1">{tier.desc}</p>
+                    <button 
+                      onClick={() => handleClaimPrize(tier)} 
+                      disabled={!canAfford || isClaiming !== null}
+                      className={`mt-4 w-full py-2 rounded-lg font-bold text-sm flex items-center justify-center transition ${isProcessing ? 'bg-slate-800 text-white cursor-wait' : canAfford ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm' : hasReachedLimit ? 'bg-rose-100 text-rose-500 border border-rose-200 cursor-not-allowed' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    >
+                      {isProcessing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</> : hasReachedLimit ? 'Limit Reached' : canAfford ? 'Claim Reward' : 'Need More Points'}
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => handleClaimPrize(tier)} 
-                    disabled={!canAfford || isClaiming !== null}
-                    className={`mt-4 w-full py-2 rounded-lg font-bold text-sm flex items-center justify-center transition ${isProcessing ? 'bg-slate-800 text-white cursor-wait' : canAfford ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-sm' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-                  >
-                    {isProcessing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing...</> : canAfford ? 'Claim Reward' : 'Need More Points'}
-                  </button>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         </div>
       </div>
@@ -448,12 +464,19 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
             ) : (
               <div className="space-y-4">
                 {filteredPrizes.map(p => (
-                  <div key={p.id} className="bg-gradient-to-br from-purple-700 to-indigo-900 rounded-xl p-5 shadow-md text-white relative overflow-hidden">
+                  <div key={p.id} className={`bg-gradient-to-br rounded-xl p-5 shadow-md relative overflow-hidden ${p.status === 'pending' ? 'from-amber-500 to-amber-700 text-white' : 'from-purple-700 to-indigo-900 text-white'}`}>
                      <div className="absolute top-0 right-0 -mt-2 -mr-2 opacity-10"><Gift size={100} /></div>
                      <div className="relative z-10">
-                       <div className="text-xs font-bold text-purple-200 mb-1 uppercase tracking-wider flex justify-between"><span>{p.date}</span><div className="flex items-center">{p.value > 0 && <span className="text-emerald-300 font-black">${Number(p.value).toFixed(2)}</span>}<span className="ml-3 bg-amber-400 text-amber-900 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">+50 Gala Pts</span></div></div>
+                       <div className="text-xs font-bold opacity-80 mb-1 uppercase tracking-wider flex justify-between">
+                         <span>{p.date}</span>
+                         <div className="flex items-center">
+                           {p.value > 0 && <span className="text-emerald-300 font-black">${Number(p.value).toFixed(2)}</span>}
+                           {p.cost > 0 && <span className="ml-3 bg-red-400/20 border border-red-400/50 text-red-300 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">-{p.cost} Pts</span>}
+                         </div>
+                       </div>
                        <div className="text-xl font-black mt-2 mb-2 leading-tight">{p.name}</div>
-                       {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner mb-3">"{p.note}"</div>}
+                       {p.status === 'pending' && <div className="text-sm font-bold bg-white/20 px-3 py-1.5 rounded-lg inline-block border border-white/30 animate-pulse"><Clock className="inline h-4 w-4 mr-1"/> Pending Admin Delivery</div>}
+                       {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner mt-2 mb-3">"{p.note}"</div>}
                        {p.code && <div className="text-sm font-mono bg-black/40 px-3 py-1.5 rounded mt-2 text-center border border-white/20 font-bold tracking-wider">Code: {p.code}</div>}
                        <div className="flex gap-2 mt-2">
                          {p.link && <a href={p.link} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-white text-purple-900 font-bold py-2 rounded text-xs hover:bg-slate-100 transition shadow-sm"><ExternalLink className="h-3 w-3 mr-1.5"/> Redeem Prize</a>}
@@ -505,7 +528,13 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead className="bg-slate-800/80 backdrop-blur sticky top-0">
               <tr className="text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-700">
-                <th className="px-6 py-4 font-bold">Rank</th><th className="px-6 py-4 font-bold">Employee</th><th className="px-6 py-4 font-bold">Role</th><th className="px-6 py-4 font-bold text-center text-slate-300">Base Activity Pts</th><th className="px-6 py-4 font-bold text-center text-blue-400">Kudos Pts</th><th className="px-6 py-4 font-bold text-center text-purple-400">Prize Pts</th><th className="px-6 py-4 font-bold text-right text-amber-400">Total Gala Score</th>
+                <th className="px-6 py-4 font-bold">Rank</th>
+                <th className="px-6 py-4 font-bold">Employee</th>
+                <th className="px-6 py-4 font-bold">Role</th>
+                <th className="px-6 py-4 font-bold text-center text-slate-300">Base Activity Pts</th>
+                <th className="px-6 py-4 font-bold text-center text-blue-400">Kudos Pts</th>
+                <th className="px-6 py-4 font-bold text-center text-red-400">Points Spent</th>
+                <th className="px-6 py-4 font-bold text-right text-amber-400">Total Gala Score</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
@@ -519,7 +548,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
                       <td className="px-6 py-4 text-slate-400 font-medium">{r.emp.role}</td>
                       <td className="px-6 py-4 text-center font-medium text-slate-300">{r.baseActivityScore.toLocaleString()}</td>
                       <td className="px-6 py-4 text-center font-medium text-blue-400">{r.kudosPts.toLocaleString()}</td>
-                      <td className="px-6 py-4 text-center font-medium text-purple-400">{r.prizePts.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-center font-medium text-red-400">{r.prizePts > 0 ? `-${r.prizePts.toLocaleString()}` : '0'}</td>
                       <td className="px-6 py-4 text-right font-black text-amber-400 text-lg">{r.totalGalaScore.toLocaleString()} pts</td>
                     </tr>
                  ))

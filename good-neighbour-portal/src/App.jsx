@@ -413,6 +413,16 @@ export default function App() {
                   if (certUrl) updatedReqs[reqKey] = { ...updatedReqs[reqKey], fileUrl: certUrl };
                 }
               }
+              
+              // --- NEW FIX: DUMP GHOST SHIFTS ON DEACTIVATION ---
+              if (d.isActive === false && existingEmp?.isActive !== false) {
+                 const now = new Date();
+                 const upcoming = shifts.filter(s => s.employeeId === id && new Date(`${s.date}T${s.endTime || '23:59'}`) >= now);
+                 for (const s of upcoming) {
+                     await runMutation('gn_shifts', s.id, 'update', { employeeId: 'unassigned' });
+                 }
+              }
+
               runMutation('gn_employees', id, 'update', { ...d, photoUrl: url, requirements: updatedReqs });
             }}            
             clients={clients} 

@@ -272,6 +272,17 @@ export default function AddShiftModal({
         const dateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
         
         if (getHoliday(dateStr)) continue;
+        
+        // --- NEW FIX: SKIP FUTURE VACATION DAYS ---
+        const isDayBlocked = safeTimeOff.some(log => {
+          if (log.employeeId !== employeeId || log.status !== 'approved') return false;
+          const logStart = parseLocalSafe(log.startDate);
+          const logEnd = parseLocalSafe(log.endDate);
+          const checkDate = parseLocalSafe(dateStr);
+          return checkDate >= logStart && checkDate <= logEnd;
+        });
+        if (isDayBlocked) continue;
+
         const newId = `shift_${Date.now()}_${Math.random().toString(36).substring(2,7)}`;
         newShifts.push({ ...baseShift, id: newId, date: dateStr });
       }

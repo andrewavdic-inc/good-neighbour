@@ -1016,24 +1016,27 @@ export default function EmployeeDashboard({
                 </div>
               )}
 
-              {/* TAB 4: EXPENSES (REFACTORED COMPONENTS) */}
-              {activeTab === 'expenses' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
-                  <EmployeeMileageLog 
-                    myExpenses={myExpenses} 
-                    clients={clients} 
-                    onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
-                    getClientRemainingBalance={getClientRemainingBalance}
-                  />
-                  <EmployeeClientExpenseLog 
-                    myClientExpenses={myClientExpenses} 
-                    clients={clients} 
-                    onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
-                    getClientRemainingBalance={getClientRemainingBalance}
-                  />
-                </div>
-              )}
-
+{/* TAB 4: EXPENSES (REFACTORED COMPONENTS) */}
+{activeTab === 'expenses' && (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
+    <EmployeeMileageLog 
+      myExpenses={myExpenses} 
+      clients={clients} 
+      myShifts={myShifts} // <-- New Prop
+      onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
+      onRemoveExpense={(id) => runMutation('gn_expenses', id, 'delete')} // <-- New Prop
+      getClientRemainingBalance={getClientRemainingBalance}
+    />
+    <EmployeeClientExpenseLog 
+      myClientExpenses={myClientExpenses} 
+      clients={clients} 
+      myShifts={myShifts} // <-- New Prop
+      onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
+      onRemoveClientExpense={(id) => runMutation('gn_clientExpenses', id, 'delete')} // <-- New Prop
+      getClientRemainingBalance={getClientRemainingBalance}
+    />
+  </div>
+)}
               {/* TAB 5: DOCUMENTS */}
               {activeTab === 'documents' && (
                 <div className="p-6 space-y-6">

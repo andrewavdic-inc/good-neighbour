@@ -318,12 +318,12 @@ export default function App() {
     }
   };
 
-  // --- THE PAYROLL PIPELINE ENGINE ---
+// --- THE PAYROLL PIPELINE ENGINE ---
   const handleFinalizePayroll = async (payrollData, paystubFiles) => {
     if (!firebaseUser) return;
     const payrollId = Date.now().toString();
 
-    // Process Paystubs Securely
+    // 1. Process Paystubs Securely
     for (const [empId, file] of Object.entries(paystubFiles)) {
       if (file) {
         const url = await handleFileUpload(file, 'paystubs');
@@ -340,14 +340,42 @@ export default function App() {
       }
     }
 
-    // Lock the Master Payroll Record into the Database
+    // 2. Lock the Master Payroll Record into the Database
     await setDoc(getDocRef('gn_payroll_logs', payrollId), {
       ...payrollData,
       id: payrollId,
       dateProcessed: new Date().toISOString()
     });
-  };
 
+    // 3. SECURE THE AUDIT TRAIL: Stamp all processed shifts and expenses as 'paid'
+    const pStart = new Date(payrollData.periodStart);
+    const pEnd = new Date(payrollData.periodEnd);
+    
+    // Lock Shifts
+    shifts.forEach(async (shift) => {
+      const d = new Date(shift.date);
+      if (d >= pStart && d <= pEnd && shift.status !== 'paid') {
+        await updateDoc(getDocRef('gn_shifts', shift.id), { status: 'paid', payrollId });
+      }
+    });
+
+    // Lock Mileage
+    expenses.forEach(async (exp) => {
+      const d = new Date(exp.date);
+      if (d >= pStart && d <= pEnd && exp.status === 'approved') {
+        await updateDoc(getDocRef('gn_expenses', exp.id), { status: 'paid', payrollId });
+      }
+    });
+
+    // Lock Receipts
+    clientExpenses.forEach(async (ce) => {
+      const d = new Date(ce.date);
+      if (d >= pStart && d <= pEnd && ce.status === 'approved') {
+        await updateDoc(getDocRef('gn_clientExpenses', ce.id), { status: 'paid', payrollId });
+      }
+    });
+  };
+  
   const handleSaveSettings = async (field, value) => {
     if (!firebaseUser) return;
     

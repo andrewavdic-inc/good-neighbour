@@ -10,7 +10,8 @@ import {
   Image as ImageIcon, 
   Loader2, 
   FileText, 
-  Download 
+  Download,
+  Trash2
 } from 'lucide-react';
 
 // ==========================================
@@ -245,9 +246,8 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   );
 }
 
-export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense }) {
-  const [date, setDate] = useState(''); 
-  const [clientId, setClientId] = useState(''); 
+export function EmployeeMileageLog({ myExpenses = [], clients = [], myShifts = [], onAddExpense, onRemoveExpense }) {
+  const [shiftId, setShiftId] = useState(''); 
   const [kilometers, setKilometers] = useState(''); 
   const [description, setDescription] = useState('');
   const [filterMonth, setFilterMonth] = useState(''); 
@@ -255,11 +255,23 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
   const safeExpenses = Array.isArray(myExpenses) ? myExpenses : []; 
   const safeClients = Array.isArray(clients) ? clients : [];
   
+  // Filter only shifts that are already past/completed
+  const pastShifts = safeSortByDateDesc(Array.isArray(myShifts) ? myShifts : []).filter(s => new Date(s.date) <= new Date());
+  
   const handleSubmit = (e) => { 
     e.preventDefault(); 
-    if (!date || !clientId || !kilometers) return; 
-    if (onAddExpense) onAddExpense({ date, clientId, kilometers: Number(kilometers), description }); 
-    setDate(''); setClientId(''); setKilometers(''); setDescription(''); 
+    if (!shiftId || !kilometers) return; 
+    
+    const selectedShift = pastShifts.find(s => s.id === shiftId);
+    if (!selectedShift) return;
+    
+    const date = selectedShift.date;
+    const clientId = selectedShift.isInternal ? 'internal' : selectedShift.clientId;
+
+    if (onAddExpense) {
+      onAddExpense({ date, clientId, shiftId, kilometers: Number(kilometers), description }); 
+    }
+    setShiftId(''); setKilometers(''); setDescription(''); 
   };
   
   const displayExpenses = safeSortByDateDesc(safeExpenses).filter(exp => { 
@@ -274,33 +286,33 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
       </div>
       <div className="p-6 border-b border-slate-200 bg-slate-50/50">
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Date *</label>
-              <input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
-              <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
-                <option value="" disabled>Select client / task</option>
-                <option value="internal" className="font-bold text-indigo-700">🏢 Internal Company Task</option>
-                {safeClients.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+              <label className="block text-xs font-medium text-slate-700 mb-1">Select Completed Shift *</label>
+              <select value={shiftId} onChange={(e)=>setShiftId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required>
+                <option value="" disabled>-- Choose a Shift --</option>
+                {pastShifts.map(s => {
+                  const c = clients.find(client => client.id === s.clientId);
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {parseLocalSafe(s.date).toLocaleDateString()} - {s.isInternal ? s.internalTask : c?.name} ({s.startTime})
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Kilometers *</label>
-              <input type="number" min="0.1" max="15" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required />
+              <input type="number" min="0.1" max="50" step="0.1" value={kilometers} onChange={(e)=>setKilometers(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" required />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">Description</label>
               <input type="text" value={description} onChange={(e)=>setDescription(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-teal-500 bg-white" placeholder="e.g. Park trip" />
             </div>
           </div>
-          <button type="submit" className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 transition text-sm flex items-center justify-center">
+          <button type="submit" disabled={!shiftId || !kilometers} className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 disabled:bg-slate-400 transition text-sm flex items-center justify-center">
             <Plus className="h-4 w-4 mr-1"/> Submit Log
           </button>
         </form>
@@ -320,14 +332,21 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
       </div>
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
         {displayExpenses.map(exp => {
-          const clientNameDisplay = exp.clientId === 'internal' ? '🏢 Internal Task' : safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown';
+          const clientNameDisplay = exp.clientId === 'internal' ? '召 Internal Task' : safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown';
           return (
             <div key={exp.id} className={`flex justify-between items-center p-3 border rounded-lg ${exp.clientId === 'internal' ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 bg-slate-50'}`}>
               <div>
                 <div className="font-semibold text-sm text-slate-800">{parseLocalSafe(exp.date).toLocaleDateString()}</div>
                 <div className={`text-xs mt-0.5 ${exp.clientId === 'internal' ? 'text-indigo-600 font-medium' : 'text-slate-500'}`}>{exp.kilometers} km &bull; {clientNameDisplay}</div>
               </div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+              <div className="flex items-center space-x-3">
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='paid'?'bg-blue-100 text-blue-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+                {exp.status === 'pending' && onRemoveExpense && (
+                  <button onClick={() => onRemoveExpense(exp.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete Typo">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -336,9 +355,8 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], onAddExpense
   );
 }
 
-export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], onAddClientExpense }) {
-  const [date, setDate] = useState(''); 
-  const [clientId, setClientId] = useState(''); 
+export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], myShifts = [], onAddClientExpense, onRemoveClientExpense }) {
+  const [shiftId, setShiftId] = useState(''); 
   const [amount, setAmount] = useState(''); 
   const [description, setDescription] = useState(''); 
   const [receiptFile, setReceiptFile] = useState(null); 
@@ -347,14 +365,24 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
   
   const safeClientExpenses = Array.isArray(myClientExpenses) ? myClientExpenses : [];
   
+  // Filter only shifts that are already past/completed
+  const pastShifts = safeSortByDateDesc(Array.isArray(myShifts) ? myShifts : []).filter(s => new Date(s.date) <= new Date());
+  
   const handleSubmit = async (e) => { 
     e.preventDefault(); 
-    if (!date || !amount || !clientId) return; 
+    if (!shiftId || !amount) return; 
+    
+    const selectedShift = pastShifts.find(s => s.id === shiftId);
+    if (!selectedShift) return;
+
     setIsUploading(true); 
+    const date = selectedShift.date;
+    const clientId = selectedShift.isInternal ? 'internal' : selectedShift.clientId;
+
     if(onAddClientExpense) { 
-      await onAddClientExpense({ date, clientId, amount: Number(amount), description }, receiptFile); 
+      await onAddClientExpense({ date, clientId, shiftId, amount: Number(amount), description }, receiptFile); 
     } 
-    setDate(''); setClientId(''); setAmount(''); setDescription(''); setReceiptFile(null); setIsUploading(false); 
+    setShiftId(''); setAmount(''); setDescription(''); setReceiptFile(null); setIsUploading(false); 
   };
 
   const displayExpenses = safeSortByDateDesc(safeClientExpenses).filter(exp => { 
@@ -369,17 +397,19 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
       </div>
       <div className="p-6 border-b border-slate-200 bg-slate-50/50">
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Date *</label>
-              <input type="date" value={date} onChange={(e)=>setDate(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white" required disabled={isUploading} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Client *</label>
-              <select value={clientId} onChange={(e)=>setClientId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white" required disabled={isUploading}>
-                <option value="" disabled>Select Client / Task</option>
-                <option value="internal" className="font-bold text-indigo-700">🏢 Internal Company Task</option>
-                {clients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-medium text-slate-700 mb-1">Select Completed Shift *</label>
+              <select value={shiftId} onChange={(e)=>setShiftId(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-white" required disabled={isUploading}>
+                <option value="" disabled>-- Choose a Shift --</option>
+                {pastShifts.map(s => {
+                  const c = clients.find(client => client.id === s.clientId);
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {parseLocalSafe(s.date).toLocaleDateString()} - {s.isInternal ? s.internalTask : c?.name} ({s.startTime})
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
@@ -400,7 +430,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
               <input id="receipt-upload" type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => setReceiptFile(e.target.files[0])} disabled={isUploading} />
             </div>
           </div>
-          <button type="submit" disabled={isUploading || !amount || !clientId || !date} className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 disabled:bg-slate-400 transition text-sm flex items-center justify-center">
+          <button type="submit" disabled={isUploading || !amount || !shiftId} className="w-full mt-2 bg-teal-600 text-white font-medium py-1.5 rounded hover:bg-teal-700 disabled:bg-slate-400 transition text-sm flex items-center justify-center">
             {isUploading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin"/> Uploading...</> : <><Plus className="h-4 w-4 mr-1"/> Submit Expense</>}
           </button>
         </form>
@@ -422,7 +452,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
 
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
         {displayExpenses.map(exp => {
-          const clientNameDisplay = exp.clientId === 'internal' ? '🏢 Internal Task' : clients.find(c => c.id === exp.clientId)?.name || 'Unknown';
+          const clientNameDisplay = exp.clientId === 'internal' ? '召 Internal Task' : clients.find(c => c.id === exp.clientId)?.name || 'Unknown';
           return (
             <div key={exp.id} className={`flex justify-between items-center p-3 border rounded-lg ${exp.clientId === 'internal' ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 bg-slate-50'}`}>
               <div>
@@ -435,7 +465,12 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
                     <FileText className="h-4 w-4" />
                   </a>
                 )}
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='paid'?'bg-blue-100 text-blue-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+                {exp.status === 'pending' && onRemoveClientExpense && (
+                  <button onClick={() => onRemoveClientExpense(exp.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete Typo">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
           );

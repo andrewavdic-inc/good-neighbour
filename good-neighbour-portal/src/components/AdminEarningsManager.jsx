@@ -7,9 +7,12 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   
   // --- BULLETPROOF FILTER TO GHOST THE OWNER ---
   const safeEmps = Array.isArray(employees) ? employees.filter(e => e && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
-  const safeShifts = Array.isArray(shifts) ? shifts : [];
-  const safeExp = Array.isArray(expenses) ? expenses : [];
-  const safeCE = Array.isArray(clientExpenses) ? clientExpenses : [];
+  
+  // --- INFINITE PAYOUT FIX: EXCLUDE 'PAID' RECORDS ---
+  const safeShifts = Array.isArray(shifts) ? shifts.filter(s => s.status !== 'paid') : [];
+  const safeExp = Array.isArray(expenses) ? expenses.filter(e => e.status !== 'paid') : [];
+  const safeCE = Array.isArray(clientExpenses) ? clientExpenses.filter(e => e.status !== 'paid') : [];
+  
   const safeClients = Array.isArray(clients) ? clients : [];
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   

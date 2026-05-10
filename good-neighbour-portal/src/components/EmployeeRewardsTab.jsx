@@ -121,6 +121,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   const safePrizeTiers = Array.isArray(prizeTiers) ? prizeTiers : [];
   
+  // ALL React Hooks MUST be called here at the top, before any conditional returns!
   const [isClaiming, setIsClaiming] = useState(null); 
   const [selectedLeaderboardMonth, setSelectedLeaderboardMonth] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
   const [selectedPrizeYear, setSelectedPrizeYear] = useState(() => now.getFullYear().toString());
@@ -173,6 +174,26 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const shiftProgress = Math.min(currentMonthShifts.length, 10);
   const isQualified = shiftProgress >= 10;
   const progressPercent = (shiftProgress / 10) * 100;
+
+  const currentMonthGalaScore = useMemo(() => {
+    let score = 0;
+    currentMonthShifts.forEach(sh => {
+      score += 100;
+      const hasMileage = expenses.some(e => e.employeeId === currentUser.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved');
+      if (hasMileage) score += 50;
+      const hasOop = clientExpenses.some(e => e.employeeId === currentUser.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved');
+      if (hasOop) score += 50;
+    });
+
+    const thisMonthKudos = kudos.filter(k => k.employeeId === currentUser.id && parseLocalSafe(k.date).getMonth() === now.getMonth() && parseLocalSafe(k.date).getFullYear() === now.getFullYear());
+    score += thisMonthKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
+    
+    const thisMonthPrizes = prizes.filter(p => p.employeeId === currentUser.id && parseLocalSafe(p.date).getMonth() === now.getMonth() && parseLocalSafe(p.date).getFullYear() === now.getFullYear());
+    const spentThisMonth = thisMonthPrizes.reduce((sum, p) => sum + Number(p.cost || 0), 0);
+    score -= spentThisMonth;
+    
+    return score;
+  }, [currentMonthShifts, expenses, clientExpenses, kudos, prizes, currentUser.id, now]);
 
   const myPrizes = useMemo(() => prizes.filter(p => p.employeeId === currentUser.id).sort((a, b) => new Date(b.date) - new Date(a.date)), [prizes, currentUser.id]);
   
@@ -259,6 +280,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const lifetimeSpent = myPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
   const redeemablePoints = lifetimeEarned - lifetimeSpent;
 
+  // --- RAW LEDGER LOGIC (Unfiltered) ---
   const rawPointsLedger = useMemo(() => {
     let items = [];
     allTimeShifts.forEach(s => {
@@ -287,6 +309,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return items.sort((a, b) => b.sortDate - a.sortDate);
   }, [allTimeShifts, expenses, clientExpenses, kudos, myPrizes, currentUser.id]);
 
+  // --- LEDGER FILTER OPTIONS ---
   const ledgerMonthOptions = useMemo(() => {
     const opts = new Set();
     rawPointsLedger.forEach(item => {
@@ -301,6 +324,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return [{ value: 'All', label: 'All Time' }, ...sortedOpts];
   }, [rawPointsLedger]);
 
+  // --- FILTERED LEDGER ---
   const pointsLedger = useMemo(() => {
     if (selectedLedgerMonth === 'All') return rawPointsLedger;
     return rawPointsLedger.filter(item => {
@@ -342,7 +366,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
 
 
   // ==========================================
-  // EARLY RETURNS
+  // EARLY RETURNS (SAFE TO RENDER NOW)
   // ==========================================
 
   if (!isBonusActive) return (
@@ -582,28 +606,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         )}
       </div>
 
-      {pastTrophies.length > 0 && (
-        <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-800 overflow-hidden p-6 relative">
-          <div className="absolute top-0 right-0 opacity-10 pointer-events-none"><Trophy size={200} /></div>
-          <div className="relative z-10">
-            <h2 className="text-xl font-bold text-amber-400 flex items-center mb-1"><Award className="h-5 w-5 mr-2" /> Hall of Fame</h2>
-            <p className="text-xs text-slate-400 mb-6 uppercase tracking-widest">Your Annual Award Victories</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pastTrophies.sort((a,b) => b.year - a.year).map(t => {
-                const colorClasses = t.color === 'gold' ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 border-yellow-400' : t.color === 'silver' ? 'bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 border-slate-400' : 'bg-gradient-to-br from-amber-600 to-orange-800 text-white border-amber-700';
-                return (
-                  <div key={t.id} className={`${colorClasses} rounded-xl p-5 shadow-lg flex flex-col items-center text-center transform hover:scale-105 transition`}>
-                    <Trophy className="h-12 w-12 mb-3 drop-shadow-md" />
-                    <div className="font-black text-lg leading-tight drop-shadow-sm">{t.title}</div>
-                    <div className="text-sm font-bold opacity-80 mt-1 bg-black/20 px-3 py-1 rounded-full">{t.year} Gala</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -743,6 +745,28 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           </table>
         </div>
       </div>
+
+      {pastTrophies.length > 0 && (
+        <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-800 overflow-hidden p-6 relative">
+          <div className="absolute top-0 right-0 opacity-10 pointer-events-none"><Trophy size={200} /></div>
+          <div className="relative z-10">
+            <h2 className="text-xl font-bold text-amber-400 flex items-center mb-1"><Award className="h-5 w-5 mr-2" /> Hall of Fame</h2>
+            <p className="text-xs text-slate-400 mb-6 uppercase tracking-widest">Your Annual Award Victories</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {pastTrophies.sort((a,b) => b.year - a.year).map(t => {
+                const colorClasses = t.color === 'gold' ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-yellow-900 border-yellow-400' : t.color === 'silver' ? 'bg-gradient-to-br from-slate-200 to-slate-400 text-slate-800 border-slate-400' : 'bg-gradient-to-br from-amber-600 to-orange-800 text-white border-amber-700';
+                return (
+                  <div key={t.id} className={`${colorClasses} rounded-xl p-5 shadow-lg flex flex-col items-center text-center transform hover:scale-105 transition`}>
+                    <Trophy className="h-12 w-12 mb-3 drop-shadow-md" />
+                    <div className="font-black text-lg leading-tight drop-shadow-sm">{t.title}</div>
+                    <div className="text-sm font-bold opacity-80 mt-1 bg-black/20 px-3 py-1 rounded-full">{t.year} Gala</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

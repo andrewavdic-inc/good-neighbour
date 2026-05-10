@@ -11,7 +11,8 @@ import {
   Loader2, 
   FileText, 
   Download,
-  Trash2
+  Trash2,
+  Award
 } from 'lucide-react';
 
 // ==========================================
@@ -64,7 +65,7 @@ const getPayPeriodBounds = (anchorDateStr) => {
 // COMPONENTS
 // ==========================================
 
-export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart }) {
+export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart, prizes = [] }) {
   const now = new Date(); 
   const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
   
@@ -110,7 +111,15 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
   const oopEarnings = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-  const totalEarnings = shiftEarnings + kmEarnings + oopEarnings;
+  // --- NEW: CASH BONUS EXTRACTION ---
+  const bonusEarnings = (Array.isArray(prizes) ? prizes : []).filter(p => {
+    if (!p || p.employeeId !== currentUser.id || !p.date) return false;
+    const d = parseLocalSafe(p.date);
+    const isBonus = (p.name || '').toLowerCase().includes('bonus') || (p.name || '').toLowerCase().includes('place');
+    return isBonus && d >= periodBounds.start && d <= periodBounds.end;
+  }).reduce((sum, p) => sum + (Number(p.value) || 0), 0);
+
+  const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden mb-6 mt-6">
@@ -157,6 +166,14 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
             <span className="text-sm text-slate-300">Approved Expenses</span>
             <span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span>
           </div>
+          
+          {/* --- REWARDS BONUS ROW --- */}
+          {bonusEarnings > 0 && (
+            <div className="flex justify-between items-center bg-yellow-500/20 border border-yellow-500/30 p-2 rounded">
+              <span className="text-sm text-yellow-200 font-bold flex items-center"><Award className="h-4 w-4 mr-1.5"/> Cash Bonuses</span>
+              <span className="font-black text-yellow-400">+${bonusEarnings.toFixed(2)}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

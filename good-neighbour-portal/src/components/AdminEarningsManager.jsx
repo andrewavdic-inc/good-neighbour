@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Coins, Award, Trophy, Medal, Download, ShieldAlert, Wallet, CalendarDays, Receipt, Clock, Briefcase } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
-export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], clients = [], payPeriodStart, isBonusActive, bonusSettings }) {
+export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], clients = [], payPeriodStart }) {
   const kmRate = 0.68;
   
   // --- BULLETPROOF FILTER TO GHOST THE OWNER ---
@@ -14,7 +14,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const safeCE = Array.isArray(clientExpenses) ? clientExpenses.filter(e => e.status !== 'paid') : [];
   
   const safeClients = Array.isArray(clients) ? clients : [];
-  const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   
   const allPeriods = useMemo(() => getPastPayPeriods(payPeriodStart || '2026-04-01', 104), [payPeriodStart]);
   
@@ -40,62 +39,10 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
 
   const currentPeriodStart = activePeriod.start;
   const currentPeriodEnd = activePeriod.end;
-  
-  // --- SYNCHRONIZED MONTHLY LEADERBOARD CALCULATOR ---
-  const getMonthlyLeaderboard = () => {
-    const mStart = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), 1);
-    const mEnd = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth() + 1, 0, 23, 59, 59);
-    
-    let results = safeEmps.map(emp => {
-      const empShifts = safeShifts.filter(s => {
-        if (s.employeeId !== emp.id || !s.date || !s.endTime) return false;
-        const shiftDate = new Date(`${s.date}T${s.endTime}`);
-        return shiftDate >= mStart && shiftDate <= mEnd;
-      });
-      
-      let sEarn = 0;
-      if (emp.payType === 'salary') {
-         sEarn = (Number(emp.annualSalary) || 0) / 12; 
-      } else {
-        empShifts.forEach(s => {
-          const isHourly = s.isHourlyOverride || emp.payType === 'hourly';
-          if (isHourly) {
-            const rate = s.isHourlyOverride ? Number(s.hourlyRate) : (Number(emp.hourlyWage) || 22.5);
-            const usePunch = s.requirePunchClock !== false;
-            let hours = 0;
-            
-            if (usePunch && s.actualStartTime && s.actualEndTime) {
-               hours = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
-            } else {
-               const st = s.startTime || '00:00';
-               const et = s.endTime || '00:00';
-               const [sH, sM] = String(st).split(':').map(Number);
-               const [eH, eM] = String(et).split(':').map(Number);
-               if (!isNaN(sH) && !isNaN(eH)) {
-                 hours = (eH + eM/60) - (sH + sM/60);
-                 if (hours < 0) hours += 24;
-               }
-            }
-            sEarn += hours * rate;
-          } else {
-            sEarn += (Number(emp.perVisitRate) || 45);
-          }
-        });
-      }
-      
-      const kmE = safeExp.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= mStart && parseLocal(e.date) <= mEnd).reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
-      const oopE = safeCE.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocal(e.date) >= mStart && parseLocal(e.date) <= mEnd).reduce((sum, e) => sum + Number(e.amount), 0);
-      
-      return { emp, shiftCount: empShifts.length, total: sEarn + kmE + oopE };
-    });
-    
-    return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total).slice(0, 3);
-  };
 
-  // --- SYNCHRONIZED EARNINGS CALCULATOR ---
+  // --- SYNCHRONIZED EARNINGS CALCULATOR (STRICTLY BASE PAY & REIMBURSEMENTS) ---
   const employeeEarnings = useMemo(() => {
     const now = new Date();
-    const monthlyWinners = getMonthlyLeaderboard();
 
     return safeEmps.map(emp => {
       if(!emp) return null;
@@ -168,14 +115,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       });
       const oopEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
-      let bonusEarnings = 0;
-      if (isBonusActive) {
-        if (monthlyWinners[0]?.emp.id === emp.id) { bonusEarnings = Number(safeBonusSettings.monthly[0] || 0); }
-        else if (monthlyWinners[1]?.emp.id === emp.id) { bonusEarnings = Number(safeBonusSettings.monthly[1] || 0); }
-        else if (monthlyWinners[2]?.emp.id === emp.id) { bonusEarnings = Number(safeBonusSettings.monthly[2] || 0); }
-      }
-
-      const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
+      const totalEarnings = shiftEarnings + kmEarnings + oopEarnings;
 
       return {
         ...emp,
@@ -186,11 +126,10 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         totalKms,
         kmEarnings,
         oopEarnings,
-        bonusEarnings,
         totalEarnings
       };
     }).filter(Boolean).sort((a, b) => b.totalEarnings - a.totalEarnings);
-  }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd, isBonusActive, safeBonusSettings]);
+  }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd]);
 
 
   // --- PERFECTED FINANCIAL SEPARATION WIDGET CALCULATIONS ---
@@ -204,8 +143,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   
   const totalHourlyHours = wageEmployees.filter(e => e.payType === 'hourly').reduce((sum, e) => sum + e.totalHours, 0);
   const totalVisitShifts = wageEmployees.filter(e => e.payType !== 'hourly').reduce((sum, e) => sum + e.shiftCount, 0);
-
-  const totalBonuses = employeeEarnings.reduce((sum, e) => sum + (e.bonusEarnings || 0), 0);
 
   // 1. Client Budgets (Strictly excluding Internal Overhead)
   const maxExpenseLiability = safeClients
@@ -243,7 +180,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       ['EXECUTIVE SUMMARY'],
       ['Pay Period', `"${payPeriodDisplay}"`],
       ['Total Payroll Liability', `"$${totalPayrollLiability.toFixed(2)}"`],
-      ['Wage & Bonus Cost', `"$${(totalWageCost + totalBonuses).toFixed(2)}"`],
+      ['Total Wage Cost', `"$${totalWageCost.toFixed(2)}"`],
       ['Salary Cost', `"$${totalSalaryCost.toFixed(2)}"`],
       ['Client Budget Utilized', `"$${totalUsedClientExpense.toFixed(2)} of $${maxExpenseLiability.toFixed(2)}"`],
       ['Corporate Overhead & Petty Cash', `"$${totalCorporateOverhead.toFixed(2)}"`],
@@ -251,21 +188,17 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       ['LINE-BY-LINE BREAKDOWN']
     ];
 
-    const tableHeaders = ['Employee', 'Role', 'Base Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)'];
-    if (isBonusActive) tableHeaders.push('Bonuses ($)');
-    tableHeaders.push('Total Due ($)');
+    const tableHeaders = ['Employee', 'Role', 'Base Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)', 'Total Due ($)'];
 
     const tableRows = employeeEarnings.map(emp => {
-      const row = [
+      return [
         `"${emp.name}"`, 
         `"${emp.role}"`,
         emp.shiftEarnings.toFixed(2),
         emp.kmEarnings.toFixed(2),
-        emp.oopEarnings.toFixed(2)
+        emp.oopEarnings.toFixed(2),
+        emp.totalEarnings.toFixed(2)
       ];
-      if (isBonusActive) row.push(emp.bonusEarnings.toFixed(2));
-      row.push(emp.totalEarnings.toFixed(2));
-      return row;
     });
 
     const csvContent = [
@@ -339,12 +272,11 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Clock className="h-4 w-4 mr-2 text-blue-600"/> Wage & Bonus Cost</div>
-          <div className="text-4xl font-black text-slate-800 tracking-tight">${(totalWageCost + totalBonuses).toFixed(2)}</div>
+          <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Clock className="h-4 w-4 mr-2 text-blue-600"/> Total Wage Cost</div>
+          <div className="text-4xl font-black text-slate-800 tracking-tight">${totalWageCost.toFixed(2)}</div>
           <div className="flex flex-col text-xs text-slate-400 mt-2 font-medium space-y-0.5">
             <span>{totalVisitShifts} Per-Visit Shifts</span>
             <span>{totalHourlyHours.toFixed(1)} Hourly Hours</span>
-            {isBonusActive && <span className="text-amber-500 font-bold">+ ${totalBonuses.toFixed(2)} in Bonuses</span>}
           </div>
         </div>
 
@@ -410,14 +342,13 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
               <th className="px-6 py-4 font-semibold">Base Earnings</th>
               <th className="px-6 py-4 font-semibold">Mileage</th>
               <th className="px-6 py-4 font-semibold">Out-of-Pocket</th>
-              {isBonusActive && <th className="px-6 py-4 font-semibold text-amber-600">Bonuses</th>}
               <th className="px-6 py-4 font-semibold text-right text-slate-800">Total Due</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {employeeEarnings.length === 0 ? (
               <tr>
-                <td colSpan={isBonusActive ? "6" : "5"} className="px-6 py-12 text-center text-slate-500 font-medium">No active employees found for this pay period.</td>
+                <td colSpan="5" className="px-6 py-12 text-center text-slate-500 font-medium">No active employees found for this pay period.</td>
               </tr>
             ) : (
               employeeEarnings.map(emp => (
@@ -437,15 +368,6 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                   <td className="px-6 py-4 text-sm text-slate-600 font-semibold text-slate-700">
                     ${emp.oopEarnings.toFixed(2)}
                   </td>
-                  {isBonusActive && (
-                    <td className="px-6 py-4 text-sm font-bold text-amber-600">
-                      {emp.bonusEarnings > 0 ? (
-                        <div className="flex items-center">
-                          <Award className="h-4 w-4 mr-1"/> +${emp.bonusEarnings.toFixed(2)}
-                        </div>
-                      ) : <span className="text-slate-300 font-medium">-</span>}
-                    </td>
-                  )}
                   <td className="px-6 py-4 text-right text-emerald-600 font-black text-lg">
                     ${emp.totalEarnings.toFixed(2)}
                   </td>

@@ -354,6 +354,56 @@ export default function AdminRewardsManager({
     }
   };
 
+  // --- MANUAL MONTHLY BONUS ISSUANCE ENGINE ---
+  const handleFinalizeMonthlyBonuses = async () => {
+    if (!isBonusActive) return alert("Bonus system is inactive.");
+    if (activeLeaderboard.eligible.length === 0) return alert("No eligible employees to award.");
+
+    // Failsafe: Check if we've already issued a bonus for this exact month
+    const alreadyIssued = prizes.some(p => p.name.includes('Leaderboard Bonus') && p.date.startsWith(selectedMonth));
+    if (alreadyIssued) {
+      if (!window.confirm(`It looks like Monthly Leaderboard Bonuses have already been issued for ${selectedMonth}. Are you sure you want to issue them again?`)) {
+        return;
+      }
+    } else {
+      if (!window.confirm(`WARNING: You are about to permanently issue the cash bonuses for ${selectedMonth} to the top 3 employees. This will add the funds directly to their prize wallets and cannot be undone automatically. Proceed?`)) {
+        return;
+      }
+    }
+
+    const top3 = activeLeaderboard.eligible.slice(0, 3);
+    const places = ['1st Place', '2nd Place', '3rd Place'];
+    const icons = ['🏆', '🥈', '🥉'];
+    
+    let issuedCount = 0;
+
+    for (let i = 0; i < top3.length; i++) {
+      const winner = top3[i];
+      const bonusAmount = Number(safeBonusSettings.monthly[i] || 0);
+      
+      if (bonusAmount > 0 && onAddPrize) {
+        await onAddPrize({
+          employeeId: winner.emp.id,
+          date: new Date().toISOString().split('T')[0], // The day it was processed
+          name: `${places[i]}: ${selectedMonth} Leaderboard Bonus`,
+          value: bonusAmount,
+          cost: 0, // Cash bonuses don't cost points!
+          icon: icons[i],
+          note: `Congratulations on placing ${places[i]} for ${selectedMonth}!`,
+          status: 'fulfilled', // Auto-fulfilled cash
+          acknowledged: false
+        }, null);
+        issuedCount++;
+      }
+    }
+
+    if (issuedCount > 0) {
+      alert(`Success! Issued ${issuedCount} bonuses for ${selectedMonth}. They will now appear in the winners' Prize Wallets.`);
+    } else {
+      alert(`No bonuses were issued. Check your Settings to ensure monthly bonus amounts are greater than zero.`);
+    }
+  };
+
   // --- CSV EXPORTERS ---
   const exportMonthlyPayout = () => {
     const headers = ['Rank', 'Employee', 'Role', 'Completed Shifts', 'Activity Score (pts)', 'Projected Bonus ($)'];
@@ -738,15 +788,25 @@ export default function AdminRewardsManager({
       {/* --- TAB 3: MONTHLY BATTLEFIELD --- */}
       {activeTab === 'monthly' && (
         <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <h2 className="text-lg font-bold text-slate-800 flex items-center"><TrendingUp className="h-5 w-5 mr-2 text-teal-600"/> Monthly Leaderboard</h2>
-            <div className="flex items-center space-x-3">
-              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-3 py-1.5 border border-slate-300 rounded-md focus:ring-teal-500 text-sm font-bold text-slate-700 bg-white shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-3 w-full sm:w-auto">
+              <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-md focus:ring-teal-500 text-sm font-bold text-slate-700 bg-white shadow-sm w-full sm:w-auto">
                 {monthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
               </select>
-              <button onClick={exportMonthlyPayout} className="flex items-center text-xs font-bold text-slate-600 bg-white border border-slate-300 px-3 py-1.5 rounded-md hover:bg-slate-100 transition shadow-sm">
+              <button onClick={exportMonthlyPayout} className="flex items-center justify-center text-xs font-bold text-slate-600 bg-white border border-slate-300 px-4 py-2 rounded-md hover:bg-slate-100 transition shadow-sm w-full sm:w-auto">
                 <Download className="h-4 w-4 mr-1.5" /> Export Payout CSV
               </button>
+              {/* --- NEW FULFILLMENT BUTTON --- */}
+              {isBonusActive && (
+                <button 
+                  onClick={handleFinalizeMonthlyBonuses} 
+                  disabled={activeLeaderboard.eligible.length === 0}
+                  className="flex items-center justify-center text-xs font-black text-amber-950 bg-amber-400 border border-amber-300 px-4 py-2 rounded-md hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-[0_0_15px_rgba(251,191,36,0.3)] whitespace-nowrap w-full sm:w-auto"
+                >
+                  <Zap className="h-4 w-4 mr-1.5" fill="currentColor"/> Finalize & Issue Bonuses
+                </button>
+              )}
             </div>
           </div>
           

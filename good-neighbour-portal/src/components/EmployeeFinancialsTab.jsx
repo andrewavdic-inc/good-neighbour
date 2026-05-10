@@ -60,81 +60,13 @@ const getPayPeriodBounds = (anchorDateStr) => {
   return { start, end: new Date(start.getTime() + 13 * 86400000) };
 };
 
-const calculateEarnings = (emp, start, end, shifts, expenses, clientExpenses, kudos = []) => {
-  if(!emp || !Array.isArray(shifts)) return { shiftCount: 0, totalHours: 0, shiftEarnings: 0, kmEarnings: 0, oop: 0, activityScore: 0, totalEarnings: 0 };
-  
-  const empShifts = shifts.filter(s => {
-    if (!s || s.employeeId !== emp.id || !s.date || !s.endTime) return false;
-    const shiftDate = new Date(`${s.date}T${s.endTime}`);
-    if (isNaN(shiftDate.getTime())) return false; 
-    return shiftDate >= start && shiftDate <= end && shiftDate <= new Date();
-  });
-  
-  let shiftEarnings = 0; 
-  let totalHours = 0;
-  if (emp.payType === 'salary') {
-    shiftEarnings = (Number(emp.annualSalary) || 0) / 12; 
-  } else {
-    empShifts.forEach(s => {
-      if (emp.payType === 'hourly' || s.isHourlyOverride) {
-        let hrs = 0;
-        if (s.actualStartTime && s.actualEndTime) {
-           hrs = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
-        } else {
-           const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
-           const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number);
-           if(!isNaN(sH) && !isNaN(eH)) { 
-             let h = (eH + eM/60) - (sH + sM/60); 
-             if (h < 0) h += 24; 
-             hrs += h; 
-           }
-        }
-        const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(emp.hourlyWage) || 22.50);
-        shiftEarnings += (hrs * rate);
-      } else {
-        shiftEarnings += (Number(emp.perVisitRate) || 45); 
-      }
-    });
-  }
-  
-  const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
-  const oop = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= start && parseLocalSafe(e.date) <= end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-  
-  let activityScore = 0;
-  empShifts.forEach(s => {
-    activityScore += 100;
-    const hasMileage = expenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
-    if (hasMileage) activityScore += 50;
-    const hasOop = clientExpenses.some(e => e.employeeId === emp.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
-    if (hasOop) activityScore += 50;
-  });
-
-  const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date) >= start && parseLocalSafe(k.date) <= end);
-  const kPoints = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
-  activityScore += kPoints;
-
-  return { shiftCount: empShifts.length, totalHours, shiftEarnings, kmEarnings, oop, activityScore, totalEarnings: shiftEarnings + kmEarnings + oop };
-};
-
-const getMonthlyLeaderboard = (year, month, shifts, expenses, clientExpenses, employees, kudos) => {
-  if(!Array.isArray(employees)) return [];
-  const start = new Date(year, month, 1); 
-  const end = new Date(year, month + 1, 0, 23, 59, 59);
-  let results = employees.map(emp => { 
-    const data = calculateEarnings(emp, start, end, shifts, expenses, clientExpenses, kudos); 
-    return { emp, ...data }; 
-  });
-  return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.activityScore - a.activityScore);
-};
-
 // ==========================================
 // COMPONENTS
 // ==========================================
 
-export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart, isBonusActive, employees, bonusSettings, kudos = [] }) {
+export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpenses, payPeriodStart }) {
   const now = new Date(); 
   const periodBounds = getPayPeriodBounds(payPeriodStart || '2026-04-01');
-  const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   
   const completedShifts = (Array.isArray(shifts) ? shifts : []).filter(s => {
     if (!s || s.employeeId !== currentUser.id || !s.date || !s.endTime) return false;
@@ -178,15 +110,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
   const oopEarnings = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-  let bonusEarnings = 0;
-  if (isBonusActive && Array.isArray(employees)) {
-    const safeEmployees = employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin');
-    const lb = getMonthlyLeaderboard(now.getFullYear(), now.getMonth(), shifts, expenses, clientExpenses, safeEmployees, kudos);
-    if (lb[0]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[0] || 0); 
-    else if (lb[1]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[1] || 0); 
-    else if (lb[2]?.emp?.id === currentUser.id) bonusEarnings = Number(safeBonusSettings.monthly[2] || 0);
-  }
-  const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
+  const totalEarnings = shiftEarnings + kmEarnings + oopEarnings;
 
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden mb-6 mt-6">
@@ -233,13 +157,6 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
             <span className="text-sm text-slate-300">Approved Expenses</span>
             <span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span>
           </div>
-          
-          {isBonusActive && bonusEarnings > 0 && (
-            <div className="flex justify-between items-center bg-yellow-500/20 border border-yellow-500/30 p-2 rounded mt-2">
-              <span className="text-sm text-yellow-300 flex items-center"><Star className="h-3 w-3 mr-1" fill="currentColor"/> Projected Bonus</span>
-              <span className="font-bold text-yellow-400">+${bonusEarnings.toFixed(2)}</span>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -332,7 +249,7 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], myShifts = [
       </div>
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
         {displayExpenses.map(exp => {
-          const clientNameDisplay = exp.clientId === 'internal' ? '召 Internal Task' : safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown';
+          const clientNameDisplay = exp.clientId === 'internal' ? '🏢 Internal Task' : safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown';
           return (
             <div key={exp.id} className={`flex justify-between items-center p-3 border rounded-lg ${exp.clientId === 'internal' ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 bg-slate-50'}`}>
               <div>
@@ -452,7 +369,7 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
 
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
         {displayExpenses.map(exp => {
-          const clientNameDisplay = exp.clientId === 'internal' ? '召 Internal Task' : clients.find(c => c.id === exp.clientId)?.name || 'Unknown';
+          const clientNameDisplay = exp.clientId === 'internal' ? '🏢 Internal Task' : clients.find(c => c.id === exp.clientId)?.name || 'Unknown';
           return (
             <div key={exp.id} className={`flex justify-between items-center p-3 border rounded-lg ${exp.clientId === 'internal' ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 bg-slate-50'}`}>
               <div>

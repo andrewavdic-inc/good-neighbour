@@ -126,6 +126,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const [selectedLeaderboardMonth, setSelectedLeaderboardMonth] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
   const [selectedPrizeYear, setSelectedPrizeYear] = useState(() => now.getFullYear().toString());
   const [selectedKudosMonth, setSelectedKudosMonth] = useState('All');
+  const [selectedLedgerMonth, setSelectedLedgerMonth] = useState('All'); // NEW: Ledger Filter State
 
   const safeEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
@@ -266,73 +267,60 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const lifetimeSpent = myPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
   const redeemablePoints = lifetimeEarned - lifetimeSpent;
 
-  const pointsLedger = useMemo(() => {
+  // --- RAW LEDGER LOGIC (Unfiltered) ---
+  const rawPointsLedger = useMemo(() => {
     let items = [];
-    
     allTimeShifts.forEach(s => {
       const shiftTime = new Date(`${s.date}T${s.endTime}`).getTime();
-      items.push({
-        id: `s_${s.id}`,
-        date: s.date,
-        icon: s.isInternal ? '🏢' : '⏱️',
-        desc: s.isInternal ? `Internal: ${s.internalTask}` : 'Completed Shift',
-        points: 100,
-        sortDate: shiftTime
-      });
+      items.push({ id: `s_${s.id}`, date: s.date, icon: s.isInternal ? '🏢' : '⏱️', desc: s.isInternal ? `Internal: ${s.internalTask}` : 'Completed Shift', points: 100, sortDate: shiftTime });
       
       const hasMileage = expenses.some(e => e.employeeId === currentUser.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
-      if (hasMileage) {
-        items.push({
-          id: `m_${s.id}`,
-          date: s.date,
-          icon: '🚗',
-          desc: 'Approved Mileage',
-          points: 50,
-          sortDate: shiftTime + 1000 
-        });
-      }
+      if (hasMileage) items.push({ id: `m_${s.id}`, date: s.date, icon: '🚗', desc: 'Approved Mileage', points: 50, sortDate: shiftTime + 1000 });
       
       const hasOop = clientExpenses.some(e => e.employeeId === currentUser.id && e.clientId === s.clientId && e.date === s.date && e.status === 'approved');
-      if (hasOop) {
-        items.push({
-          id: `o_${s.id}`,
-          date: s.date,
-          icon: '🧾',
-          desc: 'Approved Expense',
-          points: 50,
-          sortDate: shiftTime + 2000
-        });
-      }
+      if (hasOop) items.push({ id: `o_${s.id}`, date: s.date, icon: '🧾', desc: 'Approved Expense', points: 50, sortDate: shiftTime + 2000 });
     });
     
     (kudos || []).filter(k => k.employeeId === currentUser.id).forEach(k => {
       const kudoTime = Number(k.id) > 1000000000000 ? Number(k.id) : new Date(k.date).getTime();
-      items.push({
-        id: `k_${k.id}`,
-        date: k.date,
-        icon: k.badgeIcon || '🌟',
-        desc: `Kudos: ${k.badgeLabel || 'Bonus'}`,
-        points: Number(k.points) || 0,
-        sortDate: kudoTime
-      });
+      items.push({ id: `k_${k.id}`, date: k.date, icon: k.badgeIcon || '🌟', desc: `Kudos: ${k.badgeLabel || 'Bonus'}`, points: Number(k.points) || 0, sortDate: kudoTime });
     });
     
     myPrizes.forEach(p => {
       if(Number(p.cost) > 0) {
         const prizeTime = Number(p.id) > 1000000000000 ? Number(p.id) : new Date(p.date).getTime();
-        items.push({
-          id: `p_${p.id}`,
-          date: p.date,
-          icon: p.icon || '🎁', 
-          desc: p.status === 'pending' ? `Pending: ${p.name}` : `Redeemed: ${p.name}`,
-          points: -(Number(p.cost) || 0),
-          sortDate: prizeTime
-        });
+        items.push({ id: `p_${p.id}`, date: p.date, icon: p.icon || '🎁', desc: p.status === 'pending' ? `Pending: ${p.name}` : `Redeemed: ${p.name}`, points: -(Number(p.cost) || 0), sortDate: prizeTime });
       }
     });
     
     return items.sort((a, b) => b.sortDate - a.sortDate);
   }, [allTimeShifts, expenses, clientExpenses, kudos, myPrizes, currentUser.id]);
+
+  // --- LEDGER FILTER OPTIONS ---
+  const ledgerMonthOptions = useMemo(() => {
+    const opts = new Set();
+    rawPointsLedger.forEach(item => {
+      const d = parseLocalSafe(item.date);
+      opts.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    });
+    const sortedOpts = [...opts].sort().reverse().map(val => {
+      const [y, m] = val.split('-');
+      const label = new Date(parseInt(y, 10), parseInt(m, 10)-1, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+      return { value: val, label };
+    });
+    return [{ value: 'All', label: 'All Time' }, ...sortedOpts];
+  }, [rawPointsLedger]);
+
+  // --- FILTERED LEDGER ---
+  const pointsLedger = useMemo(() => {
+    if (selectedLedgerMonth === 'All') return rawPointsLedger;
+    return rawPointsLedger.filter(item => {
+      const d = parseLocalSafe(item.date);
+      const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return mKey === selectedLedgerMonth;
+    });
+  }, [rawPointsLedger, selectedLedgerMonth]);
+
 
   const isProbationLocked = useMemo(() => {
     if (currentUser?.rewardsAccess === 'force_off') return true;
@@ -485,13 +473,22 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[400px]">
-            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center">
-              <List className="h-4 w-4 mr-2 text-slate-500"/>
-              <h3 className="font-bold text-slate-800 text-sm">Points Ledger</h3>
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex items-center">
+                <List className="h-4 w-4 mr-2 text-slate-500"/>
+                <h3 className="font-bold text-slate-800 text-sm">Points Ledger</h3>
+              </div>
+              <select 
+                value={selectedLedgerMonth} 
+                onChange={(e) => setSelectedLedgerMonth(e.target.value)} 
+                className="bg-white border border-slate-300 text-slate-700 font-bold px-2 py-1 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm max-w-[120px]"
+              >
+                {ledgerMonthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+              </select>
             </div>
             <div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-slate-200">
               {pointsLedger.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs">No points history yet.</div>
+                <div className="p-6 text-center text-slate-400 text-xs">No points history for this period.</div>
               ) : (
                 <div className="divide-y divide-slate-100">
                   {pointsLedger.map(item => (
@@ -555,7 +552,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between relative z-10 gap-4 mb-6">
           <div>
-            <h2 className="text-2xl font-black flex items-center tracking-tight"><Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> {monthOptions.find(o => o.value === selectedLeaderboardMonth)?.label || 'Leaderboard'}</h2>
+            <h2 className="text-2xl font-black flex items-center tracking-tight"><Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> {monthOptions.find(o => o.value === selectedLeaderboardMonth)?.label || 'Leaderboard'} Monthly Bonus Leaderboard</h2>
             <p className="text-teal-100 text-sm font-medium mt-1">Activity Scores determine rankings. 100pts per shift. 50pts per mileage/expense log.</p>
           </div>
           <select value={selectedLeaderboardMonth} onChange={(e) => setSelectedLeaderboardMonth(e.target.value)} className="px-3 py-1.5 border border-teal-500 rounded-md bg-teal-800 text-white text-sm font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-400">

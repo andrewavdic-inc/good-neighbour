@@ -61,7 +61,7 @@ export default function AdminDashboard({
   onApproveShiftCancelDelete, onApproveShiftCancelOpen, onDenyShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
-  prizeTiers = [], onAddPrizeTier, onUpdatePrizeTier, onRemovePrizeTier, onUpdatePrize, // <-- NEW STORE PROPS ADDED
+  prizeTiers = [], onAddPrizeTier, onUpdatePrizeTier, onRemovePrizeTier, onUpdatePrize,
   payrollLogs = [], onFinalizePayroll, onUpdateShift,
   shiftAuditLogs = [], onAddShiftAuditLog 
 }) {
@@ -74,7 +74,6 @@ export default function AdminDashboard({
   const [isAuditViewerOpen, setIsAuditViewerOpen] = useState(false); 
   const [auditFilterMonth, setAuditFilterMonth] = useState('');
   
-  // --- NEW: DAY-SPECIFIC AUDIT STATE ---
   const [dayAuditLogDate, setDayAuditLogDate] = useState(null);
 
   const [activeAdminTab, setActiveAdminTab] = useState('desk');
@@ -93,6 +92,15 @@ export default function AdminDashboard({
   const safeClients = Array.isArray(clients) ? clients.filter(Boolean) : [];
   const safeShifts = Array.isArray(shifts) ? shifts.filter(Boolean) : [];
   const safeAuditLogs = Array.isArray(shiftAuditLogs) ? shiftAuditLogs : [];
+
+  // --- ACTION CENTER COUNTS ---
+  const safeTimeOffLogs = Array.isArray(timeOffLogs) ? timeOffLogs : [];
+  const safePrizes = Array.isArray(prizes) ? prizes : [];
+  const safeDMs = Array.isArray(directMessages) ? directMessages : [];
+
+  const pendingTimeOffCount = safeTimeOffLogs.filter(l => l.status === 'pending').length;
+  const pendingPrizeCount = safePrizes.filter(p => p.status === 'pending').length;
+  const unreadDMCount = safeDMs.filter(dm => dm.receiverId === currentUser?.id && dm.read === false).length;
 
   // --- Ping Logic ---
   const todayStr = new Date().toISOString().split('T')[0];
@@ -510,6 +518,13 @@ export default function AdminDashboard({
                  kudos={kudos}
                  payrollLogs={payrollLogs}
                  onFinalizePayroll={onFinalizePayroll}
+                 // --- NEW ACTION CENTER PROPS ---
+                 setActiveAdminTab={setActiveAdminTab}
+                 pendingTimeOffCount={pendingTimeOffCount}
+                 pendingPrizeCount={pendingPrizeCount}
+                 unreadDMCount={unreadDMCount}
+                 pendingCancellationsCount={pendingCancellations.length}
+                 urgentOpenShiftsCount={urgentOpenShifts.length}
                />;
       case 'employees': return <EmployeeManager employees={safeEmployees} shifts={safeShifts} payPeriodStart={payPeriodStart} onEmployeeFileUpload={onEmployeeFileUpload} onAddEmployee={onAddEmployee} onRemoveEmployee={onRemoveEmployee} updateEmployee={updateEmployee} currentUser={currentUser} />;
       case 'clients': return <ClientManager clients={safeClients} onAddClient={onAddClient} onRemoveClient={onRemoveClient} updateClient={updateClient} shifts={safeShifts} employees={safeEmployees} clientExpenses={clientExpenses} expenses={expenses} onClientFileUpload={onClientFileUpload} />;
@@ -521,7 +536,6 @@ export default function AdminDashboard({
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
       case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} directMessages={directMessages} onSendMessage={onSendMessage} onSendDirectMessage={onSendDirectMessage} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
       
-      // --- NEW STORE PROPS PASSED HERE ---
       case 'rewards': return <AdminRewardsManager 
                         employees={safeEmployees} 
                         shifts={safeShifts} 
@@ -911,6 +925,10 @@ export default function AdminDashboard({
             {tab.id === 'schedule' && (pendingCancellations.length > 0 || adminScheduleUpdates.length > 0 || urgentOpenShifts.length > 0) && (
               <span className={`absolute top-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white animate-pulse ${urgentOpenShifts.length > 0 ? 'bg-red-600' : pendingCancellations.length > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
             )}
+            {/* NEW RED DOTS */}
+            {tab.id === 'timeoff' && pendingTimeOffCount > 0 && <span className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>}
+            {tab.id === 'rewards' && pendingPrizeCount > 0 && <span className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>}
+            {tab.id === 'announcements' && unreadDMCount > 0 && <span className="absolute top-0 right-0 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>}
           </button>
         ))}
       </div>

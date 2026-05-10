@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter, Info, CheckCircle, AlertTriangle, CircleDollarSign, FileCheck, Heart, Users, CalendarDays, ShieldAlert } from 'lucide-react';
+import { Coffee, Plus, Calendar as CalendarIcon, Trash2, ChevronLeft, ChevronRight, FileText, Download, Receipt, Upload, Loader2, Image as ImageIcon, Archive, FolderLock, Camera, CloudSun, Clock, BookOpen, Folder, Edit, CheckSquare, Square, AlertCircle, MapPin, XCircle, Filter, Info, CheckCircle, AlertTriangle, CircleDollarSign, FileCheck, Heart, Users, CalendarDays, ShieldAlert, MessageSquare, Gift, Zap } from 'lucide-react';
 
 import AdminFilingCabinet from './AdminFilingCabinet';
 
@@ -47,7 +47,10 @@ export default function AdminDesk({
   onUpdateDeskBoard, appointments = [], onAddAppointment, onUpdateAppointment, onRemoveAppointment,
   
   payPeriodStart, shifts = [], expenses = [], clientExpenses = [], isBonusActive, bonusSettings,
-  kudos = [], payrollLogs = [], onFinalizePayroll
+  kudos = [], payrollLogs = [], onFinalizePayroll,
+
+  // --- NEW ACTION CENTER PROPS ---
+  setActiveAdminTab, pendingTimeOffCount = 0, pendingPrizeCount = 0, unreadDMCount = 0, pendingCancellationsCount = 0, urgentOpenShiftsCount = 0
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -116,6 +119,9 @@ export default function AdminDesk({
   const todayAppts = myAppointments.filter(a => a.date === todayStr);
   
   const urgentOpenShifts = (shifts || []).filter(s => s.employeeId === 'unassigned' && (s.date === todayStr || s.date === tomorrowStr));
+
+  // --- ACTION CENTER CALCULATION ---
+  const totalActionItems = pendingTimeOffCount + pendingPrizeCount + unreadDMCount + pendingCancellationsCount;
 
   // --- 5-SECOND PULSE CHECK CALCULATIONS ---
   const activeClientsCount = (clients || []).filter(c => c.isActive !== false).length;
@@ -372,6 +378,59 @@ export default function AdminDesk({
           </div>
         </div>
       )}
+
+      {/* --- PRIORITY ACTION CENTER --- */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold text-slate-800 mb-3 flex items-center">
+          <Zap className="h-5 w-5 mr-2 text-amber-500" /> Priority Action Center
+        </h2>
+        
+        {totalActionItems === 0 ? (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center text-emerald-800 shadow-sm transition">
+            <CheckCircle className="h-6 w-6 mr-3 text-emerald-500" />
+            <span className="font-bold text-sm">You are all caught up! No pending requests or unread messages.</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {pendingCancellationsCount > 0 && (
+              <div onClick={() => setActiveAdminTab('schedule')} className="bg-red-50 border border-red-200 rounded-xl p-4 shadow-sm cursor-pointer hover:bg-red-100 hover:shadow-md transition flex items-center group">
+                <div className="bg-red-100 p-2 rounded-lg mr-3 text-red-600 group-hover:scale-110 transition"><AlertTriangle className="h-5 w-5"/></div>
+                <div>
+                  <div className="text-2xl font-black text-red-700 leading-tight">{pendingCancellationsCount}</div>
+                  <div className="text-[10px] font-bold text-red-600 uppercase tracking-wider">Pending Cancels</div>
+                </div>
+              </div>
+            )}
+            {pendingTimeOffCount > 0 && (
+              <div onClick={() => setActiveAdminTab('timeoff')} className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm cursor-pointer hover:bg-amber-100 hover:shadow-md transition flex items-center group">
+                <div className="bg-amber-100 p-2 rounded-lg mr-3 text-amber-600 group-hover:scale-110 transition"><CalendarDays className="h-5 w-5"/></div>
+                <div>
+                  <div className="text-2xl font-black text-amber-700 leading-tight">{pendingTimeOffCount}</div>
+                  <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Time Off Requests</div>
+                </div>
+              </div>
+            )}
+            {pendingPrizeCount > 0 && (
+              <div onClick={() => setActiveAdminTab('rewards')} className="bg-purple-50 border border-purple-200 rounded-xl p-4 shadow-sm cursor-pointer hover:bg-purple-100 hover:shadow-md transition flex items-center group">
+                <div className="bg-purple-100 p-2 rounded-lg mr-3 text-purple-600 group-hover:scale-110 transition"><Gift className="h-5 w-5"/></div>
+                <div>
+                  <div className="text-2xl font-black text-purple-700 leading-tight">{pendingPrizeCount}</div>
+                  <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Prize Redemptions</div>
+                </div>
+              </div>
+            )}
+            {unreadDMCount > 0 && (
+              <div onClick={() => setActiveAdminTab('announcements')} className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm cursor-pointer hover:bg-blue-100 hover:shadow-md transition flex items-center group">
+                <div className="bg-blue-100 p-2 rounded-lg mr-3 text-blue-600 group-hover:scale-110 transition"><MessageSquare className="h-5 w-5"/></div>
+                <div>
+                  <div className="text-2xl font-black text-blue-700 leading-tight">{unreadDMCount}</div>
+                  <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Unread Messages</div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* --- 5-SECOND PULSE CHECK --- */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">

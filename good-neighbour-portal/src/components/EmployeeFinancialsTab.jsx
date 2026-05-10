@@ -111,7 +111,6 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
   const oopEarnings = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
-  // --- NEW: CASH BONUS EXTRACTION ---
   const bonusEarnings = (Array.isArray(prizes) ? prizes : []).filter(p => {
     if (!p || p.employeeId !== currentUser.id || !p.date) return false;
     const d = parseLocalSafe(p.date);
@@ -121,6 +120,102 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
 
   const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
 
+  // --- NEW: DETAILED EARNINGS LEDGER LOGIC ---
+  const ledgerItems = useMemo(() => {
+    let items = [];
+
+    if (currentUser.payType === 'salary') {
+      const salaryAmount = (Number(currentUser.annualSalary) || 0) / 26;
+      items.push({
+        id: 'salary_base',
+        date: periodBounds.end.toISOString().split('T')[0],
+        sortDate: periodBounds.end.getTime(),
+        icon: '💼',
+        desc: 'Bi-Weekly Base Salary',
+        amount: salaryAmount
+      });
+    }
+
+    completedShifts.forEach(s => {
+      if (currentUser.payType !== 'salary') {
+        let amt = 0;
+        let h = 0;
+        if (currentUser.payType === 'hourly' || s.isHourlyOverride) {
+          if (s.actualStartTime && s.actualEndTime) {
+              h = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
+          } else {
+              const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
+              const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number); 
+              h = (eH + eM/60) - (sH + sM/60); 
+              if (h < 0) h += 24; 
+          }
+          const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(currentUser.hourlyWage) || 22.50);
+          amt = h * rate;
+        } else {
+          amt = (Number(currentUser.perVisitRate) || 45);
+        }
+        
+        let descText = s.isInternal ? `Internal Task: ${s.internalTask}` : 'Completed Shift';
+        if (currentUser.payType === 'hourly' || s.isHourlyOverride) {
+           descText += ` (${h.toFixed(1)} hrs)`;
+        }
+
+        items.push({
+          id: `s_${s.id}`,
+          date: s.date,
+          sortDate: parseLocalSafe(s.date).getTime(),
+          icon: '⏱️',
+          desc: descText,
+          amount: amt
+        });
+      }
+    });
+
+    const periodExp = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
+    periodExp.forEach(e => {
+      items.push({
+        id: `m_${e.id}`,
+        date: e.date,
+        sortDate: parseLocalSafe(e.date).getTime() + 1000,
+        icon: '🚗',
+        desc: `Approved Mileage (${e.kilometers} km)`,
+        amount: (Number(e.kilometers) || 0) * 0.68
+      });
+    });
+
+    const periodCE = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end);
+    periodCE.forEach(e => {
+      items.push({
+        id: `o_${e.id}`,
+        date: e.date,
+        sortDate: parseLocalSafe(e.date).getTime() + 2000,
+        icon: '🧾',
+        desc: e.description ? `Expense: ${e.description}` : 'Approved Expense',
+        amount: Number(e.amount) || 0
+      });
+    });
+
+    const periodPrizes = (Array.isArray(prizes) ? prizes : []).filter(p => {
+      if (!p || p.employeeId !== currentUser.id || !p.date) return false;
+      const d = parseLocalSafe(p.date);
+      const isBonus = (p.name || '').toLowerCase().includes('bonus') || (p.name || '').toLowerCase().includes('place');
+      return isBonus && d >= periodBounds.start && d <= periodBounds.end;
+    });
+    periodPrizes.forEach(p => {
+      items.push({
+        id: `b_${p.id}`,
+        date: p.date,
+        sortDate: parseLocalSafe(p.date).getTime() + 3000,
+        icon: '🏆',
+        desc: p.name,
+        amount: Number(p.value) || 0
+      });
+    });
+
+    return items.sort((a, b) => b.sortDate - a.sortDate);
+  }, [completedShifts, expenses, clientExpenses, prizes, currentUser, periodBounds]);
+
+
   return (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden mb-6 mt-6">
       <div className="absolute -right-4 -bottom-4 opacity-10"><TrendingUp size={150} /></div>
@@ -128,9 +223,8 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
         <h3 className="text-slate-300 font-medium text-sm flex items-center mb-1"><Activity className="h-4 w-4 mr-1.5 text-emerald-400" /> Live Pay Tracker</h3>
         <div className="text-xs text-slate-400 mb-6">Period: {periodBounds.start.toLocaleDateString()} - {periodBounds.end.toLocaleDateString()}</div>
         <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">${totalEarnings.toFixed(2)}</div>
+        
         <div className="space-y-3">
-          
-          {/* --- DYNAMIC SHIFT RENDERING LOGIC --- */}
           {currentUser.payType === 'salary' ? (
             <div className="flex justify-between items-center bg-white/5 p-2 rounded">
               <span className="text-sm text-slate-300">Base Salary (Bi-weekly)</span>
@@ -138,7 +232,6 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
             </div>
           ) : (
             <>
-              {/* Show Standard Per-Visit Shifts */}
               {(currentUser.payType === 'per_visit' || standardShiftCount > 0) && (
                 <div className="flex justify-between items-center bg-white/5 p-2 rounded">
                   <span className="text-sm text-slate-300">Completed Shifts ({standardShiftCount})</span>
@@ -146,7 +239,6 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
                 </div>
               )}
               
-              {/* Show Hourly/Atypical Shifts if they worked any */}
               {(currentUser.payType === 'hourly' || hourlyHours > 0) && (
                 <div className="flex justify-between items-center bg-white/5 p-2 rounded mt-2 border border-slate-700">
                   <span className="text-sm text-slate-300">
@@ -167,7 +259,6 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
             <span className="font-semibold text-white">${oopEarnings.toFixed(2)}</span>
           </div>
           
-          {/* --- REWARDS BONUS ROW --- */}
           {bonusEarnings > 0 && (
             <div className="flex justify-between items-center bg-yellow-500/20 border border-yellow-500/30 p-2 rounded">
               <span className="text-sm text-yellow-200 font-bold flex items-center"><Award className="h-4 w-4 mr-1.5"/> Cash Bonuses</span>
@@ -175,6 +266,34 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
             </div>
           )}
         </div>
+
+        {/* --- NEW SCROLLABLE LEDGER --- */}
+        <div className="mt-6 pt-5 border-t border-slate-700">
+          <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center">
+            <FileText className="h-4 w-4 mr-1.5" /> Detailed Earnings Breakdown
+          </h4>
+          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-700">
+            {ledgerItems.length === 0 ? (
+               <div className="text-center text-slate-500 py-4 text-sm italic border border-slate-700/50 rounded-lg">No earnings recorded for this period yet.</div>
+            ) : (
+               ledgerItems.map(item => (
+                 <div key={item.id} className="flex items-center justify-between bg-slate-800/50 hover:bg-slate-800 transition p-3 rounded-lg border border-slate-700/50">
+                   <div className="flex items-center space-x-3 overflow-hidden pr-2">
+                     <div className="text-xl shrink-0">{item.icon}</div>
+                     <div className="truncate">
+                       <div className="text-sm font-bold text-slate-200 truncate">{item.desc}</div>
+                       <div className="text-[10px] text-slate-400">{parseLocalSafe(item.date).toLocaleDateString()}</div>
+                     </div>
+                   </div>
+                   <div className="text-emerald-400 font-bold text-sm shrink-0">
+                     +${item.amount.toFixed(2)}
+                   </div>
+                 </div>
+               ))
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   );

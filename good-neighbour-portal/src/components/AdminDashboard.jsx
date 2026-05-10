@@ -63,7 +63,7 @@ export default function AdminDashboard({
   kudos = [], prizes = [], onAddKudos, onRemoveKudos, onAddPrize, onRemovePrize,
   prizeTiers = [], onAddPrizeTier, onUpdatePrizeTier, onRemovePrizeTier, onUpdatePrize,
   payrollLogs = [], onFinalizePayroll, onUpdateShift,
-  shiftAuditLogs = [], onAddShiftAuditLog 
+  shiftAuditLogs = [], onAddShiftAuditLog, onHardReset 
 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -557,8 +557,7 @@ export default function AdminDashboard({
                         updateEmployee={updateEmployee} 
                       />;
                       
-      case 'settings': return <SettingsManager payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;
-      case 'schedule':
+case 'settings': return <SettingsManager onHardReset={onHardReset} payPeriodStart={payPeriodStart} setPayPeriodStart={setPayPeriodStart} isBonusActive={isBonusActive} setIsBonusActive={setIsBonusActive} bonusSettings={bonusSettings} setBonusSettings={setBonusSettings} officeLocation={officeLocation} setOfficeLocation={setOfficeLocation} />;      case 'schedule':
       default: return (
         <div className="space-y-4">
           

@@ -73,17 +73,31 @@ export default function AdminRewardsManager({
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
+  // --- SMART DROPDOWN LOGIC ---
   const monthOptions = useMemo(() => {
-    const opts = [];
-    const d = new Date();
-    for(let i=0; i<12; i++) {
-      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-      opts.push({ value: val, label });
-      d.setMonth(d.getMonth() - 1);
-    }
-    return opts;
-  }, []);
+    const opts = new Set();
+    const now = new Date();
+    // Always ensure current month exists so they can view the live leaderboard
+    opts.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    
+    const addDate = (dateStr) => {
+      if (!dateStr) return;
+      const d = parseLocalSafe(dateStr);
+      opts.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    };
+
+    (shifts || []).forEach(s => addDate(s.date));
+    (expenses || []).forEach(e => addDate(e.date));
+    (clientExpenses || []).forEach(e => addDate(e.date));
+    (kudos || []).forEach(k => addDate(k.date));
+    (prizes || []).forEach(p => addDate(p.date));
+
+    return [...opts].sort().reverse().map(val => {
+      const [y, m] = val.split('-');
+      const label = new Date(parseInt(y, 10), parseInt(m, 10)-1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      return { value: val, label };
+    });
+  }, [shifts, expenses, clientExpenses, kudos, prizes]);
 
   // --- GALA STATE ---
   const [galaYear, setGalaYear] = useState(() => new Date().getFullYear());
@@ -310,7 +324,7 @@ export default function AdminRewardsManager({
   };
 
   // --- MINT ANNUAL TROPHIES ENGINE ---
-  const handleMintTrophies = () => {
+  const handleMintTrophies = async () => {
     if (annualGalaStandings.length === 0) return alert("No eligible employees to award.");
     
     const confirmMessage = `WARNING: You are about to permanently award the ${galaYear} Trophies to the top 3 employees. This will save to their profiles and display in their Trophy Case forever.\n\nAre you sure you want to finalize the ${galaYear} 'Best Neighbour' Awards?`;
@@ -319,15 +333,16 @@ export default function AdminRewardsManager({
 
     const top3 = annualGalaStandings.slice(0, 3);
     const awards = [
-      { title: "1st Place: Best Neighbour", color: "gold" },
-      { title: "2nd Place: Great Neighbour", color: "silver" },
-      { title: "3rd Place: Good Neighbour", color: "bronze" }
+      { title: "1st Place: Best Neighbour", color: "gold", icon: '🏆' },
+      { title: "2nd Place: Great Neighbour", color: "silver", icon: '🥈' },
+      { title: "3rd Place: Good Neighbour", color: "bronze", icon: '🥉' }
     ];
 
     let awardedCount = 0;
 
-    top3.forEach((winner, index) => {
-      if (winner.totalGalaScore <= 0) return; // Don't award 0 points
+    for (let index = 0; index < top3.length; index++) {
+      const winner = top3[index];
+      if (winner.totalGalaScore <= 0) continue; 
       
       const emp = winner.emp;
       const newTrophy = {
@@ -341,14 +356,31 @@ export default function AdminRewardsManager({
       
       if (!currentTrophies.some(t => t.year === galaYear)) {
         if (updateEmployee) {
-          updateEmployee(emp.id, { pastTrophies: [...currentTrophies, newTrophy] });
-          awardedCount++;
+          await updateEmployee(emp.id, { pastTrophies: [...currentTrophies, newTrophy] });
         }
+        
+        // NEW: ISSUE ANNUAL CASH BONUS PRIZE TO WALLET
+        const bonusAmount = Number(safeBonusSettings.annual[index] || 0);
+        if (isBonusActive && bonusAmount > 0 && onAddPrize) {
+           await onAddPrize({
+             employeeId: emp.id,
+             date: new Date().toISOString().split('T')[0],
+             name: `${index + 1}${index===0?'st':index===1?'nd':'rd'} Place: ${galaYear} Gala Bonus`,
+             value: bonusAmount,
+             cost: 0, 
+             icon: awards[index].icon,
+             note: `Congratulations on winning ${awards[index].title}!`,
+             status: 'fulfilled', 
+             acknowledged: false
+           }, null);
+        }
+        
+        awardedCount++;
       }
-    });
+    }
 
     if (awardedCount > 0) {
-      alert(`Success! The ${galaYear} Trophies have been securely minted to the profiles of the top ${awardedCount} employees.`);
+      alert(`Success! The ${galaYear} Trophies have been securely minted, and cash bonuses have been delivered to their digital wallets.`);
     } else {
       alert(`No trophies were awarded. They may have already been issued for ${galaYear}.`);
     }

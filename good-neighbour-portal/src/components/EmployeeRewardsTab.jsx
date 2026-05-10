@@ -121,29 +121,41 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const safeBonusSettings = bonusSettings || { monthly: [100, 50, 20], annual: [3000, 2000, 1000] };
   const safePrizeTiers = Array.isArray(prizeTiers) ? prizeTiers : [];
   
-  // ALL React Hooks MUST be called here at the top, before any conditional returns!
   const [isClaiming, setIsClaiming] = useState(null); 
   const [selectedLeaderboardMonth, setSelectedLeaderboardMonth] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
   const [selectedPrizeYear, setSelectedPrizeYear] = useState(() => now.getFullYear().toString());
   const [selectedKudosMonth, setSelectedKudosMonth] = useState('All');
-  const [selectedLedgerMonth, setSelectedLedgerMonth] = useState('All'); // NEW: Ledger Filter State
+  const [selectedLedgerMonth, setSelectedLedgerMonth] = useState('All'); 
 
   const safeEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
     return employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin' && !e.excludeFromGala);
   }, [employees]);
 
+  // --- SMART DROPDOWN LOGIC ---
   const monthOptions = useMemo(() => {
-    const opts = [];
-    const d = new Date();
-    for(let i=0; i<12; i++) {
-      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-      opts.push({ value: val, label });
-      d.setMonth(d.getMonth() - 1);
-    }
-    return opts;
-  }, []);
+    const opts = new Set();
+    // Always ensure current month exists so they can view the live leaderboard
+    opts.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    
+    const addDate = (dateStr) => {
+      if (!dateStr) return;
+      const d = parseLocalSafe(dateStr);
+      opts.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    };
+
+    (shifts || []).forEach(s => addDate(s.date));
+    (expenses || []).forEach(e => addDate(e.date));
+    (clientExpenses || []).forEach(e => addDate(e.date));
+    (kudos || []).forEach(k => addDate(k.date));
+    (prizes || []).forEach(p => addDate(p.date));
+
+    return [...opts].sort().reverse().map(val => {
+      const [y, m] = val.split('-');
+      const label = new Date(parseInt(y, 10), parseInt(m, 10)-1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      return { value: val, label };
+    });
+  }, [shifts, expenses, clientExpenses, kudos, prizes, now]);
 
   const fullLeaderboard = useMemo(() => {
     const [y, m] = selectedLeaderboardMonth.split('-');
@@ -161,26 +173,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const shiftProgress = Math.min(currentMonthShifts.length, 10);
   const isQualified = shiftProgress >= 10;
   const progressPercent = (shiftProgress / 10) * 100;
-
-  const currentMonthGalaScore = useMemo(() => {
-    let score = 0;
-    currentMonthShifts.forEach(sh => {
-      score += 100;
-      const hasMileage = expenses.some(e => e.employeeId === currentUser.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved');
-      if (hasMileage) score += 50;
-      const hasOop = clientExpenses.some(e => e.employeeId === currentUser.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved');
-      if (hasOop) score += 50;
-    });
-
-    const thisMonthKudos = kudos.filter(k => k.employeeId === currentUser.id && parseLocalSafe(k.date).getMonth() === now.getMonth() && parseLocalSafe(k.date).getFullYear() === now.getFullYear());
-    score += thisMonthKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
-    
-    const thisMonthPrizes = prizes.filter(p => p.employeeId === currentUser.id && parseLocalSafe(p.date).getMonth() === now.getMonth() && parseLocalSafe(p.date).getFullYear() === now.getFullYear());
-    const spentThisMonth = thisMonthPrizes.reduce((sum, p) => sum + Number(p.cost || 0), 0);
-    score -= spentThisMonth;
-    
-    return score;
-  }, [currentMonthShifts, expenses, clientExpenses, kudos, prizes, currentUser.id, now]);
 
   const myPrizes = useMemo(() => prizes.filter(p => p.employeeId === currentUser.id).sort((a, b) => new Date(b.date) - new Date(a.date)), [prizes, currentUser.id]);
   
@@ -267,7 +259,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const lifetimeSpent = myPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
   const redeemablePoints = lifetimeEarned - lifetimeSpent;
 
-  // --- RAW LEDGER LOGIC (Unfiltered) ---
   const rawPointsLedger = useMemo(() => {
     let items = [];
     allTimeShifts.forEach(s => {
@@ -296,7 +287,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return items.sort((a, b) => b.sortDate - a.sortDate);
   }, [allTimeShifts, expenses, clientExpenses, kudos, myPrizes, currentUser.id]);
 
-  // --- LEDGER FILTER OPTIONS ---
   const ledgerMonthOptions = useMemo(() => {
     const opts = new Set();
     rawPointsLedger.forEach(item => {
@@ -311,7 +301,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return [{ value: 'All', label: 'All Time' }, ...sortedOpts];
   }, [rawPointsLedger]);
 
-  // --- FILTERED LEDGER ---
   const pointsLedger = useMemo(() => {
     if (selectedLedgerMonth === 'All') return rawPointsLedger;
     return rawPointsLedger.filter(item => {
@@ -353,7 +342,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
 
 
   // ==========================================
-  // EARLY RETURNS (SAFE TO RENDER NOW)
+  // EARLY RETURNS
   // ==========================================
 
   if (!isBonusActive) return (
@@ -626,28 +615,56 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
               <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">No prizes awarded in {selectedPrizeYear}.</div>
             ) : (
               <div className="space-y-4">
-                {filteredPrizes.map(p => (
-                  <div key={p.id} className={`bg-gradient-to-br rounded-xl p-5 shadow-md relative overflow-hidden ${p.status === 'pending' ? 'from-amber-500 to-amber-700 text-white' : 'from-purple-700 to-indigo-900 text-white'}`}>
-                     <div className="absolute top-0 right-0 -mt-2 -mr-2 opacity-10"><Gift size={100} /></div>
-                     <div className="relative z-10">
-                       <div className="text-xs font-bold opacity-80 mb-1 uppercase tracking-wider flex justify-between">
-                         <span>{p.date}</span>
-                         <div className="flex items-center">
-                           {p.value > 0 && <span className="text-emerald-300 font-black">${Number(p.value).toFixed(2)}</span>}
-                           {p.cost > 0 && <span className="ml-3 bg-red-400/20 border border-red-400/50 text-red-300 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">-{p.cost} Pts</span>}
+                {filteredPrizes.map(p => {
+                  const isBonusPlaque = p.name.toLowerCase().includes('bonus') || p.name.toLowerCase().includes('place');
+
+                  if (isBonusPlaque) {
+                    return (
+                      <div key={p.id} className="bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-600 rounded-xl p-1 shadow-lg relative overflow-hidden">
+                         <div className="bg-slate-900 rounded-lg p-5 h-full relative overflow-hidden flex flex-col justify-between">
+                            <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-20 text-yellow-400"><Trophy size={120} /></div>
+                            <div className="relative z-10">
+                              <div className="text-xs font-bold text-yellow-500 mb-1 uppercase tracking-widest flex justify-between">
+                                <span>{parseLocalSafe(p.date).toLocaleDateString()}</span>
+                                {p.value > 0 && <span className="text-yellow-400 font-black text-sm">+${Number(p.value).toFixed(2)}</span>}
+                              </div>
+                              <div className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500 mt-2 mb-3 leading-tight tracking-wide">{p.name}</div>
+                              {p.note && <div className="text-sm text-yellow-100/80 italic border-l-2 border-yellow-500/50 pl-3 py-1 mb-4">"{p.note}"</div>}
+                            </div>
+                            <div className="relative z-10 mt-auto">
+                              <div className="inline-flex items-center bg-yellow-500/10 border border-yellow-500/30 px-3 py-1.5 rounded-md">
+                                <CheckCircle className="h-4 w-4 text-yellow-500 mr-2" />
+                                <span className="text-xs font-bold text-yellow-400 uppercase tracking-wider">Funds Delivered</span>
+                              </div>
+                            </div>
+                         </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={p.id} className={`bg-gradient-to-br rounded-xl p-5 shadow-md relative overflow-hidden ${p.status === 'pending' ? 'from-amber-500 to-amber-700 text-white' : 'from-purple-700 to-indigo-900 text-white'}`}>
+                       <div className="absolute top-0 right-0 -mt-2 -mr-2 opacity-10"><Gift size={100} /></div>
+                       <div className="relative z-10">
+                         <div className="text-xs font-bold opacity-80 mb-1 uppercase tracking-wider flex justify-between">
+                           <span>{p.date}</span>
+                           <div className="flex items-center">
+                             {p.value > 0 && <span className="text-emerald-300 font-black">${Number(p.value).toFixed(2)}</span>}
+                             {p.cost > 0 && <span className="ml-3 bg-red-400/20 border border-red-400/50 text-red-300 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">-{p.cost} Pts</span>}
+                           </div>
+                         </div>
+                         <div className="text-xl font-black mt-2 mb-2 leading-tight">{p.name}</div>
+                         {p.status === 'pending' && <div className="text-sm font-bold bg-white/20 px-3 py-1.5 rounded-lg inline-block border border-white/30 animate-pulse"><Clock className="inline h-4 w-4 mr-1"/> Pending Admin Delivery</div>}
+                         {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner mt-2 mb-3">"{p.note}"</div>}
+                         {p.code && <div className="text-sm font-mono bg-black/40 px-3 py-1.5 rounded mt-2 text-center border border-white/20 font-bold tracking-wider">Code: {p.code}</div>}
+                         <div className="flex gap-2 mt-2">
+                           {p.link && <a href={p.link} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-white text-purple-900 font-bold py-2 rounded text-xs hover:bg-slate-100 transition shadow-sm"><ExternalLink className="h-3 w-3 mr-1.5"/> Redeem Prize</a>}
+                           {p.fileUrl && <a href={p.fileUrl} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-purple-800 border border-purple-500 text-white font-bold py-2 rounded text-xs hover:bg-purple-700 transition shadow-sm"><FileText className="h-3 w-3 mr-1.5"/> View Attachment</a>}
                          </div>
                        </div>
-                       <div className="text-xl font-black mt-2 mb-2 leading-tight">{p.name}</div>
-                       {p.status === 'pending' && <div className="text-sm font-bold bg-white/20 px-3 py-1.5 rounded-lg inline-block border border-white/30 animate-pulse"><Clock className="inline h-4 w-4 mr-1"/> Pending Admin Delivery</div>}
-                       {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner mt-2 mb-3">"{p.note}"</div>}
-                       {p.code && <div className="text-sm font-mono bg-black/40 px-3 py-1.5 rounded mt-2 text-center border border-white/20 font-bold tracking-wider">Code: {p.code}</div>}
-                       <div className="flex gap-2 mt-2">
-                         {p.link && <a href={p.link} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-white text-purple-900 font-bold py-2 rounded text-xs hover:bg-slate-100 transition shadow-sm"><ExternalLink className="h-3 w-3 mr-1.5"/> Redeem Prize</a>}
-                         {p.fileUrl && <a href={p.fileUrl} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-purple-800 border border-purple-500 text-white font-bold py-2 rounded text-xs hover:bg-purple-700 transition shadow-sm"><FileText className="h-3 w-3 mr-1.5"/> View Attachment</a>}
-                       </div>
-                     </div>
-                  </div>
-                ))}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

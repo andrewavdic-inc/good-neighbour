@@ -3,7 +3,7 @@ import {
   Calendar as CalendarIcon, Clock, User, Plus, ChevronLeft, ChevronRight, 
   CalendarDays, Trash2, Heart, Coins, Star, AlertCircle, Phone, FileText, 
   Info, Image as ImageIcon, MapPin, UserMinus, Activity, BookOpen, Camera, 
-  Loader2, Upload, Sun, CheckCircle, XCircle, Gift, PartyPopper, Briefcase, Award  
+  Loader2, Upload, Sun, CheckCircle, XCircle, Gift, PartyPopper, Briefcase, Award, Trophy
 } from 'lucide-react';
 
 // --- SUB-COMPONENT IMPORTS ---
@@ -462,12 +462,14 @@ export default function EmployeeDashboard({
     <div className="space-y-6">
       
       {/* REWARDS UNBOXING MODAL */}
-      {activeReward && (
+      {activeReward && (() => {
+        const isBonus = activeReward._type === 'prize' && (activeReward.name.toLowerCase().includes('bonus') || activeReward.name.toLowerCase().includes('place'));
+        return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all scale-100 animate-in zoom-in-95 duration-300">
-            <div className={`px-6 py-8 text-center relative overflow-hidden ${activeReward._type === 'kudo' ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-amber-950' : 'bg-gradient-to-b from-purple-500 to-purple-700 text-white'}`}>
+            <div className={`px-6 py-8 text-center relative overflow-hidden ${isBonus ? 'bg-gradient-to-b from-yellow-300 to-yellow-500 text-yellow-950' : activeReward._type === 'kudo' ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-amber-950' : 'bg-gradient-to-b from-purple-500 to-purple-700 text-white'}`}>
                <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-20">
-                 {activeReward._type === 'kudo' ? <Award size={150} /> : <Gift size={150} />}
+                 {isBonus ? <Trophy size={150} /> : activeReward._type === 'kudo' ? <Award size={150} /> : <Gift size={150} />}
                </div>
                <PartyPopper className="h-12 w-12 mx-auto mb-4 relative z-10 animate-bounce" />
                <h2 className="text-2xl font-black relative z-10">You've been recognized!</h2>
@@ -475,8 +477,8 @@ export default function EmployeeDashboard({
             </div>
             
             <div className="p-8 text-center flex flex-col items-center">
-               <div className={`h-24 w-24 rounded-full flex items-center justify-center text-5xl mb-4 shadow-inner border-4 ${activeReward._type === 'kudo' ? 'bg-amber-50 border-amber-100 text-amber-500' : 'bg-purple-50 border-purple-100 text-purple-600'}`}>
-                 {activeReward._type === 'kudo' ? activeReward.badgeIcon : <Gift className="h-10 w-10" />}
+               <div className={`h-24 w-24 rounded-full flex items-center justify-center text-5xl mb-4 shadow-inner border-4 ${isBonus ? 'bg-yellow-50 border-yellow-200 text-yellow-600' : activeReward._type === 'kudo' ? 'bg-amber-50 border-amber-100 text-amber-500' : 'bg-purple-50 border-purple-100 text-purple-600'}`}>
+                 {isBonus ? <Trophy className="h-10 w-10" /> : activeReward._type === 'kudo' ? activeReward.badgeIcon : <Gift className="h-10 w-10" />}
                </div>
                
                <h3 className="text-xl font-bold text-slate-800 mb-2">
@@ -489,20 +491,21 @@ export default function EmployeeDashboard({
                  <span className="text-2xl text-slate-300 absolute bottom-0 right-2">"</span>
                </div>
                
-               <div className={`w-full py-3 rounded-xl font-black text-lg shadow-sm border ${activeReward._type === 'kudo' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
-                 {activeReward._type === 'kudo' ? `+${activeReward.points} Gala Points` : `+50 Gala Points`}
+               <div className={`w-full py-3 rounded-xl font-black text-lg shadow-sm border ${isBonus ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : activeReward._type === 'kudo' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
+                 {isBonus ? `+$${Number(activeReward.value || 0).toFixed(2)} Cash Bonus` : activeReward._type === 'kudo' ? `+${activeReward.points} Gala Points` : `Reward Delivered`}
                </div>
                
                <button 
                  onClick={handleClaimReward} 
-                 className={`mt-6 w-full py-3.5 rounded-lg font-bold text-white shadow-md transition transform hover:scale-105 ${activeReward._type === 'kudo' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                 className={`mt-6 w-full py-3.5 rounded-lg font-bold text-white shadow-md transition transform hover:scale-105 ${isBonus ? 'bg-yellow-500 hover:bg-yellow-600' : activeReward._type === 'kudo' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}
                >
-                 Claim Reward
+                 {isBonus ? 'Accept Bonus' : 'Claim Reward'}
                </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* CANCELLATION REASON MODAL */}
       {isCancelModalOpen && (
@@ -683,6 +686,7 @@ export default function EmployeeDashboard({
             employees={employees} 
             bonusSettings={bonusSettings} 
             kudos={kudos}
+            prizes={prizes}
           />
           
           {nextShift && (

@@ -6,6 +6,7 @@ export default function Announcements({
   directMessages = [],
   onSendMessage, 
   onSendDirectMessage,
+  onMarkDirectMessageRead, // <-- NEW PROP ADDED
   currentUser, 
   employees = [],
   onDeleteMessage,
@@ -26,6 +27,34 @@ export default function Announcements({
   const [selectedDmUserId, setSelectedDmUserId] = useState(null);
   const [dmText, setDmText] = useState('');
   const chatEndRef = useRef(null);
+
+  // --- PERMISSIONS ---
+  const isAdmin = currentUser?.role === 'Administrator' || currentUser?.role === 'admin' || currentUser?.role === 'Master Admin';
+  const canSendFeed = isAdmin || currentUser?.role === 'Block Captain';
+  
+  // Strict Owner Check (Only the owner doesn't need to acknowledge)
+  const isOwner = currentUser?.id === 'admin1' || currentUser?.name === 'Master Admin' || currentUser?.role === 'Master Admin';
+
+  // Filter out the owner from the tracker so they don't show up in "Pending"
+  const trackableEmployees = employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin');
+
+  // --- AUTOMATIC READ RECEIPT TRIGGER ---
+  useEffect(() => {
+    if (viewTab === 'dm' && onMarkDirectMessageRead) {
+      // Find messages sent TO the current user that are currently UNREAD
+      const unreadToMe = directMessages.filter(m => 
+        m.receiverId === currentUser?.id && 
+        m.read === false &&
+        // If Admin, only mark read if we actually clicked on that specific employee's chat
+        (!isAdmin || m.senderId === selectedDmUserId)
+      );
+
+      // Fire the mutation to clear the red dots!
+      unreadToMe.forEach(msg => {
+        onMarkDirectMessageRead(msg.id);
+      });
+    }
+  }, [viewTab, selectedDmUserId, directMessages, currentUser?.id, isAdmin, onMarkDirectMessageRead]);
 
   // Scroll to bottom of chat when looking at DMs
   useEffect(() => {
@@ -75,16 +104,6 @@ export default function Announcements({
       return (isNaN(dB) ? 0 : dB) - (isNaN(dA) ? 0 : dA);
     });
   };
-
-  // --- PERMISSIONS ---
-  const isAdmin = currentUser?.role === 'Administrator' || currentUser?.role === 'admin' || currentUser?.role === 'Master Admin';
-  const canSendFeed = isAdmin || currentUser?.role === 'Block Captain';
-  
-  // Strict Owner Check (Only the owner doesn't need to acknowledge)
-  const isOwner = currentUser?.id === 'admin1' || currentUser?.name === 'Master Admin' || currentUser?.role === 'Master Admin';
-
-  // Filter out the owner from the tracker so they don't show up in "Pending"
-  const trackableEmployees = employees.filter(e => e.isActive !== false && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin');
 
   // --- CSV COMPLIANCE EXPORT ---
   const exportTrackerCSV = (m, acknowledgedStaff, pendingStaff) => {

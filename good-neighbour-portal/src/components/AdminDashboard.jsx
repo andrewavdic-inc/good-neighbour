@@ -50,7 +50,7 @@ export default function AdminDashboard({
   shifts = [], employees = [], setEmployees, updateEmployee, clients = [], setClients, updateClient, 
   expenses = [], onUpdateExpense, clientExpenses = [], onUpdateClientExpense, paystubs = [], 
   onAddPaystub, onRemovePaystub, timeOffLogs = [], onAddTimeOffLog, onRemoveTimeOffLog, 
-  documents = [], onAddDocument, onRemoveDocument, messages = [], directMessages = [], onSendMessage, onSendDirectMessage, currentUser, 
+  documents = [], onAddDocument, onRemoveDocument, messages = [], directMessages = [], onSendMessage, onSendDirectMessage, onMarkDirectMessageRead, currentUser, 
   payPeriodStart, setPayPeriodStart, isBonusActive, setIsBonusActive, bonusSettings, setBonusSettings, 
   officeLocation, setOfficeLocation, onAddShift, onRemoveShift, onMarkShiftOpen, onAddEmployee, 
   onRemoveEmployee, onAddClient, onRemoveClient, onApproveTimeOff, onRejectTimeOff, onClientFileUpload,
@@ -534,7 +534,7 @@ export default function AdminDashboard({
       case 'timeoff': return <TimeOffManager employees={safeEmployees} timeOffLogs={timeOffLogs} onApprove={onApproveTimeOff} onReject={onRejectTimeOff} onRemoveTimeOff={onRemoveTimeOffLog} />;
       case 'paystubs': return <PaystubManager paystubs={paystubs} employees={safeEmployees} onAddPaystub={onAddPaystub} onRemovePaystub={onRemovePaystub} />;
       case 'documents': return <DocumentManager documents={documents} onAddDocument={onAddDocument} onRemoveDocument={onRemoveDocument} isAdmin={true} />; 
-      case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} directMessages={directMessages} onSendMessage={onSendMessage} onSendDirectMessage={onSendDirectMessage} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
+      case 'announcements': return <div className="max-w-4xl"><Announcements messages={messages} directMessages={directMessages} onSendMessage={onSendMessage} onSendDirectMessage={onSendDirectMessage} onMarkDirectMessageRead={onMarkDirectMessageRead} currentUser={currentUser} employees={safeEmployees} onDeleteMessage={onDeleteMessage} onAcknowledgeMessage={onAcknowledgeMessage} announcementPictureUrl={announcementPictureUrl} onUpdateAnnouncementPicture={onUpdateAnnouncementPicture} /></div>;
       
       case 'rewards': return <AdminRewardsManager 
                         employees={safeEmployees} 

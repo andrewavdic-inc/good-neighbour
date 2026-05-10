@@ -81,7 +81,7 @@ export default function App() {
   // NEW DATABASES FOR REWARDS & STORE
   const [kudos, setKudos] = useState([]);
   const [prizes, setPrizes] = useState([]);
-  const [prizeTiers, setPrizeTiers] = useState([]);
+  const [prizeTiers, setPrizeTiers] = useState([]); // <-- RESTORED
   const [shiftAuditLogs, setShiftAuditLogs] = useState([]);
   
   // DATABASE FOR PAYROLL
@@ -138,7 +138,7 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_appointments'), snap => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_kudos'), snap => setKudos(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_prizes'), snap => setPrizes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_prizeTiers'), snap => setPrizeTiers(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
+    unsubs.push(onSnapshot(getCol('gn_prizeTiers'), snap => setPrizeTiers(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError)); // <-- RESTORED
     unsubs.push(onSnapshot(getCol('gn_shiftAuditLogs'), snap => setShiftAuditLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
     // PAYROLL LOGS LISTENER
@@ -187,7 +187,7 @@ export default function App() {
       await wipeCollection('gn_directMessages', directMessages);
       await wipeCollection('gn_shiftAuditLogs', shiftAuditLogs);
       await wipeCollection('gn_payroll_logs', payrollLogs);
-      await wipeCollection('gn_prizeTiers', prizeTiers);
+      await wipeCollection('gn_prizeTiers', prizeTiers); // <-- RESTORED
       
       // Wipe local storage snapshots so the UI doesn't show fake "deleted" notifications
       localStorage.clear();
@@ -202,7 +202,7 @@ export default function App() {
       for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
       for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
       
-      // Seed default Storefront Prizes
+      // RESTORED: Seed default Storefront Prizes
       const DEFAULT_TIERS = [
         { id: 't1', label: 'Bronze', cost: 500, icon: '🥉', desc: '$10 Coffee Gift Card', limitOnePerYear: false },
         { id: 't2', label: 'Silver', cost: 1500, icon: '🥈', desc: '$25 Gas Gift Card', limitOnePerYear: false },
@@ -592,6 +592,7 @@ export default function App() {
             
             onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
             onSendDirectMessage={(text, senderId, receiverId) => runMutation('gn_directMessages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, receiverId, date: new Date().toISOString(), read: false })}
+            onMarkDirectMessageRead={(id) => runMutation('gn_directMessages', id, 'update', { read: true })} // <-- NEW READ RECEIPT MUTATION
             onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
             onAcknowledgeMessage={handleAcknowledgeMessage}
             announcementPictureUrl={announcementPictureUrl}
@@ -683,7 +684,7 @@ export default function App() {
 
             kudos={kudos}
             prizes={prizes}
-            prizeTiers={prizeTiers}
+            prizeTiers={prizeTiers} // <-- RESTORED
             onAddKudos={(d) => runMutation('gn_kudos', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })}
             onRemoveKudos={(id) => runMutation('gn_kudos', id, 'delete')}
             
@@ -692,12 +693,12 @@ export default function App() {
               if (file) url = await handleFileUpload(file, 'documents'); 
               runMutation('gn_prizes', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
             }}
-            onUpdatePrize={(id, data) => runMutation('gn_prizes', id, 'update', data)}
+            onUpdatePrize={(id, data) => runMutation('gn_prizes', id, 'update', data)} // <-- RESTORED
             onRemovePrize={(id) => runMutation('gn_prizes', id, 'delete')}
 
-            onAddPrizeTier={(data) => runMutation('gn_prizeTiers', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })}
-            onUpdatePrizeTier={(id, data) => runMutation('gn_prizeTiers', id, 'update', data)}
-            onRemovePrizeTier={(id) => runMutation('gn_prizeTiers', id, 'delete')}
+            onAddPrizeTier={(data) => runMutation('gn_prizeTiers', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })} // <-- RESTORED
+            onUpdatePrizeTier={(id, data) => runMutation('gn_prizeTiers', id, 'update', data)} // <-- RESTORED
+            onRemovePrizeTier={(id) => runMutation('gn_prizeTiers', id, 'delete')} // <-- RESTORED
             
             payrollLogs={payrollLogs}
             onFinalizePayroll={handleFinalizePayroll}
@@ -730,6 +731,7 @@ export default function App() {
             
             onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
             onSendDirectMessage={(text, senderId, receiverId) => runMutation('gn_directMessages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, receiverId, date: new Date().toISOString(), read: false })}
+            onMarkDirectMessageRead={(id) => runMutation('gn_directMessages', id, 'update', { read: true })} // <-- NEW READ RECEIPT MUTATION
             onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
             onAcknowledgeMessage={handleAcknowledgeMessage}
             announcementPictureUrl={announcementPictureUrl}
@@ -767,7 +769,7 @@ export default function App() {
             
             kudos={kudos}
             prizes={prizes}
-            prizeTiers={prizeTiers}
+            prizeTiers={prizeTiers} // <-- RESTORED
             onAddPrize={async (d, file) => {
               let url = d.fileUrl || '';
               if (file) url = await handleFileUpload(file, 'documents'); 

@@ -83,7 +83,7 @@ const getHoliday = (dateStr) => {
 export default function EmployeeDashboard({ 
   shifts = [], employees = [], currentUser, clients = [], expenses = [], onAddExpense, 
   clientExpenses = [], onAddClientExpense, getClientRemainingBalance, paystubs = [], 
-  timeOffLogs = [], messages = [], directMessages = [], documents = [], onSendMessage, onSendDirectMessage, payPeriodStart, 
+  timeOffLogs = [], messages = [], directMessages = [], documents = [], onSendMessage, onSendDirectMessage, onMarkDirectMessageRead, payPeriodStart, 
   onPickupShift, isBonusActive, bonusSettings, setSelectedClient, onUpdateProfile, 
   onEmployeeFileUpload, onAddTimeOff, onRequestShiftCancel,
   onDeleteMessage, onAcknowledgeMessage, announcementPictureUrl, onUpdateAnnouncementPicture,
@@ -1113,6 +1113,7 @@ export default function EmployeeDashboard({
                   directMessages={directMessages}
                   onSendMessage={onSendMessage} 
                   onSendDirectMessage={onSendDirectMessage}
+                  onMarkDirectMessageRead={onMarkDirectMessageRead}
                   currentUser={currentUser} 
                   employees={employees} 
                   onDeleteMessage={onDeleteMessage} 

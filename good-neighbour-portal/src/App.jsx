@@ -81,7 +81,7 @@ export default function App() {
   // NEW DATABASES FOR REWARDS & STORE
   const [kudos, setKudos] = useState([]);
   const [prizes, setPrizes] = useState([]);
-  const [prizeTiers, setPrizeTiers] = useState([]); // <-- RESTORED
+  const [prizeTiers, setPrizeTiers] = useState([]);
   const [shiftAuditLogs, setShiftAuditLogs] = useState([]);
   
   // DATABASE FOR PAYROLL
@@ -138,7 +138,7 @@ export default function App() {
     unsubs.push(onSnapshot(getCol('gn_appointments'), snap => setAppointments(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_kudos'), snap => setKudos(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     unsubs.push(onSnapshot(getCol('gn_prizes'), snap => setPrizes(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
-    unsubs.push(onSnapshot(getCol('gn_prizeTiers'), snap => setPrizeTiers(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError)); // <-- RESTORED
+    unsubs.push(onSnapshot(getCol('gn_prizeTiers'), snap => setPrizeTiers(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError)); 
     unsubs.push(onSnapshot(getCol('gn_shiftAuditLogs'), snap => setShiftAuditLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleError));
     
     // PAYROLL LOGS LISTENER
@@ -187,13 +187,27 @@ export default function App() {
       await wipeCollection('gn_directMessages', directMessages);
       await wipeCollection('gn_shiftAuditLogs', shiftAuditLogs);
       await wipeCollection('gn_payroll_logs', payrollLogs);
-      await wipeCollection('gn_prizeTiers', prizeTiers); // <-- RESTORED
+      await wipeCollection('gn_prizeTiers', prizeTiers); 
       
       // Wipe local storage snapshots so the UI doesn't show fake "deleted" notifications
       localStorage.clear();
 
-      // 2. SEED FRESH MOCK DATA
-      for (const e of MOCK_EMPLOYEES) await setDoc(getDocRef('gn_employees', e.id), e);
+      // 2. SEED FRESH MOCK DATA - WITH EXPLICIT MASTER ADMIN CREATION
+      const masterAdmin = {
+        id: 'admin1',
+        name: 'Master Admin',
+        email: 'admin@goodneighbour.ca',
+        role: 'Master Admin',
+        isActive: true,
+        payType: 'salary',
+        annualSalary: 0
+      };
+      await setDoc(getDocRef('gn_employees', 'admin1'), masterAdmin);
+
+      for (const e of MOCK_EMPLOYEES) {
+         if (e.id !== 'admin1') await setDoc(getDocRef('gn_employees', e.id), e);
+      }
+      
       for (const c of MOCK_CLIENTS) await setDoc(getDocRef('gn_clients', c.id), c);
       for (const s of INITIAL_SHIFTS) await setDoc(getDocRef('gn_shifts', s.id.toString()), { ...s, id: s.id.toString() });
       for (const ex of INITIAL_EXPENSES) await setDoc(getDocRef('gn_expenses', ex.id.toString()), { ...ex, id: ex.id.toString() });
@@ -202,7 +216,7 @@ export default function App() {
       for (const t of INITIAL_TIME_OFF) await setDoc(getDocRef('gn_timeOffLogs', t.id.toString()), { ...t, id: t.id.toString() });
       for (const m of INITIAL_MESSAGES) await setDoc(getDocRef('gn_messages', m.id.toString()), { ...m, id: m.id.toString() });
       
-      // RESTORED: Seed default Storefront Prizes
+      // Seed default Storefront Prizes
       const DEFAULT_TIERS = [
         { id: 't1', label: 'Bronze', cost: 500, icon: '🥉', desc: '$10 Coffee Gift Card', limitOnePerYear: false },
         { id: 't2', label: 'Silver', cost: 1500, icon: '🥈', desc: '$25 Gas Gift Card', limitOnePerYear: false },
@@ -288,8 +302,24 @@ export default function App() {
       const secureEmail = userCredential.user.email;
 
       const safeEmployees = Array.isArray(employees) ? employees : [];
-      const foundEmp = safeEmployees.find(e => e && e.email && String(e.email).toLowerCase() === String(secureEmail).toLowerCase());
+      let foundEmp = safeEmployees.find(e => e && e.email && String(e.email).toLowerCase() === String(secureEmail).toLowerCase());
       
+      // --- EMERGENCY LIFELINE: REBUILD MASTER ADMIN ---
+      if (!foundEmp && String(secureEmail).toLowerCase() === 'admin@goodneighbour.ca') {
+         foundEmp = {
+           id: 'admin1',
+           name: 'Master Admin',
+           email: 'admin@goodneighbour.ca',
+           role: 'Master Admin',
+           isActive: true,
+           payType: 'salary',
+           annualSalary: 0
+         };
+         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'gn_employees', 'admin1'), foundEmp);
+         setEmployees(prev => [...prev, foundEmp]); // Force local update
+      }
+      // ------------------------------------------------
+
       if (foundEmp) {
         setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, annualSalary: foundEmp.annualSalary, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, deskPictureUrl: foundEmp.deskPictureUrl, deskBoard: foundEmp.deskBoard, hireDate: foundEmp.hireDate, pastTrophies: foundEmp.pastTrophies });
         setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
@@ -592,7 +622,7 @@ export default function App() {
             
             onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
             onSendDirectMessage={(text, senderId, receiverId) => runMutation('gn_directMessages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, receiverId, date: new Date().toISOString(), read: false })}
-            onMarkDirectMessageRead={(id) => runMutation('gn_directMessages', id, 'update', { read: true })} // <-- NEW READ RECEIPT MUTATION
+            onMarkDirectMessageRead={(id) => runMutation('gn_directMessages', id, 'update', { read: true })} 
             onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
             onAcknowledgeMessage={handleAcknowledgeMessage}
             announcementPictureUrl={announcementPictureUrl}
@@ -684,7 +714,7 @@ export default function App() {
 
             kudos={kudos}
             prizes={prizes}
-            prizeTiers={prizeTiers} // <-- RESTORED
+            prizeTiers={prizeTiers} 
             onAddKudos={(d) => runMutation('gn_kudos', Date.now().toString(), 'set', { ...d, id: Date.now().toString() })}
             onRemoveKudos={(id) => runMutation('gn_kudos', id, 'delete')}
             
@@ -693,12 +723,12 @@ export default function App() {
               if (file) url = await handleFileUpload(file, 'documents'); 
               runMutation('gn_prizes', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), fileUrl: url });
             }}
-            onUpdatePrize={(id, data) => runMutation('gn_prizes', id, 'update', data)} // <-- RESTORED
+            onUpdatePrize={(id, data) => runMutation('gn_prizes', id, 'update', data)} 
             onRemovePrize={(id) => runMutation('gn_prizes', id, 'delete')}
 
-            onAddPrizeTier={(data) => runMutation('gn_prizeTiers', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })} // <-- RESTORED
-            onUpdatePrizeTier={(id, data) => runMutation('gn_prizeTiers', id, 'update', data)} // <-- RESTORED
-            onRemovePrizeTier={(id) => runMutation('gn_prizeTiers', id, 'delete')} // <-- RESTORED
+            onAddPrizeTier={(data) => runMutation('gn_prizeTiers', Date.now().toString(), 'set', { ...data, id: Date.now().toString() })} 
+            onUpdatePrizeTier={(id, data) => runMutation('gn_prizeTiers', id, 'update', data)} 
+            onRemovePrizeTier={(id) => runMutation('gn_prizeTiers', id, 'delete')} 
             
             payrollLogs={payrollLogs}
             onFinalizePayroll={handleFinalizePayroll}
@@ -731,7 +761,7 @@ export default function App() {
             
             onSendMessage={(text, senderId, isHighPriority) => runMutation('gn_messages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, date: new Date().toISOString(), isHighPriority: !!isHighPriority, acknowledgements: [] })} 
             onSendDirectMessage={(text, senderId, receiverId) => runMutation('gn_directMessages', Date.now().toString(), 'set', { id: Date.now().toString(), text, senderId, receiverId, date: new Date().toISOString(), read: false })}
-            onMarkDirectMessageRead={(id) => runMutation('gn_directMessages', id, 'update', { read: true })} // <-- NEW READ RECEIPT MUTATION
+            onMarkDirectMessageRead={(id) => runMutation('gn_directMessages', id, 'update', { read: true })} 
             onDeleteMessage={(id) => runMutation('gn_messages', id, 'delete')}
             onAcknowledgeMessage={handleAcknowledgeMessage}
             announcementPictureUrl={announcementPictureUrl}
@@ -769,7 +799,7 @@ export default function App() {
             
             kudos={kudos}
             prizes={prizes}
-            prizeTiers={prizeTiers} // <-- RESTORED
+            prizeTiers={prizeTiers} 
             onAddPrize={async (d, file) => {
               let url = d.fileUrl || '';
               if (file) url = await handleFileUpload(file, 'documents'); 

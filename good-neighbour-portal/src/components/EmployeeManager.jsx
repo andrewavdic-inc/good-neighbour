@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, Loader2, FileText, Upload, Archive, RefreshCcw, Lock } from 'lucide-react';
+import { Users, Search, Edit, Trash2, User, Phone, Mail, AlertCircle, ShieldCheck, Plus, Image as ImageIcon, CalendarDays, Info, CheckCircle, Loader2, FileText, Upload, Archive, RefreshCcw, Lock, Award } from 'lucide-react';
 import { getPayPeriodBounds, parseLocal } from '../utils';
 
 const ONTARIO_REQUIREMENTS = [
@@ -29,6 +29,7 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload, is
     perVisitRate: employee?.perVisitRate || 45,
     annualSalary: employee?.annualSalary || 45000,
     hireDate: employee?.hireDate || new Date().toISOString().split('T')[0],
+    rewardsAccess: employee?.rewardsAccess || 'auto',
     emergencyContactName: employee?.emergencyContactName || '',
     emergencyContactPhone: employee?.emergencyContactPhone || '',
     requirements: employee?.requirements || {},
@@ -178,6 +179,15 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload, is
                       <label className="block text-sm font-medium text-slate-700 mb-1">Hire Date</label>
                       <input type="date" disabled={isUploading} value={formData.hireDate} onChange={(e) => handleChange('hireDate', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                     </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center"><Award className="h-4 w-4 mr-1 text-amber-500" /> Rewards Access</label>
+                    <select disabled={isUploading} value={formData.rewardsAccess} onChange={(e) => handleChange('rewardsAccess', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
+                      <option value="auto">Auto (3-Month Probation)</option>
+                      <option value="force_on">Force On (VIP Access)</option>
+                      <option value="force_off">Force Off (Locked Out)</option>
+                    </select>
                   </div>
 
                   {/* RESTRICTED WAGE SECTION */}
@@ -468,6 +478,7 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
   const [newPerVisitRate, setNewPerVisitRate] = useState('45');
   const [newAnnualSalary, setNewAnnualSalary] = useState('45000');
   const [newHireDate, setNewHireDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newRewardsAccess, setNewRewardsAccess] = useState('auto');
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newAvailability, setNewAvailability] = useState([]);
@@ -510,6 +521,7 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
       perVisitRate: Number(newPerVisitRate) || 45,
       annualSalary: Number(newAnnualSalary) || 45000,
       hireDate: newHireDate,
+      rewardsAccess: newRewardsAccess,
       phone: newPhone,
       email: newEmail,
       photoUrl: newPhotoFile ? '' : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
@@ -525,7 +537,7 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
     
     setNewName(''); setNewUsername(''); setNewPassword(''); setNewPayType('per_visit'); setNewHourlyWage('22.50');
     setNewPerVisitRate('45'); setNewAnnualSalary('45000'); setNewHireDate(new Date().toISOString().split('T')[0]); 
-    setNewPhone(''); setNewEmail(''); setNewAvailability([]); setNewPhotoFile(null); setIsUploading(false);
+    setNewRewardsAccess('auto'); setNewPhone(''); setNewEmail(''); setNewAvailability([]); setNewPhotoFile(null); setIsUploading(false);
   };
 
   const toggleNewAvailability = (dayPart) => {
@@ -769,6 +781,14 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
             <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">Hire Date</label>
               <input type="date" disabled={isUploading} value={newHireDate} onChange={(e) => setNewHireDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center"><Award className="h-4 w-4 mr-1 text-amber-500" /> Rewards Access</label>
+              <select disabled={isUploading} value={newRewardsAccess} onChange={(e) => setNewRewardsAccess(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm bg-white">
+                <option value="auto">Auto (3-Month Probation)</option>
+                <option value="force_on">Force On (VIP Access)</option>
+                <option value="force_off">Force Off (Locked Out)</option>
+              </select>
             </div>
             
             {/* WAGE SECURE AREA */}

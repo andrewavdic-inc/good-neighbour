@@ -321,8 +321,27 @@ export default function App() {
       // ------------------------------------------------
 
       if (foundEmp) {
-        setCurrentUser({ id: foundEmp.id, name: foundEmp.name, role: foundEmp.role || 'Neighbour', payType: foundEmp.payType, hourlyWage: foundEmp.hourlyWage, perVisitRate: foundEmp.perVisitRate, annualSalary: foundEmp.annualSalary, timeOffBalances: foundEmp.timeOffBalances, photoUrl: foundEmp.photoUrl, deskPictureUrl: foundEmp.deskPictureUrl, deskBoard: foundEmp.deskBoard, hireDate: foundEmp.hireDate, pastTrophies: foundEmp.pastTrophies });
-        setViewMode(String(foundEmp.role).includes('Admin') ? 'admin' : 'employee');
+        setCurrentUser({ 
+          id: foundEmp.id, 
+          name: foundEmp.name, 
+          role: foundEmp.role || 'Neighbour', 
+          payType: foundEmp.payType, 
+          hourlyWage: foundEmp.hourlyWage, 
+          perVisitRate: foundEmp.perVisitRate, 
+          annualSalary: foundEmp.annualSalary, 
+          timeOffBalances: foundEmp.timeOffBalances, 
+          photoUrl: foundEmp.photoUrl, 
+          deskPictureUrl: foundEmp.deskPictureUrl, 
+          deskBoard: foundEmp.deskBoard, 
+          hireDate: foundEmp.hireDate, 
+          pastTrophies: foundEmp.pastTrophies,
+          isTrainee: foundEmp.isTrainee
+        });
+        
+        // UPGRADED ACCESS CONTROL: Automatically grant admin view to these specific roles
+        const adminRoles = ['Administrator', 'Master Admin', 'Care Coordinator', 'Logistics Lead', 'Community Liaison'];
+        const isUserAdmin = adminRoles.includes(foundEmp.role) || String(foundEmp.role).includes('Admin');
+        setViewMode(isUserAdmin ? 'admin' : 'employee');
       } else { 
         alert("Login successful, but this email is not assigned to an employee profile in the directory. Please contact the administrator."); 
       }
@@ -493,7 +512,9 @@ export default function App() {
 
   if (!currentUser) return <LoginPage onLogin={handleLogin} isDbReady={Boolean(isDbReady)} hasData={Boolean(Array.isArray(employees) && employees.length > 0)} onSeedData={handleSeedData} />;
 
-  const isAdmin = String(currentUser.role).includes('Admin');
+  // UPGRADED ACCESS CONTROL: Ensure the new roles have proper master admin access paths
+  const adminRoles = ['Administrator', 'Master Admin', 'Care Coordinator', 'Logistics Lead', 'Community Liaison'];
+  const isAdmin = adminRoles.includes(currentUser.role) || String(currentUser.role).includes('Admin');
   const showAdminView = isAdmin && viewMode === 'admin';
   const finalPhotoUrl = getValidPhoto(currentUser.photoUrl);
 
@@ -746,12 +767,13 @@ export default function App() {
             currentUser={currentUser} 
             clients={clients} 
             expenses={expenses} 
-            onAddExpense={(d) => runMutation('gn_expenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: 'pending' })} 
+            // --- TRAINEE INTERCEPT: Send directly to simulated 'training' status ---
+            onAddExpense={(d) => runMutation('gn_expenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: currentUser?.isTrainee ? 'training' : 'pending' })} 
             clientExpenses={clientExpenses} 
             onAddClientExpense={async (d, file) => {
               let url = d.receiptUrl || '';
               if (file) url = await handleFileUpload(file, 'receipts');
-              runMutation('gn_clientExpenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: 'pending', receiptUrl: url });
+              runMutation('gn_clientExpenses', Date.now().toString(), 'set', { ...d, id: Date.now().toString(), status: currentUser?.isTrainee ? 'training' : 'pending', receiptUrl: url });
             }}
             paystubs={paystubs} 
             timeOffLogs={timeOffLogs} 
@@ -794,7 +816,8 @@ export default function App() {
               runMutation('gn_employees', employeeId, 'update', { uploadedFiles: [...currentUploads, newFileRecord] });
               setCurrentUser(prev => ({ ...prev, uploadedFiles: [...currentUploads, newFileRecord] }));
             }}
-            onAddTimeOff={(req) => runMutation('gn_timeOffLogs', req.id, 'set', { ...req, status: 'pending', dateSubmitted: new Date().toISOString() })}
+            // --- TRAINEE INTERCEPT: Send directly to simulated 'training' status ---
+            onAddTimeOff={(req) => runMutation('gn_timeOffLogs', req.id, 'set', { ...req, status: currentUser?.isTrainee ? 'training' : 'pending', dateSubmitted: new Date().toISOString() })}
             onRequestShiftCancel={(shiftId, reason) => runMutation('gn_shifts', shiftId, 'update', { cancelRequest: { pending: true, reason } })}
             
             kudos={kudos}

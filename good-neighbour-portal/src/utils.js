@@ -16,24 +16,51 @@ export const ONTARIO_REQUIREMENTS = [
 export const MOCK_EMPLOYEES = [
   { 
     id: 'admin1', name: 'Master Admin', role: 'Administrator', username: 'admin', password: 'admin', phone: '555-0000', email: 'admin@goodneighbour.ca',
-    photoUrl: '', requirements: {}, timeOffBalances: { sick: 5, vacation: 15 }
+    photoUrl: '', requirements: {}, timeOffBalances: { sick: 5, vacation: 15 },
+    payType: 'salary', annualSalary: 0, isActive: true, pastTrophies: []
   },
   { 
     id: 'emp1', name: 'Alice Smith', role: 'Block Captain', username: 'alice', password: 'password', phone: '555-1001', email: 'alice.s@goodneighbour.ca',
     photoUrl: '',
     requirements: { cpr: { status: 'valid', expiryDate: '2027-01-15' }, vsc: { status: 'valid', expiryDate: '2028-04-10' }, whmis: { status: 'valid' } },
-    timeOffBalances: { sick: 5, vacation: 10 }
+    timeOffBalances: { sick: 5, vacation: 10 },
+    payType: 'hourly', hourlyWage: 25.00, perVisitRate: 50, isActive: true, pastTrophies: []
   },
   { 
     id: 'emp2', name: 'Bob Jones', role: 'Neighbour', username: 'bob', password: 'password', phone: '555-1002', email: 'bob.j@goodneighbour.ca',
     photoUrl: '',
-    requirements: { cpr: { status: 'expired', expiryDate: '2025-12-01' }, maskFit: { status: 'missing' } }, timeOffBalances: { sick: 5, vacation: 10 }
+    requirements: { cpr: { status: 'expired', expiryDate: '2025-12-01' }, maskFit: { status: 'missing' } }, timeOffBalances: { sick: 5, vacation: 10 },
+    payType: 'per_visit', hourlyWage: 22.50, perVisitRate: 45, isActive: true, pastTrophies: []
   },
   { 
     id: 'emp3', name: 'Charlie Davis', role: 'Neighbour', username: 'charlie', password: 'password', phone: '555-1003', email: 'charlie.d@goodneighbour.ca',
     photoUrl: '',
-    requirements: { vsc: { status: 'pending' } }, timeOffBalances: { sick: 5, vacation: 10 }
+    requirements: { vsc: { status: 'pending' } }, timeOffBalances: { sick: 5, vacation: 10 },
+    payType: 'per_visit', hourlyWage: 22.50, perVisitRate: 45, isActive: true, pastTrophies: []
   },
+  // --- NEW ADMINISTRATOR ROLES ---
+  { 
+    id: 'emp4', name: 'Clara Oswald', role: 'Care Coordinator', username: 'clara', password: 'password', phone: '555-1004', email: 'clara@goodneighbour.ca', 
+    photoUrl: '', requirements: {}, timeOffBalances: { sick: 5, vacation: 15 },
+    payType: 'salary', annualSalary: 55000, isActive: true, pastTrophies: [] 
+  },
+  { 
+    id: 'emp5', name: 'David Wallace', role: 'Logistics Lead', username: 'david', password: 'password', phone: '555-1005', email: 'david@goodneighbour.ca', 
+    photoUrl: '', requirements: {}, timeOffBalances: { sick: 5, vacation: 15 },
+    payType: 'salary', annualSalary: 52000, isActive: true, pastTrophies: [] 
+  },
+  { 
+    id: 'emp6', name: 'Elena Gilbert', role: 'Community Liaison', username: 'elena', password: 'password', phone: '555-1006', email: 'elena@goodneighbour.ca', 
+    photoUrl: '', requirements: {}, timeOffBalances: { sick: 5, vacation: 15 },
+    payType: 'salary', annualSalary: 50000, isActive: true, pastTrophies: [] 
+  },
+  // --- NEW TRAINEE SANDBOX PROFILE ---
+  { 
+    id: 'emp7', name: 'Tommy Trainee', role: 'Neighbour', username: 'tommy', password: 'password', phone: '555-1007', email: 'tommy@goodneighbour.ca', 
+    photoUrl: '', requirements: {}, timeOffBalances: { sick: 5, vacation: 10 }, 
+    payType: 'hourly', hourlyWage: 22.50, perVisitRate: 45, isActive: true, 
+    isTrainee: true, trainingWage: 16.55, pastTrophies: [] 
+  }
 ];
 
 export const MOCK_CLIENTS = [

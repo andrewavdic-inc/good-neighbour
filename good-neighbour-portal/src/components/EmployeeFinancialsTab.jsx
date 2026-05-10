@@ -83,20 +83,24 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
   let hourlyHours = 0;
   let hourlyEarnings = 0;
 
-  if (currentUser.payType === 'salary') {
+  if (currentUser.payType === 'salary' && !currentUser.isTrainee) {
     shiftEarnings = (Number(currentUser.annualSalary) || 0) / 26; 
   } else { 
     completedShifts.forEach(s => { 
-      if (currentUser.payType === 'hourly' || s.isHourlyOverride) {
-         let h = 0;
-         if (s.actualStartTime && s.actualEndTime) {
-             h = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
-         } else {
-             const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
-             const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number); 
-             h = (eH + eM/60) - (sH + sM/60); 
-             if (h < 0) h += 24; 
-         }
+      let h = 0;
+      if (s.actualStartTime && s.actualEndTime) {
+          h = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
+      } else {
+          const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
+          const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number); 
+          h = (eH + eM/60) - (sH + sM/60); 
+          if (h < 0) h += 24; 
+      }
+
+      if (currentUser.isTrainee) {
+         hourlyHours += h;
+         hourlyEarnings += (h * (Number(currentUser.trainingWage) || 16.55));
+      } else if (currentUser.payType === 'hourly' || s.isHourlyOverride) {
          const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(currentUser.hourlyWage) || 22.50);
          hourlyHours += h;
          hourlyEarnings += (h * rate);
@@ -108,6 +112,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
     shiftEarnings = standardEarnings + hourlyEarnings;
   }
 
+  // Trainee logs are 'training', not 'approved', so they bypass this math entirely!
   const kmEarnings = (Array.isArray(expenses) ? expenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.kilometers) || 0) * 0.68, 0);
   const oopEarnings = (Array.isArray(clientExpenses) ? clientExpenses : []).filter(e => e && e.employeeId === currentUser.id && e.status === 'approved' && parseLocalSafe(e.date) >= periodBounds.start && parseLocalSafe(e.date) <= periodBounds.end).reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
 
@@ -120,11 +125,11 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
 
   const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
 
-  // --- NEW: DETAILED EARNINGS LEDGER LOGIC ---
+  // --- DETAILED EARNINGS LEDGER LOGIC ---
   const ledgerItems = useMemo(() => {
     let items = [];
 
-    if (currentUser.payType === 'salary') {
+    if (currentUser.payType === 'salary' && !currentUser.isTrainee) {
       const salaryAmount = (Number(currentUser.annualSalary) || 0) / 26;
       items.push({
         id: 'salary_base',
@@ -137,27 +142,30 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
     }
 
     completedShifts.forEach(s => {
-      if (currentUser.payType !== 'salary') {
+      if (currentUser.payType !== 'salary' || currentUser.isTrainee) {
         let amt = 0;
         let h = 0;
-        if (currentUser.payType === 'hourly' || s.isHourlyOverride) {
-          if (s.actualStartTime && s.actualEndTime) {
-              h = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
-          } else {
-              const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
-              const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number); 
-              h = (eH + eM/60) - (sH + sM/60); 
-              if (h < 0) h += 24; 
-          }
-          const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(currentUser.hourlyWage) || 22.50);
-          amt = h * rate;
+        if (s.actualStartTime && s.actualEndTime) {
+            h = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
         } else {
-          amt = (Number(currentUser.perVisitRate) || 45);
+            const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number); 
+            const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number); 
+            h = (eH + eM/60) - (sH + sM/60); 
+            if (h < 0) h += 24; 
         }
         
-        let descText = s.isInternal ? `Internal Task: ${s.internalTask}` : 'Completed Shift';
-        if (currentUser.payType === 'hourly' || s.isHourlyOverride) {
+        let descText = '';
+        if (currentUser.isTrainee) {
+           amt = h * (Number(currentUser.trainingWage) || 16.55);
+           descText = `Training Shift (${h.toFixed(1)} hrs)`;
+        } else if (currentUser.payType === 'hourly' || s.isHourlyOverride) {
+           const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(currentUser.hourlyWage) || 22.50);
+           amt = h * rate;
+           descText = s.isInternal ? `Internal Task: ${s.internalTask}` : 'Completed Shift';
            descText += ` (${h.toFixed(1)} hrs)`;
+        } else {
+           amt = (Number(currentUser.perVisitRate) || 45);
+           descText = s.isInternal ? `Internal Task: ${s.internalTask}` : 'Completed Shift';
         }
 
         items.push({
@@ -225,7 +233,12 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
         <div className="text-4xl font-black text-emerald-400 mb-6 tracking-tight">${totalEarnings.toFixed(2)}</div>
         
         <div className="space-y-3">
-          {currentUser.payType === 'salary' ? (
+          {currentUser.isTrainee ? (
+            <div className="flex justify-between items-center bg-indigo-500/20 border border-indigo-500/30 p-2 rounded">
+              <span className="text-sm text-indigo-200 font-bold flex items-center">Training Hours ({hourlyHours.toFixed(1)} hrs)</span>
+              <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
+            </div>
+          ) : currentUser.payType === 'salary' ? (
             <div className="flex justify-between items-center bg-white/5 p-2 rounded">
               <span className="text-sm text-slate-300">Base Salary (Bi-weekly)</span>
               <span className="font-semibold text-white">${shiftEarnings.toFixed(2)}</span>
@@ -267,7 +280,7 @@ export function EmployeePayTracker({ currentUser, shifts, expenses, clientExpens
           )}
         </div>
 
-        {/* --- NEW SCROLLABLE LEDGER --- */}
+        {/* --- SCROLLABLE LEDGER --- */}
         <div className="mt-6 pt-5 border-t border-slate-700">
           <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center">
             <FileText className="h-4 w-4 mr-1.5" /> Detailed Earnings Breakdown
@@ -386,6 +399,8 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], myShifts = [
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
         {displayExpenses.map(exp => {
           const clientNameDisplay = exp.clientId === 'internal' ? '🏢 Internal Task' : safeClients.find(c => c.id === exp.clientId)?.name || 'Unknown';
+          const isTraining = exp.status === 'training';
+          
           return (
             <div key={exp.id} className={`flex justify-between items-center p-3 border rounded-lg ${exp.clientId === 'internal' ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 bg-slate-50'}`}>
               <div>
@@ -393,7 +408,9 @@ export function EmployeeMileageLog({ myExpenses = [], clients = [], myShifts = [
                 <div className={`text-xs mt-0.5 ${exp.clientId === 'internal' ? 'text-indigo-600 font-medium' : 'text-slate-500'}`}>{exp.kilometers} km &bull; {clientNameDisplay}</div>
               </div>
               <div className="flex items-center space-x-3">
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='paid'?'bg-blue-100 text-blue-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${(exp.status === 'approved' || isTraining) ? 'bg-green-100 text-green-800' : exp.status === 'paid' ? 'bg-blue-100 text-blue-800' : exp.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {isTraining ? 'approved' : exp.status}
+                </span>
                 {exp.status === 'pending' && onRemoveExpense && (
                   <button onClick={() => onRemoveExpense(exp.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete Typo">
                     <Trash2 className="h-4 w-4" />
@@ -506,6 +523,8 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
       <div className="flex-1 p-4 overflow-y-auto max-h-[300px] space-y-2">
         {displayExpenses.map(exp => {
           const clientNameDisplay = exp.clientId === 'internal' ? '🏢 Internal Task' : clients.find(c => c.id === exp.clientId)?.name || 'Unknown';
+          const isTraining = exp.status === 'training';
+          
           return (
             <div key={exp.id} className={`flex justify-between items-center p-3 border rounded-lg ${exp.clientId === 'internal' ? 'bg-indigo-50/50 border-indigo-100' : 'border-slate-100 bg-slate-50'}`}>
               <div>
@@ -518,7 +537,9 @@ export function EmployeeClientExpenseLog({ myClientExpenses = [], clients = [], 
                     <FileText className="h-4 w-4" />
                   </a>
                 )}
-                <span className={`text-xs font-bold px-2 py-1 rounded-full ${exp.status==='approved'?'bg-green-100 text-green-800':exp.status==='paid'?'bg-blue-100 text-blue-800':exp.status==='rejected'?'bg-red-100 text-red-800':'bg-amber-100 text-amber-800'}`}>{exp.status}</span>
+                <span className={`text-xs font-bold px-2 py-1 rounded-full ${(exp.status === 'approved' || isTraining) ? 'bg-green-100 text-green-800' : exp.status === 'paid' ? 'bg-blue-100 text-blue-800' : exp.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {isTraining ? 'approved' : exp.status}
+                </span>
                 {exp.status === 'pending' && onRemoveClientExpense && (
                   <button onClick={() => onRemoveClientExpense(exp.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition" title="Delete Typo">
                     <Trash2 className="h-4 w-4" />

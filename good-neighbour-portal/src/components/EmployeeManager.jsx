@@ -30,6 +30,8 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload, is
     annualSalary: employee?.annualSalary || 45000,
     hireDate: employee?.hireDate || new Date().toISOString().split('T')[0],
     rewardsAccess: employee?.rewardsAccess || 'auto',
+    isTrainee: employee?.isTrainee || false,
+    trainingWage: employee?.trainingWage || 16.55,
     emergencyContactName: employee?.emergencyContactName || '',
     emergencyContactPhone: employee?.emergencyContactPhone || '',
     requirements: employee?.requirements || {},
@@ -99,7 +101,8 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload, is
       payType: formData.payType || 'per_visit',
       hourlyWage: Number(formData.hourlyWage) || 0,
       perVisitRate: Number(formData.perVisitRate) || 0,
-      annualSalary: Number(formData.annualSalary) || 0
+      annualSalary: Number(formData.annualSalary) || 0,
+      trainingWage: Number(formData.trainingWage) || 0
     };
     
     if (onSave && employee?.id) {
@@ -167,11 +170,14 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload, is
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
+                    <div className="col-span-2">
                       <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                      <select disabled={isUploading} value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm">
+                      <select disabled={isUploading} value={formData.role} onChange={(e) => handleChange('role', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-slate-800">
                         <option value="Neighbour">Neighbour</option>
                         <option value="Block Captain">Block Captain</option>
+                        <option value="Care Coordinator">Care Coordinator</option>
+                        <option value="Logistics Lead">Logistics Lead</option>
+                        <option value="Community Liaison">Community Liaison</option>
                         <option value="Administrator">Administrator</option>
                       </select>
                     </div>
@@ -179,15 +185,35 @@ function EditEmployeeModal({ employee, onClose, onSave, onEmployeeFileUpload, is
                       <label className="block text-sm font-medium text-slate-700 mb-1">Hire Date</label>
                       <input type="date" disabled={isUploading} value={formData.hireDate} onChange={(e) => handleChange('hireDate', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm" />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center"><Award className="h-4 w-4 mr-1 text-amber-500" /> Rewards</label>
+                      <select disabled={isUploading} value={formData.rewardsAccess} onChange={(e) => handleChange('rewardsAccess', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
+                        <option value="auto">Auto (3-Mo)</option>
+                        <option value="force_on">VIP Access</option>
+                        <option value="force_off">Locked Out</option>
+                      </select>
+                    </div>
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center"><Award className="h-4 w-4 mr-1 text-amber-500" /> Rewards Access</label>
-                    <select disabled={isUploading} value={formData.rewardsAccess} onChange={(e) => handleChange('rewardsAccess', e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm">
-                      <option value="auto">Auto (3-Month Probation)</option>
-                      <option value="force_on">Force On (VIP Access)</option>
-                      <option value="force_off">Force Off (Locked Out)</option>
-                    </select>
+
+                  {/* TRAINING MODE SANDBOX */}
+                  <div className="border border-indigo-200 bg-indigo-50 p-3 rounded-md">
+                    <label className="flex items-center space-x-3 cursor-pointer group w-fit">
+                      <div className="relative flex items-center justify-center">
+                        <input type="checkbox" disabled={isUploading} checked={formData.isTrainee} onChange={(e) => handleChange('isTrainee', e.target.checked)} className="h-5 w-5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                      </div>
+                      <span className="font-bold text-indigo-900 flex items-center">
+                        Training Mode (Sandbox)
+                      </span>
+                    </label>
+                    <p className="text-xs text-indigo-700/80 mt-1 ml-8">Trainees can submit fake logs that auto-approve for practice without affecting real billing or leaderboards.</p>
+                    {formData.isTrainee && isMasterAdmin ? (
+                      <div className="mt-3 ml-8">
+                        <label className="block text-xs font-bold text-indigo-900 mb-1">Training Wage ($/hr)</label>
+                        <input type="number" min="0" step="0.25" disabled={isUploading} value={formData.trainingWage} onChange={(e) => handleChange('trainingWage', e.target.value)} className="w-32 px-3 py-1.5 border border-indigo-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white" required />
+                      </div>
+                    ) : formData.isTrainee && !isMasterAdmin ? (
+                      <div className="mt-2 ml-8 text-[10px] text-indigo-500 font-bold uppercase tracking-wider"><Lock className="h-3 w-3 inline mr-1"/> Wage Restricted</div>
+                    ) : null}
                   </div>
 
                   {/* RESTRICTED WAGE SECTION */}
@@ -479,6 +505,8 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
   const [newAnnualSalary, setNewAnnualSalary] = useState('45000');
   const [newHireDate, setNewHireDate] = useState(new Date().toISOString().split('T')[0]);
   const [newRewardsAccess, setNewRewardsAccess] = useState('auto');
+  const [newIsTrainee, setNewIsTrainee] = useState(false);
+  const [newTrainingWage, setNewTrainingWage] = useState('16.55');
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newAvailability, setNewAvailability] = useState([]);
@@ -522,6 +550,8 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
       annualSalary: Number(newAnnualSalary) || 45000,
       hireDate: newHireDate,
       rewardsAccess: newRewardsAccess,
+      isTrainee: newIsTrainee,
+      trainingWage: Number(newTrainingWage) || 16.55,
       phone: newPhone,
       email: newEmail,
       photoUrl: newPhotoFile ? '' : `https://api.dicebear.com/7.x/avataaars/svg?seed=${newName}&backgroundColor=0f766e`,
@@ -537,7 +567,8 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
     
     setNewName(''); setNewUsername(''); setNewPassword(''); setNewPayType('per_visit'); setNewHourlyWage('22.50');
     setNewPerVisitRate('45'); setNewAnnualSalary('45000'); setNewHireDate(new Date().toISOString().split('T')[0]); 
-    setNewRewardsAccess('auto'); setNewPhone(''); setNewEmail(''); setNewAvailability([]); setNewPhotoFile(null); setIsUploading(false);
+    setNewRewardsAccess('auto'); setNewIsTrainee(false); setNewTrainingWage('16.55'); setNewPhone(''); setNewEmail(''); 
+    setNewAvailability([]); setNewPhotoFile(null); setIsUploading(false);
   };
 
   const toggleNewAvailability = (dayPart) => {
@@ -668,8 +699,9 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
                   <div>
                     <h3 className="font-bold text-slate-800 leading-tight">{emp.name || 'Unnamed Employee'}</h3>
                     <div className="flex flex-col mt-0.5 space-y-1">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                         <span className={`text-xs font-medium px-2 py-0.5 rounded inline-block w-fit ${emp.isActive === false ? 'bg-slate-100 text-slate-500' : 'bg-teal-50 text-teal-700'}`}>{emp.role || 'Staff'}</span>
+                        {emp.isTrainee && <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded uppercase shadow-sm">Trainee</span>}
                         {emp.isActive === false && <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase">Deactivated</span>}
                       </div>
                       
@@ -772,9 +804,12 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
           <div className="grid grid-cols-2 gap-3 border border-slate-200 p-3 rounded-md bg-slate-50/50">
             <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-              <select disabled={isUploading} value={newRole} onChange={(e) => setNewRole(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-teal-800 bg-white">
+              <select disabled={isUploading} value={newRole} onChange={(e) => setNewRole(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm font-bold text-slate-800 bg-white">
                 <option value="Neighbour">Neighbour</option>
                 <option value="Block Captain">Block Captain</option>
+                <option value="Care Coordinator">Care Coordinator</option>
+                <option value="Logistics Lead">Logistics Lead</option>
+                <option value="Community Liaison">Community Liaison</option>
                 <option value="Administrator">Administrator</option>
               </select>
             </div>
@@ -789,6 +824,27 @@ export default function EmployeeManager({ employees = [], shifts = [], payPeriod
                 <option value="force_on">Force On (VIP Access)</option>
                 <option value="force_off">Force Off (Locked Out)</option>
               </select>
+            </div>
+
+            {/* TRAINING MODE SANDBOX */}
+            <div className="col-span-2 border border-indigo-200 bg-indigo-50 p-3 rounded-md">
+              <label className="flex items-center space-x-3 cursor-pointer group w-fit">
+                <div className="relative flex items-center justify-center">
+                  <input type="checkbox" disabled={isUploading} checked={newIsTrainee} onChange={(e) => setNewIsTrainee(e.target.checked)} className="h-5 w-5 rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                </div>
+                <span className="font-bold text-indigo-900 flex items-center">
+                  Training Mode (Sandbox)
+                </span>
+              </label>
+              <p className="text-xs text-indigo-700/80 mt-1 ml-8">Trainees can submit fake logs that auto-approve for practice without affecting real billing or leaderboards.</p>
+              {newIsTrainee && isMasterAdmin ? (
+                <div className="mt-3 ml-8">
+                  <label className="block text-xs font-bold text-indigo-900 mb-1">Training Wage ($/hr)</label>
+                  <input type="number" min="0" step="0.25" disabled={isUploading} value={newTrainingWage} onChange={(e) => setNewTrainingWage(e.target.value)} className="w-32 px-3 py-1.5 border border-indigo-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white" required />
+                </div>
+              ) : newIsTrainee && !isMasterAdmin ? (
+                <div className="mt-2 ml-8 text-[10px] text-indigo-500 font-bold uppercase tracking-wider"><Lock className="h-3 w-3 inline mr-1"/> Wage Restricted</div>
+              ) : null}
             </div>
             
             {/* WAGE SECURE AREA */}

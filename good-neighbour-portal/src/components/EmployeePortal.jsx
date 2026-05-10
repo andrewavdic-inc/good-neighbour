@@ -461,6 +461,19 @@ export default function EmployeeDashboard({
   return (
     <div className="space-y-6">
       
+      {/* --- NEW: TRAINEE SANDBOX BANNER --- */}
+      {currentUser.isTrainee && (
+        <div className="bg-indigo-600 rounded-xl shadow-lg border border-indigo-700 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between text-indigo-50 animate-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center">
+             <AlertCircle className="h-6 w-6 mr-3 text-indigo-300 shrink-0" />
+             <div>
+               <h3 className="font-bold text-white text-sm">Training Sandbox Active</h3>
+               <p className="text-xs text-indigo-200 mt-0.5">Your logs, expenses, and time-off requests will automatically simulate approval for practice. No real money or client billing is affected.</p>
+             </div>
+          </div>
+        </div>
+      )}
+
       {/* REWARDS UNBOXING MODAL */}
       {activeReward && (() => {
         const isBonus = activeReward._type === 'prize' && (activeReward.name.toLowerCase().includes('bonus') || activeReward.name.toLowerCase().includes('place'));
@@ -625,9 +638,12 @@ export default function EmployeeDashboard({
             
             <h2 className="text-xl font-bold text-slate-800">{String(currentUser.name)}</h2>
             <div className="flex flex-col mt-2 gap-1 items-center">
-              <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">{String(currentUser.role)}</span>
-              <span className="text-xs font-semibold text-slate-500">
-                {currentUser.payType === 'salary' ? 'Salaried' : currentUser.payType === 'hourly' ? `$${currentUser.hourlyWage || 22.50}/hr` : `$${currentUser.perVisitRate || 45}/visit`}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">{String(currentUser.role)}</span>
+                {currentUser.isTrainee && <span className="text-xs font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-widest shadow-sm border border-indigo-200">Trainee</span>}
+              </div>
+              <span className="text-xs font-semibold text-slate-500 mt-1">
+                {currentUser.isTrainee ? `Training Wage: $${currentUser.trainingWage || 16.55}/hr` : currentUser.payType === 'salary' ? 'Salaried' : currentUser.payType === 'hourly' ? `$${currentUser.hourlyWage || 22.50}/hr` : `$${currentUser.perVisitRate || 45}/visit`}
               </span>
             </div>
           </div>
@@ -829,6 +845,7 @@ export default function EmployeeDashboard({
                           const isSick = req.type === 'sick';
                           const start = parseLocalSafe(req.startDate);
                           const end = parseLocalSafe(req.endDate);
+                          const isTraining = req.status === 'training';
                           
                           return (
                             <div key={req.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-slate-200 rounded-lg bg-slate-50 hover:bg-white transition gap-3">
@@ -847,7 +864,7 @@ export default function EmployeeDashboard({
                                 </div>
                               </div>
                               <div className="flex items-center sm:justify-end">
-                                {req.status === 'approved' ? (
+                                {(req.status === 'approved' || isTraining) ? (
                                   <span className="flex items-center text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full"><CheckCircle className="h-3.5 w-3.5 mr-1" /> Approved</span>
                                 ) : req.status === 'rejected' ? (
                                   <span className="flex items-center text-xs font-bold text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full"><XCircle className="h-3.5 w-3.5 mr-1" /> Denied</span>
@@ -1020,27 +1037,28 @@ export default function EmployeeDashboard({
                 </div>
               )}
 
-{/* TAB 4: EXPENSES (REFACTORED COMPONENTS) */}
-{activeTab === 'expenses' && (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
-    <EmployeeMileageLog 
-      myExpenses={myExpenses} 
-      clients={clients} 
-      myShifts={myShifts} 
-      onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
-      onRemoveExpense={(id) => runMutation('gn_expenses', id, 'delete')} 
-      getClientRemainingBalance={getClientRemainingBalance}
-    />
-    <EmployeeClientExpenseLog 
-      myClientExpenses={myClientExpenses} 
-      clients={clients} 
-      myShifts={myShifts} 
-      onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
-      onRemoveClientExpense={(id) => runMutation('gn_clientExpenses', id, 'delete')} 
-      getClientRemainingBalance={getClientRemainingBalance}
-    />
-  </div>
-)}
+              {/* TAB 4: EXPENSES (REFACTORED COMPONENTS) */}
+              {activeTab === 'expenses' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200">
+                  <EmployeeMileageLog 
+                    myExpenses={myExpenses} 
+                    clients={clients} 
+                    myShifts={myShifts} 
+                    onAddExpense={(exp) => onAddExpense({ ...exp, employeeId: currentUser.id })} 
+                    onRemoveExpense={(id) => onAddExpense({ id, _delete: true })} // Simple mock intercept for deletion
+                    getClientRemainingBalance={getClientRemainingBalance}
+                  />
+                  <EmployeeClientExpenseLog 
+                    myClientExpenses={myClientExpenses} 
+                    clients={clients} 
+                    myShifts={myShifts} 
+                    onAddClientExpense={(exp, file) => onAddClientExpense({ ...exp, employeeId: currentUser.id }, file)} 
+                    onRemoveClientExpense={(id) => onAddClientExpense({ id, _delete: true })} // Simple mock intercept for deletion
+                    getClientRemainingBalance={getClientRemainingBalance}
+                  />
+                </div>
+              )}
+
               {/* TAB 5: DOCUMENTS */}
               {activeTab === 'documents' && (
                 <div className="p-6 space-y-6">

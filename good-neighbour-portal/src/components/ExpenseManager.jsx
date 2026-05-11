@@ -27,7 +27,7 @@ const parseLocalSafe = (dateStr) => {
 };
 
 export default function ExpenseManager({ 
-  shifts = [], expenses = [], clientExpenses = [], employees = [], clients = [], 
+  shifts = [], expenses = [], clientExpenses = [], employees = [], clients = [], prizes = [],
   onUpdateExpense, onUpdateClientExpense, payPeriodStart, isBonusActive, bonusSettings
 }) {
   const [selectedEmpId, setSelectedEmpId] = useState(null);
@@ -43,6 +43,7 @@ export default function ExpenseManager({
   const safeShifts = Array.isArray(shifts) ? shifts : [];
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
   const safeClientExpenses = Array.isArray(clientExpenses) ? clientExpenses : [];
+  const safePrizes = Array.isArray(prizes) ? prizes : [];
   
   // --- UPDATED: BULLETPROOF FILTER TO GHOST THE OWNER ---
   const safeEmployees = Array.isArray(employees) ? employees.filter(e => e && e.id !== 'admin1' && e.name !== 'Master Admin' && e.role !== 'Master Admin') : [];
@@ -136,58 +137,15 @@ export default function ExpenseManager({
 
   const empAdjs = manualAdjustments.filter(a => a.employeeId === selectedEmpId && a.periodTime === activePeriod.start.getTime().toString());
 
-  // --- AUTO-BONUS ENGINE ---
-  const getMonthlyLeaderboard = () => {
-    const mStart = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth(), 1);
-    const mEnd = new Date(currentPeriodEnd.getFullYear(), currentPeriodEnd.getMonth() + 1, 0, 23, 59, 59);
-    
-    let results = safeEmployees.map(emp => {
-      const empShiftsForBonus = safeShifts.filter(s => {
-        if (s.employeeId !== emp.id || !s.date || !s.endTime) return false;
-        const shiftDate = new Date(`${s.date}T${s.endTime}`);
-        return shiftDate >= mStart && shiftDate <= mEnd;
-      });
-      
-      let sEarn = 0;
-      if (emp.payType === 'salary') {
-         sEarn = (Number(emp.annualSalary) || 0) / 12; 
-      } else {
-        empShiftsForBonus.forEach(s => {
-          if (emp.payType === 'hourly' || s.isHourlyOverride) {
-            let h = 0;
-            if (s.actualStartTime && s.actualEndTime) {
-               h = (new Date(s.actualEndTime) - new Date(s.actualStartTime)) / 3600000;
-            } else {
-               const [sH, sM] = String(s.startTime || '00:00').split(':').map(Number);
-               const [eH, eM] = String(s.endTime || '00:00').split(':').map(Number);
-               h = (eH + eM/60) - (sH + sM/60);
-               if (h < 0) h += 24;
-            }
-            const rate = s.isHourlyOverride ? (Number(s.hourlyRate) || 0) : (Number(emp.hourlyWage) || 22.5);
-            sEarn += (h * rate);
-          } else {
-            sEarn += (Number(emp.perVisitRate) || 45);
-          }
-        });
-      }
-      
-      const kmE = safeExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= mStart && parseLocalSafe(e.date) <= mEnd).reduce((sum, e) => sum + (Number(e.kilometers) * 0.68), 0);
-      const oopE = safeClientExpenses.filter(e => e.employeeId === emp.id && e.status === 'approved' && parseLocalSafe(e.date) >= mStart && parseLocalSafe(e.date) <= mEnd).reduce((sum, e) => sum + Number(e.amount), 0);
-      
-      return { emp, shiftCount: empShiftsForBonus.length, total: sEarn + kmE + oopE };
-    });
-    
-    return results.filter(r => r.shiftCount >= 10).sort((a, b) => b.total - a.total).slice(0, 3);
-  };
+  // --- FINALIZED BONUSES FROM PRIZE WALLET ---
+  const empBonuses = useMemo(() => safePrizes.filter(p => {
+    if (p.employeeId !== selectedEmpId || !p.date) return false;
+    const d = parseLocalSafe(p.date);
+    const isBonus = (p.name || '').toLowerCase().includes('bonus') || (p.name || '').toLowerCase().includes('place');
+    return isBonus && d >= currentPeriodStart && d <= currentPeriodEnd;
+  }), [safePrizes, selectedEmpId, currentPeriodStart, currentPeriodEnd]);
 
-  const autoBonusAmount = useMemo(() => {
-    if (!isBonusActive || !selectedEmpId) return 0;
-    const winners = getMonthlyLeaderboard();
-    if (winners[0]?.emp.id === selectedEmpId) return Number(safeBonusSettings.monthly[0] || 0);
-    if (winners[1]?.emp.id === selectedEmpId) return Number(safeBonusSettings.monthly[1] || 0);
-    if (winners[2]?.emp.id === selectedEmpId) return Number(safeBonusSettings.monthly[2] || 0);
-    return 0;
-  }, [isBonusActive, selectedEmpId, currentPeriodEnd, safeShifts, safeExpenses, safeClientExpenses, safeEmployees, safeBonusSettings]);
+  const totalBonusPayout = empBonuses.reduce((sum, p) => sum + (Number(p.value) || 0), 0);
 
   // --- LIVE TOTAL CALCULATIONS ---
   const approvedShiftsCost = useMemo(() => {
@@ -198,7 +156,7 @@ export default function ExpenseManager({
 
   const approvedMileageCost = isSalaried ? 0 : empMileage.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.kilometers || 0) * 0.68 : 0), 0);
   const approvedOOPCost = isSalaried ? 0 : empOOP.reduce((sum, e) => sum + (e.status === 'approved' ? Number(e.amount || 0) : 0), 0);
-  const totalAdjustments = empAdjs.reduce((sum, a) => sum + Number(a.amount || 0), 0) + autoBonusAmount;
+  const totalAdjustments = empAdjs.reduce((sum, a) => sum + Number(a.amount || 0), 0) + totalBonusPayout;
   
   // --- NEW SPLIT MATH ---
   const taxableEarnings = approvedShiftsCost + totalAdjustments;
@@ -257,13 +215,13 @@ export default function ExpenseManager({
       ]);
     } else if (activeTab === 'adjustments') {
       headers = ['Date', 'Description', 'Amount ($)'];
-      if (autoBonusAmount > 0) {
+      empBonuses.forEach(b => {
         rows.push([
-          `"${currentPeriodEnd.toLocaleDateString('en-US')}"`,
-          `"Performance Bonus (System Generated)"`,
-          autoBonusAmount.toFixed(2)
+          `"${parseLocalSafe(b.date).toLocaleDateString('en-US')}"`,
+          `"${b.name}"`,
+          Number(b.value || 0).toFixed(2)
         ]);
-      }
+      });
       empAdjs.forEach(a => {
         rows.push([
           `"${parseLocalSafe(a.date).toLocaleDateString()}"`,
@@ -455,7 +413,7 @@ export default function ExpenseManager({
                   )}
 
                   <button onClick={() => setActiveTab('adjustments')} className={`py-3 px-6 text-sm font-bold border-b-2 transition flex items-center whitespace-nowrap ${activeTab === 'adjustments' ? 'border-teal-600 text-teal-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                    <DollarSign className="h-4 w-4 mr-2" /> Adjustments ({empAdjs.length + (autoBonusAmount > 0 ? 1 : 0)}) &bull; ${totalAdjustments.toFixed(2)}
+                    <DollarSign className="h-4 w-4 mr-2" /> Adjustments ({empAdjs.length + empBonuses.length}) &bull; ${totalAdjustments.toFixed(2)}
                   </button>
                 </div>
                 
@@ -665,22 +623,22 @@ export default function ExpenseManager({
                     <div className="space-y-3">
                       <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2">Logged Adjustments for this Period</h3>
                       
-                      {autoBonusAmount > 0 && (
-                        <div className="flex items-center justify-between p-4 rounded-xl border shadow-sm bg-amber-50 border-amber-200">
+                      {empBonuses.map(bonus => (
+                        <div key={bonus.id} className="flex items-center justify-between p-4 rounded-xl border shadow-sm bg-amber-50 border-amber-200">
                           <div>
-                            <div className="font-bold text-sm text-amber-900 flex items-center"><Award className="h-4 w-4 mr-1"/> Performance Bonus</div>
-                            <div className="text-xs text-amber-700 mt-1 font-medium">System Generated - Auto-applied for this period</div>
+                            <div className="font-bold text-sm text-amber-900 flex items-center"><Award className="h-4 w-4 mr-1"/> {bonus.name}</div>
+                            <div className="text-xs text-amber-700 mt-1 font-medium">Finalized Cash Prize</div>
                           </div>
                           <div className="flex items-center space-x-4">
                             <div className="text-lg font-black text-amber-600">
-                              +${autoBonusAmount.toFixed(2)}
+                              +${Number(bonus.value || 0).toFixed(2)}
                             </div>
                             <div className="w-7"></div> {/* Spacer to align with the trash icons below */}
                           </div>
                         </div>
-                      )}
+                      ))}
 
-                      {empAdjs.length === 0 && autoBonusAmount === 0 ? (
+                      {empAdjs.length === 0 && empBonuses.length === 0 ? (
                         <p className="text-slate-500 italic text-sm py-4">No manual adjustments made this period.</p>
                       ) : (
                         empAdjs.map(adj => (

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Coins, Award, Trophy, Medal, Download, ShieldAlert, Wallet, CalendarDays, Receipt, Clock, Briefcase } from 'lucide-react';
 import { getPastPayPeriods, parseLocal } from '../utils';
 
-export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], clients = [], payPeriodStart }) {
+export default function AdminEarningsManager({ employees = [], shifts = [], expenses = [], clientExpenses = [], clients = [], prizes = [], payPeriodStart }) {
   const kmRate = 0.68;
   
   // --- BULLETPROOF FILTER TO GHOST THE OWNER ---
@@ -12,6 +12,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const safeShifts = Array.isArray(shifts) ? shifts.filter(s => s.status !== 'paid') : [];
   const safeExp = Array.isArray(expenses) ? expenses.filter(e => e.status !== 'paid') : [];
   const safeCE = Array.isArray(clientExpenses) ? clientExpenses.filter(e => e.status !== 'paid') : [];
+  const safePrizes = Array.isArray(prizes) ? prizes : [];
   
   const safeClients = Array.isArray(clients) ? clients : [];
   
@@ -40,7 +41,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   const currentPeriodStart = activePeriod.start;
   const currentPeriodEnd = activePeriod.end;
 
-  // --- SYNCHRONIZED EARNINGS CALCULATOR (STRICTLY BASE PAY & REIMBURSEMENTS) ---
+  // --- SYNCHRONIZED EARNINGS CALCULATOR (BASE PAY, REIMBURSEMENTS, & BONUSES) ---
   const employeeEarnings = useMemo(() => {
     const now = new Date();
 
@@ -115,7 +116,15 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       });
       const oopEarnings = empClientExp.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
-      const totalEarnings = shiftEarnings + kmEarnings + oopEarnings;
+      const empPrizes = safePrizes.filter(p => {
+        if (!p || !p.date) return false;
+        const d = parseLocal(p.date);
+        const isBonus = (p.name || '').toLowerCase().includes('bonus') || (p.name || '').toLowerCase().includes('place');
+        return p.employeeId === emp.id && isBonus && d >= currentPeriodStart && d <= currentPeriodEnd;
+      });
+      const bonusEarnings = empPrizes.reduce((sum, p) => sum + (Number(p.value) || 0), 0);
+
+      const totalEarnings = shiftEarnings + kmEarnings + oopEarnings + bonusEarnings;
 
       return {
         ...emp,
@@ -126,10 +135,11 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
         totalKms,
         kmEarnings,
         oopEarnings,
+        bonusEarnings,
         totalEarnings
       };
     }).filter(Boolean).sort((a, b) => b.totalEarnings - a.totalEarnings);
-  }, [safeEmps, safeShifts, safeExp, safeCE, currentPeriodStart, currentPeriodEnd]);
+  }, [safeEmps, safeShifts, safeExp, safeCE, safePrizes, currentPeriodStart, currentPeriodEnd]);
 
 
   // --- PERFECTED FINANCIAL SEPARATION WIDGET CALCULATIONS ---
@@ -143,6 +153,8 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
   
   const totalHourlyHours = wageEmployees.filter(e => e.payType === 'hourly').reduce((sum, e) => sum + e.totalHours, 0);
   const totalVisitShifts = wageEmployees.filter(e => e.payType !== 'hourly').reduce((sum, e) => sum + e.shiftCount, 0);
+  
+  const totalBonusPayout = employeeEarnings.reduce((sum, emp) => sum + emp.bonusEarnings, 0);
 
   // 1. Client Budgets (Strictly excluding Internal Overhead)
   const maxExpenseLiability = safeClients
@@ -182,19 +194,21 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       ['Total Payroll Liability', `"$${totalPayrollLiability.toFixed(2)}"`],
       ['Total Wage Cost', `"$${totalWageCost.toFixed(2)}"`],
       ['Salary Cost', `"$${totalSalaryCost.toFixed(2)}"`],
+      ['Total Bonus Payout', `"$${totalBonusPayout.toFixed(2)}"`],
       ['Client Budget Utilized', `"$${totalUsedClientExpense.toFixed(2)} of $${maxExpenseLiability.toFixed(2)}"`],
       ['Corporate Overhead & Petty Cash', `"$${totalCorporateOverhead.toFixed(2)}"`],
       [], 
       ['LINE-BY-LINE BREAKDOWN']
     ];
 
-    const tableHeaders = ['Employee', 'Role', 'Base Earnings ($)', 'Mileage ($)', 'Out-of-Pocket ($)', 'Total Due ($)'];
+    const tableHeaders = ['Employee', 'Role', 'Base Earnings ($)', 'Bonuses ($)', 'Mileage ($)', 'Out-of-Pocket ($)', 'Total Due ($)'];
 
     const tableRows = employeeEarnings.map(emp => {
       return [
         `"${emp.name}"`, 
         `"${emp.role}"`,
         emp.shiftEarnings.toFixed(2),
+        emp.bonusEarnings.toFixed(2),
         emp.kmEarnings.toFixed(2),
         emp.oopEarnings.toFixed(2),
         emp.totalEarnings.toFixed(2)
@@ -263,17 +277,17 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
       </div>
       
       {/* --- NEW SPLIT FINANCIAL DASHBOARD --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 border-b border-slate-200 bg-slate-50/50">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 border-b border-slate-200 bg-slate-50/50">
         
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Wallet className="h-4 w-4 mr-2 text-teal-600"/> Total Payroll Liability</div>
-          <div className="text-4xl font-black text-slate-800 tracking-tight">${totalPayrollLiability.toFixed(2)}</div>
+          <div className="text-3xl font-black text-slate-800 tracking-tight">${totalPayrollLiability.toFixed(2)}</div>
           <div className="text-xs text-slate-400 mt-2 font-medium">For selected pay period</div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Clock className="h-4 w-4 mr-2 text-blue-600"/> Total Wage Cost</div>
-          <div className="text-4xl font-black text-slate-800 tracking-tight">${totalWageCost.toFixed(2)}</div>
+          <div className="text-3xl font-black text-slate-800 tracking-tight">${totalWageCost.toFixed(2)}</div>
           <div className="flex flex-col text-xs text-slate-400 mt-2 font-medium space-y-0.5">
             <span>{totalVisitShifts} Per-Visit Shifts</span>
             <span>{totalHourlyHours.toFixed(1)} Hourly Hours</span>
@@ -282,8 +296,17 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
 
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center"><Briefcase className="h-4 w-4 mr-2 text-indigo-600"/> Salary Cost</div>
-          <div className="text-4xl font-black text-slate-800 tracking-tight">${totalSalaryCost.toFixed(2)}</div>
+          <div className="text-3xl font-black text-slate-800 tracking-tight">${totalSalaryCost.toFixed(2)}</div>
           <div className="text-xs text-slate-400 mt-2 font-medium">Fixed bi-weekly pay ({salariedEmployees.length} staff)</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-amber-50 to-white border border-amber-200 rounded-xl p-5 shadow-sm flex flex-col justify-between relative overflow-hidden">
+          <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none"><Trophy size={80} /></div>
+          <div className="relative z-10">
+            <div className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-2 flex items-center"><Award className="h-4 w-4 mr-2 text-amber-500"/> Total Bonuses</div>
+            <div className="text-3xl font-black text-slate-800 tracking-tight">${totalBonusPayout.toFixed(2)}</div>
+            <div className="text-xs text-slate-400 mt-2 font-medium">Finalized Cash Prizes</div>
+          </div>
         </div>
       </div>
 
@@ -340,6 +363,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
             <tr className="text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
               <th className="px-6 py-4 font-semibold">Employee</th>
               <th className="px-6 py-4 font-semibold">Base Earnings</th>
+              <th className="px-6 py-4 font-semibold">Bonuses</th>
               <th className="px-6 py-4 font-semibold">Mileage</th>
               <th className="px-6 py-4 font-semibold">Out-of-Pocket</th>
               <th className="px-6 py-4 font-semibold text-right text-slate-800">Total Due</th>
@@ -348,7 +372,7 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
           <tbody className="divide-y divide-slate-100">
             {employeeEarnings.length === 0 ? (
               <tr>
-                <td colSpan="5" className="px-6 py-12 text-center text-slate-500 font-medium">No active employees found for this pay period.</td>
+                <td colSpan="6" className="px-6 py-12 text-center text-slate-500 font-medium">No active employees found for this pay period.</td>
               </tr>
             ) : (
               employeeEarnings.map(emp => (
@@ -360,6 +384,9 @@ export default function AdminEarningsManager({ employees = [], shifts = [], expe
                   <td className="px-6 py-4 text-sm text-slate-600">
                     <div className="font-semibold text-slate-700">${emp.shiftEarnings.toFixed(2)}</div>
                     <div className="text-xs text-slate-400 mt-0.5">{emp.displayRate}</div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-600">
+                    <div className="font-semibold text-amber-600">${emp.bonusEarnings.toFixed(2)}</div>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">
                     <div className="font-semibold text-slate-700">${emp.kmEarnings.toFixed(2)}</div>

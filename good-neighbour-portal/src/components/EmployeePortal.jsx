@@ -461,7 +461,7 @@ export default function EmployeeDashboard({
   return (
     <div className="space-y-6">
       
-      {/* --- NEW: TRAINEE SANDBOX BANNER --- */}
+      {/* --- TRAINEE SANDBOX BANNER --- */}
       {currentUser.isTrainee && (
         <div className="bg-indigo-600 rounded-xl shadow-lg border border-indigo-700 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between text-indigo-50 animate-in slide-in-from-top-4 duration-500">
           <div className="flex items-center">
@@ -474,45 +474,50 @@ export default function EmployeeDashboard({
         </div>
       )}
 
-      {/* REWARDS UNBOXING MODAL */}
+      {/* --- JAZZED UP REWARDS UNBOXING MODAL --- */}
       {activeReward && (() => {
         const isBonus = activeReward._type === 'prize' && (activeReward.name.toLowerCase().includes('bonus') || activeReward.name.toLowerCase().includes('place'));
         return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all scale-100 animate-in zoom-in-95 duration-300">
-            <div className={`px-6 py-8 text-center relative overflow-hidden ${isBonus ? 'bg-gradient-to-b from-yellow-300 to-yellow-500 text-yellow-950' : activeReward._type === 'kudo' ? 'bg-gradient-to-b from-amber-400 to-amber-500 text-amber-950' : 'bg-gradient-to-b from-purple-500 to-purple-700 text-white'}`}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col transform transition-all scale-100 animate-in zoom-in-95 duration-300">
+            
+            <div className={`px-6 py-8 text-center relative overflow-hidden ${isBonus ? 'bg-gradient-to-b from-yellow-300 to-yellow-500 text-yellow-950' : activeReward._type === 'kudo' ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-amber-950' : 'bg-gradient-to-b from-indigo-500 to-purple-700 text-white'}`}>
                <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-20">
                  {isBonus ? <Trophy size={150} /> : activeReward._type === 'kudo' ? <Award size={150} /> : <Gift size={150} />}
                </div>
                <PartyPopper className="h-12 w-12 mx-auto mb-4 relative z-10 animate-bounce" />
-               <h2 className="text-2xl font-black relative z-10">You've been recognized!</h2>
-               <p className="text-sm font-medium mt-1 relative z-10 opacity-90">Administration has sent you a new reward.</p>
+               <h2 className="text-3xl font-black relative z-10 tracking-tight">
+                 {isBonus ? "Bonus Awarded!" : activeReward._type === 'kudo' ? "You received a Kudo!" : "Congratulations!"}
+               </h2>
+               <p className="text-sm font-medium mt-2 relative z-10 opacity-90">
+                 {activeReward._type === 'kudo' ? "Administration has recognized your hard work." : "Your reward has been delivered to your wallet."}
+               </p>
             </div>
             
             <div className="p-8 text-center flex flex-col items-center">
-               <div className={`h-24 w-24 rounded-full flex items-center justify-center text-5xl mb-4 shadow-inner border-4 ${isBonus ? 'bg-yellow-50 border-yellow-200 text-yellow-600' : activeReward._type === 'kudo' ? 'bg-amber-50 border-amber-100 text-amber-500' : 'bg-purple-50 border-purple-100 text-purple-600'}`}>
-                 {isBonus ? <Trophy className="h-10 w-10" /> : activeReward._type === 'kudo' ? activeReward.badgeIcon : <Gift className="h-10 w-10" />}
+               <div className={`h-28 w-28 rounded-full flex items-center justify-center text-6xl mb-6 shadow-inner border-4 ${isBonus ? 'bg-yellow-50 border-yellow-200 text-yellow-600' : activeReward._type === 'kudo' ? 'bg-amber-50 border-amber-200 text-amber-500' : 'bg-indigo-50 border-indigo-200 text-indigo-600'}`}>
+                 {isBonus ? <Trophy className="h-12 w-12" /> : activeReward._type === 'kudo' ? activeReward.badgeIcon : <Gift className="h-12 w-12" />}
                </div>
                
-               <h3 className="text-xl font-bold text-slate-800 mb-2">
+               <h3 className="text-2xl font-black text-slate-800 mb-3 leading-tight">
                  {activeReward._type === 'kudo' ? activeReward.badgeLabel : activeReward.name}
                </h3>
                
-               <div className="text-slate-600 italic bg-slate-50 p-4 rounded-lg border border-slate-100 w-full mb-6 relative">
-                 <span className="text-2xl text-slate-300 absolute top-2 left-2">"</span>
-                 {activeReward._type === 'kudo' ? activeReward.message : activeReward.note}
-                 <span className="text-2xl text-slate-300 absolute bottom-0 right-2">"</span>
+               <div className="text-slate-600 italic bg-slate-50 p-5 rounded-xl border border-slate-200 w-full mb-6 relative shadow-inner">
+                 <span className="text-3xl text-slate-300 absolute top-2 left-3 font-serif">"</span>
+                 <span className="relative z-10 font-medium">{activeReward._type === 'kudo' ? activeReward.message : activeReward.note}</span>
+                 <span className="text-3xl text-slate-300 absolute bottom-[-10px] right-3 font-serif">"</span>
                </div>
                
-               <div className={`w-full py-3 rounded-xl font-black text-lg shadow-sm border ${isBonus ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : activeReward._type === 'kudo' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-purple-100 text-purple-800 border-purple-200'}`}>
+               <div className={`w-full py-3.5 rounded-xl font-black text-lg shadow-sm border ${isBonus ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : activeReward._type === 'kudo' ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-indigo-100 text-indigo-800 border-indigo-300'}`}>
                  {isBonus ? `+$${Number(activeReward.value || 0).toFixed(2)} Cash Bonus` : activeReward._type === 'kudo' ? `+${activeReward.points} Gala Points` : `Reward Delivered`}
                </div>
                
                <button 
                  onClick={handleClaimReward} 
-                 className={`mt-6 w-full py-3.5 rounded-lg font-bold text-white shadow-md transition transform hover:scale-105 ${isBonus ? 'bg-yellow-500 hover:bg-yellow-600' : activeReward._type === 'kudo' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                 className={`mt-6 w-full py-4 rounded-xl font-black text-white shadow-lg transition transform hover:-translate-y-1 ${isBonus ? 'bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400' : activeReward._type === 'kudo' ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500'}`}
                >
-                 {isBonus ? 'Accept Bonus' : 'Claim Reward'}
+                 {isBonus ? 'Accept Bonus' : activeReward._type === 'kudo' ? 'Claim Points' : 'Unwrap Prize'}
                </button>
             </div>
           </div>

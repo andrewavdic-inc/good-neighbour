@@ -13,7 +13,8 @@ import {
   List,
   Lock,
   Briefcase,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 
 // ==========================================
@@ -127,6 +128,9 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const [selectedPrizeYear, setSelectedPrizeYear] = useState(() => now.getFullYear().toString());
   const [selectedKudosMonth, setSelectedKudosMonth] = useState('All');
   const [selectedLedgerMonth, setSelectedLedgerMonth] = useState('All'); 
+
+  // --- NEW: MODAL STATE ---
+  const [activeModal, setActiveModal] = useState(null); // 'ledger', 'wallet', 'kudos', or null
 
   const safeEmployees = useMemo(() => {
     if (!Array.isArray(employees)) return [];
@@ -280,7 +284,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const lifetimeSpent = myPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
   const redeemablePoints = lifetimeEarned - lifetimeSpent;
 
-  // --- RAW LEDGER LOGIC (Unfiltered) ---
   const rawPointsLedger = useMemo(() => {
     let items = [];
     allTimeShifts.forEach(s => {
@@ -309,7 +312,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return items.sort((a, b) => b.sortDate - a.sortDate);
   }, [allTimeShifts, expenses, clientExpenses, kudos, myPrizes, currentUser.id]);
 
-  // --- LEDGER FILTER OPTIONS ---
   const ledgerMonthOptions = useMemo(() => {
     const opts = new Set();
     rawPointsLedger.forEach(item => {
@@ -324,7 +326,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return [{ value: 'All', label: 'All Time' }, ...sortedOpts];
   }, [rawPointsLedger]);
 
-  // --- FILTERED LEDGER ---
   const pointsLedger = useMemo(() => {
     if (selectedLedgerMonth === 'All') return rawPointsLedger;
     return rawPointsLedger.filter(item => {
@@ -366,7 +367,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
 
 
   // ==========================================
-  // EARLY RETURNS (SAFE TO RENDER NOW)
+  // EARLY RETURNS
   // ==========================================
 
   if (!isBonusActive) return (
@@ -465,14 +466,17 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       
+      {/* --- TOP GRID: WALLET + STORE --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* WALLET WIDGET & MY RECORDS MENU */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-lg p-6 text-white relative overflow-hidden flex flex-col justify-center">
+          <div className="bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl shadow-lg p-6 text-white relative overflow-hidden flex flex-col justify-center h-[400px]">
             <div className="absolute -right-4 -bottom-4 opacity-10"><Award size={150} /></div>
-            <div className="relative z-10">
+            <div className="relative z-10 flex flex-col h-full">
               <h3 className="text-amber-100 font-bold text-sm flex items-center mb-2 uppercase tracking-widest"><Star className="h-4 w-4 mr-1.5" /> My Gala Wallet</h3>
-              <div className="text-4xl font-black text-white tracking-tight mb-6">{redeemablePoints.toLocaleString()} <span className="text-lg font-medium text-amber-200">pts</span></div>
-              <div className="space-y-2 text-sm font-medium text-amber-100">
+              <div className="text-5xl font-black text-white tracking-tight mb-6">{redeemablePoints.toLocaleString()} <span className="text-lg font-medium text-amber-200">pts</span></div>
+              <div className="space-y-2 text-sm font-medium text-amber-100 mb-auto">
                 <div className="flex justify-between border-b border-amber-600/50 pb-1">
                   <span>Lifetime Earned:</span>
                   <span className="text-white">{lifetimeEarned.toLocaleString()}</span>
@@ -482,53 +486,33 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
                   <span className="text-white">{lifetimeSpent.toLocaleString()}</span>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[400px]">
-            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div className="flex items-center">
-                <List className="h-4 w-4 mr-2 text-slate-500"/>
-                <h3 className="font-bold text-slate-800 text-sm">Points Ledger</h3>
-              </div>
-              <select 
-                value={selectedLedgerMonth} 
-                onChange={(e) => setSelectedLedgerMonth(e.target.value)} 
-                className="bg-white border border-slate-300 text-slate-700 font-bold px-2 py-1 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm max-w-[120px]"
-              >
-                {ledgerMonthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-              </select>
-            </div>
-            <div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-slate-200">
-              {pointsLedger.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs">No points history for this period.</div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {pointsLedger.map(item => (
-                    <div key={item.id} className="p-3 flex items-center justify-between hover:bg-slate-50 transition">
-                      <div className="flex items-center space-x-3 overflow-hidden pr-2">
-                        <div className="text-xl shrink-0">{item.icon}</div>
-                        <div className="truncate">
-                          <div className="text-xs font-bold text-slate-800 truncate">{item.desc}</div>
-                          <div className="text-[10px] text-slate-500">{parseLocalSafe(item.date).toLocaleDateString()}</div>
-                        </div>
-                      </div>
-                      <div className={`text-xs font-black shrink-0 ${item.points > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {item.points > 0 ? '+' : ''}{item.points} pts
-                      </div>
-                    </div>
-                  ))}
+              {/* NEW: MY RECORDS BUTTON MENU */}
+              <div className="mt-8 pt-4 border-t border-amber-600/50">
+                <h4 className="text-xs font-black text-amber-200 uppercase tracking-widest mb-3">My Records</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => setActiveModal('ledger')} className="bg-amber-900/40 hover:bg-amber-900/60 text-amber-50 text-[11px] font-bold py-2.5 rounded-lg transition border border-amber-500/30 flex flex-col items-center justify-center shadow-sm">
+                    <List className="h-4 w-4 mb-1 text-amber-300" /> Ledger
+                  </button>
+                  <button onClick={() => setActiveModal('wallet')} className="bg-amber-900/40 hover:bg-amber-900/60 text-amber-50 text-[11px] font-bold py-2.5 rounded-lg transition border border-amber-500/30 flex flex-col items-center justify-center shadow-sm">
+                    <Gift className="h-4 w-4 mb-1 text-amber-300" /> Prizes
+                  </button>
+                  <button onClick={() => setActiveModal('kudos')} className="bg-amber-900/40 hover:bg-amber-900/60 text-amber-50 text-[11px] font-bold py-2.5 rounded-lg transition border border-amber-500/30 flex flex-col items-center justify-center shadow-sm">
+                    <Award className="h-4 w-4 mb-1 text-amber-300" /> Kudos
+                  </button>
                 </div>
-              )}
+              </div>
+
             </div>
           </div>
-
         </div>
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col">
+
+        {/* PRIZE STORE WIDGET */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-[400px]">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center shrink-0"><Gift className="h-5 w-5 mr-2 text-purple-500"/> Redeem Prizes</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 p-1">
             {safePrizeTiers.length === 0 ? (
-              <div className="col-span-2 text-center text-slate-400 py-8 border border-dashed border-slate-300 rounded-xl bg-slate-50">The prize store is currently empty.</div>
+              <div className="col-span-2 text-center text-slate-400 py-8 border border-dashed border-slate-300 rounded-xl bg-slate-50 flex items-center justify-center">The prize store is currently empty.</div>
             ) : (
               safePrizeTiers.sort((a,b)=>a.cost - b.cost).map(tier => {
                 const hasReachedLimit = tier.limitOnePerYear && myPrizesThisYear.some(p => p.name === tier.label);
@@ -561,6 +545,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         </div>
       </div>
 
+      {/* --- MONTHLY LEADERBOARD --- */}
       <div className="bg-gradient-to-r from-teal-700 to-emerald-600 rounded-xl shadow-lg p-6 sm:p-8 text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-10"><Trophy size={200} /></div>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between relative z-10 gap-4 mb-6">
@@ -606,96 +591,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <div><h2 className="text-lg font-bold text-slate-800 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-600" /> Prize Wallet</h2><p className="text-xs text-slate-500 mt-1 font-medium">Digital gift cards & rewards.</p></div>
-            <div className="flex items-center space-x-2"><select value={selectedPrizeYear} onChange={(e) => setSelectedPrizeYear(e.target.value)} className="bg-purple-100 border border-purple-200 text-purple-800 font-bold px-2 py-1 rounded text-xs focus:outline-none">{yearOptions.map(y => <option key={y} value={y}>{y}</option>)}</select></div>
-          </div>
-          <div className="p-6 bg-slate-50/50 flex-1 overflow-y-auto max-h-[400px] scrollbar-thin scrollbar-thumb-slate-200">
-            {filteredPrizes.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">No prizes awarded in {selectedPrizeYear}.</div>
-            ) : (
-              <div className="space-y-4">
-                {filteredPrizes.map(p => {
-                  const isBonusPlaque = p.name.toLowerCase().includes('bonus') || p.name.toLowerCase().includes('place');
-
-                  if (isBonusPlaque) {
-                    return (
-                      <div key={p.id} className="bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-600 rounded-xl p-1 shadow-lg relative overflow-hidden">
-                         <div className="bg-slate-900 rounded-lg p-5 h-full relative overflow-hidden flex flex-col justify-between">
-                            <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-20 text-yellow-400"><Trophy size={120} /></div>
-                            <div className="relative z-10">
-                              <div className="text-xs font-bold text-yellow-500 mb-1 uppercase tracking-widest flex justify-between">
-                                <span>{parseLocalSafe(p.date).toLocaleDateString()}</span>
-                                {p.value > 0 && <span className="text-yellow-400 font-black text-sm">+${Number(p.value).toFixed(2)}</span>}
-                              </div>
-                              <div className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500 mt-2 mb-3 leading-tight tracking-wide">{p.name}</div>
-                              {p.note && <div className="text-sm text-yellow-100/80 italic border-l-2 border-yellow-500/50 pl-3 py-1 mb-4">"{p.note}"</div>}
-                            </div>
-                            <div className="relative z-10 mt-auto">
-                              <div className="inline-flex items-center bg-yellow-500/10 border border-yellow-500/30 px-3 py-1.5 rounded-md">
-                                <CheckCircle className="h-4 w-4 text-yellow-500 mr-2" />
-                                <span className="text-xs font-bold text-yellow-400 uppercase tracking-wider">Funds Delivered</span>
-                              </div>
-                            </div>
-                         </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div key={p.id} className={`bg-gradient-to-br rounded-xl p-5 shadow-md relative overflow-hidden ${p.status === 'pending' ? 'from-amber-500 to-amber-700 text-white' : 'from-purple-700 to-indigo-900 text-white'}`}>
-                       <div className="absolute top-0 right-0 -mt-2 -mr-2 opacity-10"><Gift size={100} /></div>
-                       <div className="relative z-10">
-                         <div className="text-xs font-bold opacity-80 mb-1 uppercase tracking-wider flex justify-between">
-                           <span>{p.date}</span>
-                           <div className="flex items-center">
-                             {p.value > 0 && <span className="text-emerald-300 font-black">${Number(p.value).toFixed(2)}</span>}
-                             {p.cost > 0 && <span className="ml-3 bg-red-400/20 border border-red-400/50 text-red-300 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">-{p.cost} Pts</span>}
-                           </div>
-                         </div>
-                         <div className="text-xl font-black mt-2 mb-2 leading-tight">{p.name}</div>
-                         {p.status === 'pending' && <div className="text-sm font-bold bg-white/20 px-3 py-1.5 rounded-lg inline-block border border-white/30 animate-pulse"><Clock className="inline h-4 w-4 mr-1"/> Pending Admin Delivery</div>}
-                         {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner mt-2 mb-3">"{p.note}"</div>}
-                         {p.code && <div className="text-sm font-mono bg-black/40 px-3 py-1.5 rounded mt-2 text-center border border-white/20 font-bold tracking-wider">Code: {p.code}</div>}
-                         <div className="flex gap-2 mt-2">
-                           {p.link && <a href={p.link} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-white text-purple-900 font-bold py-2 rounded text-xs hover:bg-slate-100 transition shadow-sm"><ExternalLink className="h-3 w-3 mr-1.5"/> Redeem Prize</a>}
-                           {p.fileUrl && <a href={p.fileUrl} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-purple-800 border border-purple-500 text-white font-bold py-2 rounded text-xs hover:bg-purple-700 transition shadow-sm"><FileText className="h-3 w-3 mr-1.5"/> View Attachment</a>}
-                         </div>
-                       </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <div><h2 className="text-lg font-bold text-slate-800 flex items-center"><Award className="h-5 w-5 mr-2 text-amber-500" /> My Badges & Kudos</h2><p className="text-xs text-slate-500 mt-1 font-medium">Recognition from administration.</p></div>
-            <div className="flex items-center space-x-2"><select value={selectedKudosMonth} onChange={(e) => setSelectedKudosMonth(e.target.value)} className="bg-amber-100 border border-amber-200 text-amber-800 font-bold px-2 py-1 rounded text-xs focus:outline-none max-w-[100px]">{kudosMonthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></div>
-          </div>
-          <div className="p-6 bg-slate-50/50 flex-1 overflow-y-auto max-h-[400px] scrollbar-thin scrollbar-thumb-slate-200">
-            {filteredKudos.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 text-sm border border-dashed border-slate-300 rounded-lg bg-white">No badges earned in this period. </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredKudos.map(k => (
-                  <div key={k.id} className="bg-white border border-amber-200 rounded-xl p-4 shadow-sm flex items-start space-x-4 relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-400"></div>
-                    <div className="text-4xl bg-amber-50 h-14 w-14 rounded-full flex items-center justify-center shrink-0 border border-amber-100 shadow-inner">{k.badgeIcon}</div>
-                    <div className="flex-1 pr-12"><div className="font-bold text-slate-800">{k.badgeLabel}</div><div className="text-xs text-slate-500 mb-2">{k.date}</div><div className="text-sm text-slate-700 italic bg-slate-50 p-2 rounded border border-slate-100">"{k.message}"</div></div>
-                    <div className="absolute top-4 right-4 bg-amber-100 text-amber-800 font-black px-2 py-1 rounded shadow-sm text-xs">+{k.points} pts</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
+      {/* --- ANNUAL AWARDS GALA --- */}
       <div className="bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden relative mt-8">
         <div className="absolute top-0 right-0 opacity-5 pointer-events-none"><Star size={300} /></div>
         <div className="px-6 py-6 border-b border-slate-800 bg-slate-900/80 relative z-10 backdrop-blur-sm">
@@ -767,6 +663,175 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
           </div>
         </div>
       )}
+
+      {/* ========================================== */}
+      {/* POP-UP MODALS FOR "MY RECORDS" */}
+      {/* ========================================== */}
+
+      {/* 1. POINTS LEDGER MODAL */}
+      {activeModal === 'ledger' && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="flex items-center">
+                <List className="h-5 w-5 mr-2 text-slate-600"/>
+                <h3 className="font-bold text-slate-800 text-lg">Points Ledger</h3>
+              </div>
+              <div className="flex items-center space-x-3">
+                <select 
+                  value={selectedLedgerMonth} 
+                  onChange={(e) => setSelectedLedgerMonth(e.target.value)} 
+                  className="bg-white border border-slate-300 text-slate-700 font-bold px-2 py-1 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
+                >
+                  {ledgerMonthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+                <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 transition"><X className="h-6 w-6" /></button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-0 scrollbar-thin scrollbar-thumb-slate-200">
+              {pointsLedger.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm italic">No points history for this period.</div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {pointsLedger.map(item => (
+                    <div key={item.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
+                      <div className="flex items-center space-x-4 overflow-hidden pr-2">
+                        <div className="text-2xl shrink-0">{item.icon}</div>
+                        <div className="truncate">
+                          <div className="text-sm font-bold text-slate-800 truncate">{item.desc}</div>
+                          <div className="text-[11px] text-slate-500 font-medium">{parseLocalSafe(item.date).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                      <div className={`text-sm font-black shrink-0 ${item.points > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {item.points > 0 ? '+' : ''}{item.points} pts
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. PRIZE WALLET MODAL */}
+      {activeModal === 'wallet' && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-50 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800 flex items-center"><Gift className="h-5 w-5 mr-2 text-purple-600" /> Prize Wallet</h2>
+                <p className="text-xs text-slate-500 mt-1 font-medium">Your claimed digital gift cards & rewards.</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <select value={selectedPrizeYear} onChange={(e) => setSelectedPrizeYear(e.target.value)} className="bg-purple-50 border border-purple-200 text-purple-800 font-bold px-3 py-1.5 rounded-md text-xs focus:outline-none">
+                  {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+                <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 transition"><X className="h-6 w-6" /></button>
+              </div>
+            </div>
+            <div className="p-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+              {filteredPrizes.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-sm border border-dashed border-slate-300 rounded-xl bg-white">No prizes awarded in {selectedPrizeYear}.</div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filteredPrizes.map(p => {
+                    const isBonusPlaque = p.name.toLowerCase().includes('bonus') || p.name.toLowerCase().includes('place');
+
+                    if (isBonusPlaque) {
+                      return (
+                        <div key={p.id} className="bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-600 rounded-xl p-1 shadow-lg relative overflow-hidden sm:col-span-2">
+                           <div className="bg-slate-900 rounded-lg p-5 h-full relative overflow-hidden flex flex-col justify-between">
+                              <div className="absolute top-0 right-0 -mt-4 -mr-4 opacity-20 text-yellow-400"><Trophy size={120} /></div>
+                              <div className="relative z-10">
+                                <div className="text-xs font-bold text-yellow-500 mb-1 uppercase tracking-widest flex justify-between">
+                                  <span>{parseLocalSafe(p.date).toLocaleDateString()}</span>
+                                  {p.value > 0 && <span className="text-yellow-400 font-black text-sm">+${Number(p.value).toFixed(2)}</span>}
+                                </div>
+                                <div className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-yellow-500 mt-2 mb-3 leading-tight tracking-wide">{p.name}</div>
+                                {p.note && <div className="text-sm text-yellow-100/80 italic border-l-2 border-yellow-500/50 pl-3 py-1 mb-4">"{p.note}"</div>}
+                              </div>
+                              <div className="relative z-10 mt-auto">
+                                <div className="inline-flex items-center bg-yellow-500/10 border border-yellow-500/30 px-3 py-1.5 rounded-md">
+                                  <CheckCircle className="h-4 w-4 text-yellow-500 mr-2" />
+                                  <span className="text-xs font-bold text-yellow-400 uppercase tracking-wider">Funds Delivered</span>
+                                </div>
+                              </div>
+                           </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={p.id} className={`bg-gradient-to-br rounded-xl p-5 shadow-md relative overflow-hidden ${p.status === 'pending' ? 'from-amber-500 to-amber-700 text-white' : 'from-purple-700 to-indigo-900 text-white'}`}>
+                         <div className="absolute top-0 right-0 -mt-2 -mr-2 opacity-10"><Gift size={100} /></div>
+                         <div className="relative z-10">
+                           <div className="text-xs font-bold opacity-80 mb-1 uppercase tracking-wider flex justify-between">
+                             <span>{p.date}</span>
+                             <div className="flex items-center">
+                               {p.value > 0 && <span className="text-emerald-300 font-black">${Number(p.value).toFixed(2)}</span>}
+                               {p.cost > 0 && <span className="ml-3 bg-red-400/20 border border-red-400/50 text-red-300 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-sm">-{p.cost} Pts</span>}
+                             </div>
+                           </div>
+                           <div className="text-xl font-black mt-2 mb-2 leading-tight">{p.name}</div>
+                           {p.status === 'pending' && <div className="text-sm font-bold bg-white/20 px-3 py-1.5 rounded-lg inline-block border border-white/30 animate-pulse"><Clock className="inline h-4 w-4 mr-1"/> Pending Admin Delivery</div>}
+                           {p.note && <div className="text-xs bg-black/30 p-2.5 rounded-lg italic border border-white/10 shadow-inner mt-2 mb-3">"{p.note}"</div>}
+                           {p.code && <div className="text-sm font-mono bg-black/40 px-3 py-1.5 rounded mt-2 text-center border border-white/20 font-bold tracking-wider">Code: {p.code}</div>}
+                           <div className="flex gap-2 mt-2">
+                             {p.link && <a href={p.link} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-white text-purple-900 font-bold py-2 rounded text-xs hover:bg-slate-100 transition shadow-sm"><ExternalLink className="h-3 w-3 mr-1.5"/> Redeem Prize</a>}
+                             {p.fileUrl && <a href={p.fileUrl} target="_blank" rel="noopener noreferrer" className="flex-1 flex items-center justify-center bg-purple-800 border border-purple-500 text-white font-bold py-2 rounded text-xs hover:bg-purple-700 transition shadow-sm"><FileText className="h-3 w-3 mr-1.5"/> View Attachment</a>}
+                           </div>
+                         </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. KUDOS MODAL */}
+      {activeModal === 'kudos' && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-50 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800 flex items-center"><Award className="h-5 w-5 mr-2 text-amber-500" /> Kudos</h2>
+                <p className="text-xs text-slate-500 mt-1 font-medium">Recognition from administration.</p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <select value={selectedKudosMonth} onChange={(e) => setSelectedKudosMonth(e.target.value)} className="bg-amber-50 border border-amber-200 text-amber-800 font-bold px-3 py-1.5 rounded-md text-xs focus:outline-none max-w-[120px]">
+                  {kudosMonthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+                <button onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 transition"><X className="h-6 w-6" /></button>
+              </div>
+            </div>
+            <div className="p-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+              {filteredKudos.length === 0 ? (
+                <div className="text-center py-12 text-slate-500 text-sm border border-dashed border-slate-300 rounded-xl bg-white">No kudos earned in this period.</div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredKudos.map(k => (
+                    <div key={k.id} className="bg-white border border-amber-200 rounded-xl p-5 shadow-sm flex items-start space-x-4 relative overflow-hidden group">
+                      <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-400"></div>
+                      <div className="text-4xl bg-amber-50 h-14 w-14 rounded-full flex items-center justify-center shrink-0 border border-amber-100 shadow-inner">{k.badgeIcon}</div>
+                      <div className="flex-1 pr-12">
+                        <div className="font-black text-slate-800 text-lg">{k.badgeLabel}</div>
+                        <div className="text-xs font-bold text-amber-600/80 mb-3">{parseLocalSafe(k.date).toLocaleDateString()}</div>
+                        <div className="text-sm text-slate-700 italic bg-slate-50 p-3 rounded-lg border border-slate-100 shadow-inner">"{k.message}"</div>
+                      </div>
+                      <div className="absolute top-4 right-4 bg-amber-100 text-amber-800 font-black px-2.5 py-1 rounded-md shadow-sm text-xs border border-amber-200">+{k.points} pts</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

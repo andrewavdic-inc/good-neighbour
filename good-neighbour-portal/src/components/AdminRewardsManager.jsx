@@ -77,7 +77,6 @@ export default function AdminRewardsManager({
   const monthOptions = useMemo(() => {
     const opts = new Set();
     const now = new Date();
-    // Always ensure current month exists so they can view the live leaderboard
     opts.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
     
     const addDate = (dateStr) => {
@@ -98,15 +97,6 @@ export default function AdminRewardsManager({
       return { value: val, label };
     });
   }, [shifts, expenses, clientExpenses, kudos, prizes]);
-
-  // --- GALA STATE ---
-  const [galaYear, setGalaYear] = useState(() => new Date().getFullYear());
-
-  const yearOptions = useMemo(() => {
-    const years = new Set([new Date().getFullYear()]);
-    shifts.forEach(s => s.date && years.add(parseLocalSafe(s.date).getFullYear()));
-    return [...years].sort((a, b) => b - a);
-  }, [shifts]);
 
   // --- MATH ENGINE: PRIVACY-SAFE "ACTIVITY SCORE" (MONTHLY WITH JEOPARDY DEDUCTIONS) ---
   const getLeaderboardForMonth = (yearStr, monthStr) => {
@@ -134,7 +124,6 @@ export default function AdminRewardsManager({
       const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date) >= start && parseLocalSafe(k.date) <= end);
       const kPoints = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
       
-      // JEOPARDY MATH: Deduct points spent on storefront prizes (manual 'value' prizes cost 0)
       const empPrizes = prizes.filter(p => p.employeeId === emp.id && parseLocalSafe(p.date) >= start && parseLocalSafe(p.date) <= end);
       const spentPts = empPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
 
@@ -154,7 +143,15 @@ export default function AdminRewardsManager({
     return getLeaderboardForMonth(y, m);
   }, [selectedMonth, safeEmployees, shifts, expenses, clientExpenses, kudos, prizes]);
 
-  // --- MATH ENGINE: "BEST NEIGHBOUR" ANNUAL AWARDS (WITH JEOPARDY DEDUCTIONS) ---
+  // --- GALA STATE ---
+  const [galaYear, setGalaYear] = useState(() => new Date().getFullYear().toString());
+
+  const yearOptions = useMemo(() => {
+    const years = new Set([new Date().getFullYear()]);
+    shifts.forEach(s => s.date && years.add(parseLocalSafe(s.date).getFullYear()));
+    return [...years].sort((a, b) => b - a).map(String);
+  }, [shifts]);
+
   const annualGalaStandings = useMemo(() => {
     const targetYear = parseInt(galaYear, 10);
     const scores = {}; 
@@ -186,7 +183,6 @@ export default function AdminRewardsManager({
       const empKudos = kudos.filter(k => k.employeeId === emp.id && parseLocalSafe(k.date).getFullYear() === targetYear);
       s.kudosPts = empKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
       
-      // JEOPARDY MATH: Deduct points spent on storefront prizes
       const empPrizes = prizes.filter(p => p.employeeId === emp.id && parseLocalSafe(p.date).getFullYear() === targetYear);
       s.prizePts = empPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
 
@@ -195,6 +191,12 @@ export default function AdminRewardsManager({
 
     return Object.values(scores).sort((a, b) => b.totalGalaScore - a.totalGalaScore);
   }, [safeEmployees, shifts, expenses, clientExpenses, kudos, prizes, galaYear]);
+
+  // Find users who ALREADY have a trophy for the selected year
+  const galaWinners = useMemo(() => {
+    return safeEmployees.filter(e => Array.isArray(e.pastTrophies) && e.pastTrophies.some(t => String(t.year) === String(galaYear)));
+  }, [safeEmployees, galaYear]);
+
 
   // --- UNIFIED COMPREHENSIVE LOG ---
   const unifiedLog = useMemo(() => {
@@ -359,7 +361,6 @@ export default function AdminRewardsManager({
           await updateEmployee(emp.id, { pastTrophies: [...currentTrophies, newTrophy] });
         }
         
-        // NEW: ISSUE ANNUAL CASH BONUS PRIZE TO WALLET
         const bonusAmount = Number(safeBonusSettings.annual[index] || 0);
         if (isBonusActive && bonusAmount > 0 && onAddPrize) {
            await onAddPrize({
@@ -386,12 +387,21 @@ export default function AdminRewardsManager({
     }
   };
 
+  // --- REVOKE GALA TROPHY ENGINE ---
+  const handleRevokeTrophy = (emp, trophyId) => {
+    if (window.confirm(`WARNING: Are you sure you want to permanently revoke this Annual Trophy from ${emp.name}?\n\nNOTE: If a cash bonus was attached to this award, you must ALSO delete the Cash Prize from the Command Center Ledger.`)) {
+      const updatedTrophies = (emp.pastTrophies || []).filter(t => t.id !== trophyId);
+      if (updateEmployee) {
+        updateEmployee(emp.id, { pastTrophies: updatedTrophies });
+      }
+    }
+  };
+
   // --- MANUAL MONTHLY BONUS ISSUANCE ENGINE ---
   const handleFinalizeMonthlyBonuses = async () => {
     if (!isBonusActive) return alert("Bonus system is inactive.");
     if (activeLeaderboard.eligible.length === 0) return alert("No eligible employees to award.");
 
-    // Failsafe: Check if we've already issued a bonus for this exact month
     const alreadyIssued = prizes.some(p => p.name.includes('Leaderboard Bonus') && p.date.startsWith(selectedMonth));
     if (alreadyIssued) {
       if (!window.confirm(`It looks like Monthly Leaderboard Bonuses have already been issued for ${selectedMonth}. Are you sure you want to issue them again?`)) {
@@ -416,13 +426,13 @@ export default function AdminRewardsManager({
       if (bonusAmount > 0 && onAddPrize) {
         await onAddPrize({
           employeeId: winner.emp.id,
-          date: new Date().toISOString().split('T')[0], // The day it was processed
+          date: new Date().toISOString().split('T')[0], 
           name: `${places[i]}: ${selectedMonth} Leaderboard Bonus`,
           value: bonusAmount,
-          cost: 0, // Cash bonuses don't cost points!
+          cost: 0, 
           icon: icons[i],
           note: `Congratulations on placing ${places[i]} for ${selectedMonth}!`,
-          status: 'fulfilled', // Auto-fulfilled cash
+          status: 'fulfilled', 
           acknowledged: false
         }, null);
         issuedCount++;
@@ -730,12 +740,17 @@ export default function AdminRewardsManager({
                               )}
                             </td>
                             <td className="px-6 py-3 text-right">
+                               {/* --- NEW REVOKE BUTTON --- */}
                                <button 
-                                  onClick={() => isKudo ? onRemoveKudos(log.id) : onRemovePrize(log.id)} 
-                                  className="text-slate-400 hover:text-red-500 p-1.5 rounded-md hover:bg-red-50 transition opacity-0 group-hover:opacity-100" 
-                                  title={`Delete ${isKudo ? 'Kudo' : 'Prize'}`}
+                                  onClick={() => {
+                                    if (window.confirm(`Are you sure you want to permanently REVOKE this ${isKudo ? 'Kudo' : 'Prize'}? This will immediately deduct the points/funds from the employee's wallet.`)) {
+                                      isKudo ? onRemoveKudos(log.id) : onRemovePrize(log.id);
+                                    }
+                                  }} 
+                                  className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md font-bold text-xs transition shadow-sm flex items-center opacity-0 group-hover:opacity-100 ml-auto" 
+                                  title={`Revoke ${isKudo ? 'Kudo' : 'Prize'}`}
                                 >
-                                  <Trash2 className="h-4 w-4"/>
+                                  <Trash2 className="h-3.5 w-3.5 mr-1"/> Revoke
                                </button>
                             </td>
                           </tr>
@@ -829,7 +844,6 @@ export default function AdminRewardsManager({
               <button onClick={exportMonthlyPayout} className="flex items-center justify-center text-xs font-bold text-slate-600 bg-white border border-slate-300 px-4 py-2 rounded-md hover:bg-slate-100 transition shadow-sm w-full sm:w-auto">
                 <Download className="h-4 w-4 mr-1.5" /> Export Payout CSV
               </button>
-              {/* --- NEW FULFILLMENT BUTTON --- */}
               {isBonusActive && (
                 <button 
                   onClick={handleFinalizeMonthlyBonuses} 
@@ -960,7 +974,36 @@ export default function AdminRewardsManager({
           </div>
 
           <div className="p-0 flex-1 overflow-y-auto relative z-10">
-            <table className="w-full text-left border-collapse min-w-[800px]">
+            
+            {/* --- NEW AWARDED TROPHIES REVOKE PANEL --- */}
+            {galaWinners.length > 0 && (
+              <div className="mx-6 mt-6 p-4 bg-amber-900/30 border border-amber-500/50 rounded-xl relative z-10">
+                <h3 className="text-amber-400 font-bold text-sm mb-3 flex items-center"><Award className="h-4 w-4 mr-2"/> Awarded Trophies for {galaYear}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                   {galaWinners.map(emp => {
+                     const trophy = emp.pastTrophies.find(t => String(t.year) === String(galaYear));
+                     if(!trophy) return null;
+                     return (
+                       <div key={emp.id} className="bg-slate-800/80 border border-slate-700 rounded-lg p-3 flex justify-between items-center shadow-inner">
+                         <div>
+                           <div className="text-sm font-bold text-white">{emp.name}</div>
+                           <div className="text-xs font-medium text-amber-500">{trophy.title}</div>
+                         </div>
+                         <button 
+                           onClick={() => handleRevokeTrophy(emp, trophy.id)} 
+                           className="text-xs font-bold bg-red-900/50 hover:bg-red-800 text-red-200 border border-red-700/50 px-3 py-1.5 rounded transition shadow-sm"
+                         >
+                           Revoke
+                         </button>
+                       </div>
+                     )
+                   })}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-3 italic">* Note: Revoking a trophy removes the badge from their profile. If a cash bonus was attached, you must also revoke the cash prize in the Command Center Ledger.</p>
+              </div>
+            )}
+
+            <table className="w-full text-left border-collapse min-w-[800px] mt-2">
               <thead className="bg-slate-800/80 backdrop-blur sticky top-0">
                 <tr className="text-slate-400 text-[10px] uppercase tracking-widest border-b border-slate-700">
                   <th className="px-6 py-4 font-bold">Rank</th>

@@ -129,7 +129,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const [selectedKudosMonth, setSelectedKudosMonth] = useState('All');
   const [selectedLedgerMonth, setSelectedLedgerMonth] = useState('All'); 
 
-  // --- NEW: MODAL STATE ---
   const [activeModal, setActiveModal] = useState(null); // 'ledger', 'wallet', 'kudos', or null
 
   const safeEmployees = useMemo(() => {
@@ -140,7 +139,6 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   // --- SMART DROPDOWN LOGIC ---
   const monthOptions = useMemo(() => {
     const opts = new Set();
-    // Always ensure current month exists so they can view the live leaderboard
     opts.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
     
     const addDate = (dateStr) => {
@@ -272,6 +270,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
     return new Date(`${s.date}T${s.endTime}`) <= now;
   }), [shifts, currentUser.id, now]);
 
+  // --- NEW WALLET MATH ---
   let walletActivityScore = 0;
   allTimeShifts.forEach(s => {
     walletActivityScore += 100;
@@ -283,6 +282,33 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
   const lifetimeEarned = walletActivityScore + walletKudos;
   const lifetimeSpent = myPrizes.reduce((sum, p) => sum + (Number(p.cost) || 0), 0);
   const redeemablePoints = lifetimeEarned - lifetimeSpent;
+
+  // Calculate Earned This Month
+  const earnedThisMonth = useMemo(() => {
+    let score = 0;
+    currentMonthShifts.forEach(sh => {
+      score += 100;
+      if (expenses.some(e => e.employeeId === currentUser.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved')) score += 50;
+      if (clientExpenses.some(e => e.employeeId === currentUser.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved')) score += 50;
+    });
+    const thisMonthKudos = kudos.filter(k => k.employeeId === currentUser.id && parseLocalSafe(k.date).getMonth() === now.getMonth() && parseLocalSafe(k.date).getFullYear() === now.getFullYear());
+    score += thisMonthKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
+    return score;
+  }, [currentMonthShifts, expenses, clientExpenses, kudos, currentUser.id, now]);
+
+  // Calculate Earned This Year
+  const earnedThisYear = useMemo(() => {
+    let score = 0;
+    const thisYearShifts = allTimeShifts.filter(s => parseLocalSafe(s.date).getFullYear() === now.getFullYear());
+    thisYearShifts.forEach(sh => {
+      score += 100;
+      if (expenses.some(e => e.employeeId === currentUser.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved')) score += 50;
+      if (clientExpenses.some(e => e.employeeId === currentUser.id && e.clientId === sh.clientId && e.date === sh.date && e.status === 'approved')) score += 50;
+    });
+    const thisYearKudos = kudos.filter(k => k.employeeId === currentUser.id && parseLocalSafe(k.date).getFullYear() === now.getFullYear());
+    score += thisYearKudos.reduce((sum, k) => sum + Number(k.points || 0), 0);
+    return score;
+  }, [allTimeShifts, expenses, clientExpenses, kudos, currentUser.id, now]);
 
   const rawPointsLedger = useMemo(() => {
     let items = [];
@@ -478,16 +504,20 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
               <div className="text-5xl font-black text-white tracking-tight mb-6">{redeemablePoints.toLocaleString()} <span className="text-lg font-medium text-amber-200">pts</span></div>
               <div className="space-y-2 text-sm font-medium text-amber-100 mb-auto">
                 <div className="flex justify-between border-b border-amber-600/50 pb-1">
-                  <span>Lifetime Earned:</span>
-                  <span className="text-white">{lifetimeEarned.toLocaleString()}</span>
+                  <span>Earned in {now.toLocaleString('en-US', { month: 'long' })}:</span>
+                  <span className="text-white">{earnedThisMonth.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between border-b border-amber-600/50 pb-1">
-                  <span>Lifetime Spent:</span>
+                  <span>Earned in {now.getFullYear()}:</span>
+                  <span className="text-white">{earnedThisYear.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between border-b border-amber-600/50 pb-1">
+                  <span>Spent:</span>
                   <span className="text-white">{lifetimeSpent.toLocaleString()}</span>
                 </div>
               </div>
 
-              {/* NEW: MY RECORDS BUTTON MENU */}
+              {/* MY RECORDS BUTTON MENU */}
               <div className="mt-8 pt-4 border-t border-amber-600/50">
                 <h4 className="text-xs font-black text-amber-200 uppercase tracking-widest mb-3">My Records</h4>
                 <div className="grid grid-cols-3 gap-2">
@@ -551,7 +581,7 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
         <div className="flex flex-col sm:flex-row sm:items-start justify-between relative z-10 gap-4 mb-6">
           <div>
             <h2 className="text-2xl font-black flex items-center tracking-tight"><Star className="mr-2 h-6 w-6 text-yellow-300" fill="currentColor"/> {monthOptions.find(o => o.value === selectedLeaderboardMonth)?.label || 'Leaderboard'} Monthly Bonus Leaderboard</h2>
-            <p className="text-teal-100 text-sm font-medium mt-1">Activity Scores determine rankings. 100pts per shift. 50pts per mileage/expense log.</p>
+            <p className="text-teal-100 text-sm font-medium mt-1">These are your top 3 most active coworkers for this month! Activity Scores determine rankings (100pts per shift, 50pts per log). Cash prizes are added to the pay tracker on the 1st of the month and included in your next pay period.</p>
           </div>
           <select value={selectedLeaderboardMonth} onChange={(e) => setSelectedLeaderboardMonth(e.target.value)} className="px-3 py-1.5 border border-teal-500 rounded-md bg-teal-800 text-white text-sm font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
             {monthOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -594,8 +624,9 @@ export default function EmployeeRewardsTab({ currentUser, employees, shifts, exp
       {/* --- ANNUAL AWARDS GALA --- */}
       <div className="bg-slate-900 rounded-xl shadow-xl border border-slate-800 overflow-hidden relative mt-8">
         <div className="absolute top-0 right-0 opacity-5 pointer-events-none"><Star size={300} /></div>
-        <div className="px-6 py-6 border-b border-slate-800 bg-slate-900/80 relative z-10 backdrop-blur-sm">
-          <h2 className="text-2xl font-black text-amber-400 flex items-center tracking-tight mb-3"><Trophy className="h-6 w-6 mr-3 text-amber-400" /> The 'Best Neighbour' Annual Awards</h2>
+        <div className="px-6 py-5 border-b border-slate-800 bg-slate-900/80 relative z-10 backdrop-blur-sm">
+          <h2 className="text-2xl font-black text-amber-400 flex items-center tracking-tight mb-1"><Trophy className="h-6 w-6 mr-3 text-amber-400" /> The 'Best Neighbour' Annual Awards</h2>
+          <p className="text-slate-300 text-sm font-medium mb-3">Your monthly activity points add up to a yearly total. The top 3 employees will win an annual cash prize on Jan 1st, which will be added to their first pay period of the new year!</p>
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="bg-amber-900/40 border border-amber-500/50 text-amber-200 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-widest text-center shadow-sm whitespace-nowrap">1st Place: Best Neighbour ($3000)</div>
             <div className="bg-slate-800/60 border border-slate-500/50 text-slate-300 text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-widest text-center shadow-sm whitespace-nowrap">2nd Place: Great Neighbour ($2000)</div>
